@@ -84,6 +84,7 @@ impl Cheevos {
         unsafe { ffi::rc_client_set_userdata(client, this as *const Cheevos as *mut c_void) };
         std::thread::Builder::new()
             .name("omega-cheevos-http".into())
+            .stack_size(crate::THREAD_STACK)
             .spawn(move || {
                 for job in rx {
                     let mut response = transport.send(&job.request);

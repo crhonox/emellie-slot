@@ -41,6 +41,11 @@ build() {
 	fi
 
 	mkdir -p "$src"
+	# the device build's container runs as root over a checkout handed back to the user after
+	# the last build, which git refuses as another's; only that throwaway root is told to trust it
+	if [ "$(id -u)" = 0 ] && [ -f /.dockerenv ]; then
+		git config --global --add safe.directory "$(cd "$src" && pwd)"
+	fi
 	[ -d "$src/.git" ] || git init -q "$src"
 	git -C "$src" cat-file -e "$commit^{commit}" 2>/dev/null ||
 		git -C "$src" fetch -q --depth 1 https://github.com/libretro/mgba "$commit"

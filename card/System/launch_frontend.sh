@@ -4,6 +4,10 @@ SYS="$SD/System"
 RUN="${AGS_RUN:-/run}"
 LOADER="${AGS_LOADER:-/lib/ld-linux-aarch64.so.1}"
 export OMEGA_ROOT="$SD"
+# every thread allocates from the one heap: glibc's arenas, 64 MB of address space reserved
+# for each thread that contends, crowded the cores loaded after them, and gpsp's JIT cache has
+# to be mapped within 128 MB of its code
+export MALLOC_ARENA_MAX=1
 
 log() {
 	echo "$(date '+%H:%M:%S') $*" >> "$SD/emellie-slot-session.log" 2>/dev/null

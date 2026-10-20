@@ -135,7 +135,10 @@ pub fn account_changed(root: &Path) {
 }
 
 fn spawn(name: &str, f: impl FnOnce() + Send + 'static) {
-    if let Err(e) = std::thread::Builder::new().name(name.into()).spawn(f) {
+    let thread = std::thread::Builder::new()
+        .name(name.into())
+        .stack_size(omega_cheevos::THREAD_STACK);
+    if let Err(e) = thread.spawn(f) {
         eprintln!("omega-zero: cheevos: {e}");
     }
 }
