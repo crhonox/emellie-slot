@@ -86,7 +86,7 @@ pub fn open(root: &Path, core: Core, setup: Setup) -> Opened {
 /// picture, so a SNES or PlayStation game without its core is still laid out as one.
 fn stand_in(core: Core) -> MockCore {
     match core {
-        Core::Mgba | Core::Gpsp => MockCore::new(),
+        Core::Mgba | Core::Gpsp | Core::Gambatte => MockCore::new(),
         Core::Snes9x | Core::Supafaust => MockCore::sized(256, 224),
         Core::PcsxRearmed => MockCore::sized(320, 240),
         Core::Dsperate => MockCore::sized(256, 384),
@@ -185,6 +185,10 @@ pub fn colour_option(which: Core, on: bool) -> Option<(&'static str, &'static st
             "gpsp_color_correction",
             if on { "enabled" } else { "disabled" },
         )),
+        Core::Gambatte => Some((
+            "gambatte_gbc_color_correction",
+            if on { "GBC only" } else { "disabled" },
+        )),
         Core::Snes9x | Core::Supafaust | Core::PcsxRearmed | Core::Dsperate => None,
     }
 }
@@ -235,7 +239,9 @@ pub fn apply_core_options(
 /// games show, so it is exactly twice that on every canvas. Supafaust is left to run its
 /// threads wherever the system puts them: by itself it would pin the emulator thread to the
 /// second CPU and its PPU thread to the first, where the render thread and the kernel's
-/// interrupts run. The PlayStation runs its own BIOS from BIOS/ when one is there and its
+/// interrupts run. Gambatte draws a Game Boy game, one without colours of its own, in its
+/// Special 4 (TI-83 Legacy) palette, and has no Super Game Boy to take a game's colours from.
+/// The PlayStation runs its own BIOS from BIOS/ when one is there and its
 /// built-in one otherwise, and keeps memory card 1 as the game's save, in Saves/PS1; the
 /// second card, which pcsx_rearmed would keep in a file of its own in Saves, is left out.
 pub fn core_options(
@@ -270,6 +276,10 @@ pub fn core_options(
             put("pcsx_rearmed_bios", "auto");
             put("pcsx_rearmed_memcard1", "libretro");
             put("pcsx_rearmed_memcard2", "none");
+        }
+        Core::Gambatte => {
+            put("gambatte_gb_colorization", "internal");
+            put("gambatte_gb_internal_palette", "Special 4 (TI-83 Legacy)");
         }
         Core::Dsperate => {}
     }

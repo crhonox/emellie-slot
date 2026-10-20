@@ -14,16 +14,18 @@ pub enum Core {
     Supafaust,
     PcsxRearmed,
     Dsperate,
+    Gambatte,
 }
 
 impl Core {
-    pub const ALL: [Core; 6] = [
+    pub const ALL: [Core; 7] = [
         Core::Mgba,
         Core::Gpsp,
         Core::Snes9x,
         Core::Supafaust,
         Core::PcsxRearmed,
         Core::Dsperate,
+        Core::Gambatte,
     ];
 
     pub fn as_str(&self) -> &'static str {
@@ -34,6 +36,7 @@ impl Core {
             Core::Supafaust => "supafaust",
             Core::PcsxRearmed => "pcsx_rearmed",
             Core::Dsperate => "dsperate",
+            Core::Gambatte => "gambatte",
         }
     }
 
@@ -65,6 +68,7 @@ impl Core {
             Core::Supafaust => "Faust",
             Core::PcsxRearmed => "PCSX",
             Core::Dsperate => "DSpr",
+            Core::Gambatte => "Gamb",
         }
     }
 
@@ -77,6 +81,7 @@ impl Core {
             Core::Supafaust => "Supafaust",
             Core::PcsxRearmed => "PCSX-ReARMed",
             Core::Dsperate => "DSperate",
+            Core::Gambatte => "Gambatte",
         }
     }
 
@@ -88,6 +93,7 @@ impl Core {
             "supafaust" => Some(Core::Supafaust),
             "pcsx_rearmed" => Some(Core::PcsxRearmed),
             "dsperate" => Some(Core::Dsperate),
+            "gambatte" => Some(Core::Gambatte),
             _ => None,
         }
     }
@@ -101,7 +107,8 @@ impl Core {
     pub fn for_platform(platform: Platform) -> &'static [Core] {
         match platform {
             Platform::Gba => &[Core::Mgba, Core::Gpsp],
-            Platform::Gb | Platform::Gbc => &[Core::Mgba],
+            // Gambatte, in the palette it is set to; mGBA for a Game Boy link cable
+            Platform::Gb | Platform::Gbc => &[Core::Gambatte, Core::Mgba],
             Platform::Snes => &[Core::Snes9x, Core::Supafaust],
             Platform::Ps1 => &[Core::PcsxRearmed],
             Platform::Nds => &[Core::Dsperate],

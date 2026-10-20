@@ -6,11 +6,13 @@ vars:
   SNES9X_HOST: vendor/snes9x_libretro.dylib
   SUPAFAUST_HOST: vendor/mednafen_supafaust_libretro.dylib
   PCSX_HOST: vendor/pcsx_rearmed_libretro.dylib
+  GAMBATTE_HOST: vendor/gambatte_libretro.dylib
   MGBA_COMMIT: e31759b24e7a4e3899285ff720d7b573ac328ae7
   GPSP_COMMIT: 7b2dd37394e2822110cacef321e9bb291a305b77
   SNES9X_COMMIT: fae2fea08f74180759ef540ee94259213f503480
   SUPAFAUST_COMMIT: 642d1d1b6684aa7e306a02a89885f3f5456a5157
   PCSX_COMMIT: c8816799b50388e61cfe237fe2cdbb7d8175f20a
+  GAMBATTE_COMMIT: d9d6cd06382d1ced30de34d56d3609452323dab1
   # DSperate is no libretro core: the DS games are handed over to it, System/dsperate/dsperate
   DSPERATE_COMMIT: 59fce36e59d5c7d181009d72ff824446c27f7d99
   # The mali-fbdev SDL2 DSperate draws to fb0 through (BaseOS's own cannot reach the panel), and
@@ -19,10 +21,10 @@ vars:
   # Files for the card beyond the build (Overlays/, Config/...), copied over dist-device
   SD_EXTRAS: '{{.SD_EXTRAS | default "../sd-extras"}}'
   # The libretro names of the cores the device bundle ships, <name>_libretro.so in System/
-  DEVICE_CORES: mgba gpsp snes9x mednafen_supafaust pcsx_rearmed
+  DEVICE_CORES: mgba gpsp snes9x mednafen_supafaust pcsx_rearmed gambatte
   # The cores built by cores/<name>/build.sh whose source archive ships in System/licenses/
   # beside them, as <name>:<libretro name>. gpSP's ships too, the way it always has
-  SOURCE_CORES: snes9x:snes9x supafaust:mednafen_supafaust pcsx_rearmed:pcsx_rearmed
+  SOURCE_CORES: snes9x:snes9x supafaust:mednafen_supafaust pcsx_rearmed:pcsx_rearmed gambatte-libretro:gambatte
 
 tasks:
   default:
@@ -136,6 +138,7 @@ tasks:
       - task: core:snes9x:host
       - task: core:supafaust:host
       - task: core:pcsx:host
+      - task: core:gambatte:host
 
   core:mgba:host:
     desc: Build mgba_libretro for this host from the pinned libretro/mgba commit and cores/mgba's patches
@@ -164,6 +167,12 @@ tasks:
     cmds:
       - task: core:buildbot
         vars: {LIB: pcsx_rearmed}
+
+  core:gambatte:host:
+    desc: Fetch the host Gambatte core from the libretro buildbot
+    cmds:
+      - task: core:buildbot
+        vars: {LIB: gambatte}
 
   core:supafaust:host:
     desc: >-
@@ -233,7 +242,7 @@ tasks:
     cmds:
       - >-
         rm -f {{.CORE}} {{.CORE}}.meta {{.GPSP_HOST}} {{.SNES9X_HOST}} {{.SUPAFAUST_HOST}}
-        {{.SUPAFAUST_HOST}}.meta {{.PCSX_HOST}}
+        {{.SUPAFAUST_HOST}}.meta {{.PCSX_HOST}} {{.GAMBATTE_HOST}}
       - task: core
 
   icons:
@@ -326,7 +335,7 @@ tasks:
       - cp target/release/emellie-slot {{.OUT}}/System/emellie-slot
       - >-
         cp {{.CORE}} {{.GPSP_HOST}} {{.SNES9X_HOST}} {{.SUPAFAUST_HOST}} {{.PCSX_HOST}}
-        {{.OUT}}/System/
+        {{.GAMBATTE_HOST}} {{.OUT}}/System/
       - 'echo "dist ready at {{.OUT}}, copy its contents to SD2"'
 
   core:device:
@@ -402,6 +411,31 @@ tasks:
             target-device/snes9x vendor/snes9x_libretro.so
       - file vendor/snes9x_libretro.so | grep -q aarch64
       - 'echo "built vendor/snes9x_libretro.so from vendor/snes9x-src.tar.gz @ {{.SNES9X_COMMIT}}"'
+
+  core:gambatte:
+    desc: >-
+      Build the aarch64 linux Gambatte core, the Game Boys' default, from its pinned source
+      archive. GPL-2.0; the archive ships beside it
+    status:
+      - test -f vendor/gambatte_libretro.so
+      - test "$(cat vendor/gambatte-libretro-src.sha 2>/dev/null)" = "{{.GAMBATTE_COMMIT}}"
+      - test "$(cat vendor/gambatte_libretro.so.meta 2>/dev/null)" = "$(sh cores/gambatte/build.sh stamp {{.GAMBATTE_COMMIT}})"
+    cmds:
+      - task: core:src
+        vars: {NAME: gambatte-libretro, COMMIT: '{{.GAMBATTE_COMMIT}}', FILE: Makefile.libretro}
+      - task: device:sh
+        vars:
+          CMD: >-
+            sh cores/gambatte/build.sh build {{.GAMBATTE_COMMIT}} vendor/gambatte-libretro-src.tar.gz
+            target-device/gambatte vendor/gambatte_libretro.so
+      - file vendor/gambatte_libretro.so | grep -q aarch64
+      - 'echo "built vendor/gambatte_libretro.so from vendor/gambatte-libretro-src.tar.gz @ {{.GAMBATTE_COMMIT}}"'
+
+  core:gambatte:update:
+    desc: Refetch Gambatte's source archive and rebuild the device core from it, even if the set is current
+    cmds:
+      - rm -f vendor/gambatte_libretro.so vendor/gambatte_libretro.so.meta vendor/gambatte-libretro-src.tar.gz vendor/gambatte-libretro-src.sha
+      - task: core:gambatte
 
   core:snes9x:update:
     desc: Refetch Snes9x's source archive and rebuild the device core from it, even if the set is current
@@ -513,8 +547,8 @@ tasks:
       - task: core:dsperate
 
   cores:device:
-    desc: Build every core the device bundle ships, mGBA, gpSP, Snes9x, Supafaust, pcsx_rearmed and DSperate
-    deps: [core:device, core:gpsp, core:snes9x, core:supafaust, core:pcsx, core:dsperate]
+    desc: Build every core the device bundle ships, mGBA, gpSP, Snes9x, Supafaust, pcsx_rearmed, Gambatte and DSperate
+    deps: [core:device, core:gpsp, core:snes9x, core:supafaust, core:pcsx, core:gambatte, core:dsperate]
 
   device:sh:
     desc: >-

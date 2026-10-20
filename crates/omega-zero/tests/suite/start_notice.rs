@@ -393,7 +393,7 @@ fn a_boot_to_the_clock_shows_it_once_the_clock_is_set() {
 }
 
 #[test]
-fn a_game_on_a_system_with_one_core_is_told_to_start_it_clean() {
+fn a_game_boy_game_is_told_it_can_have_its_other_core() {
     let d = card();
     write_gb_cart(&d, "Tetris", "TETRIS");
     seated(&d, Some(("Tetris", Platform::Gb)), true);
@@ -402,15 +402,12 @@ fn a_game_on_a_system_with_one_core_is_told_to_start_it_clean() {
     run_to_prompt(&mut a);
     assert_eq!(line(&a, 5).as_deref(), Some("game : Tetris"));
     assert_eq!(line(&a, 6).as_deref(), Some("sys  : GB"));
-    assert_eq!(line(&a, 7).as_deref(), Some("core : mGBA"));
+    assert_eq!(line(&a, 7).as_deref(), Some("core : Gambatte"));
     assert_eq!(
         line(&a, 13).as_deref(),
-        Some("Hold A on the shelf to start")
+        Some("X on the shelf picks another")
     );
-    assert_eq!(
-        line(&a, 14).as_deref(),
-        Some("it clean, without its resume.")
-    );
+    assert_eq!(line(&a, 14).as_deref(), Some("core for it."));
 }
 
 #[test]

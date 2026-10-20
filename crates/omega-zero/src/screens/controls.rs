@@ -1,9 +1,9 @@
 //! Controls, opened with a SELECT tap on the shelf and titled CONTROLS: what each button does
 //! on the shelf and in a game of the shelf's system, as `App::apply` and the gestures in
 //! omega-input do it. A PlayStation game has L2 and R2 of its own, so it fast-forwards on
-//! SELECT+R2, has nothing to rewind it and swaps discs on SELECT+MENU; only the GBA and the Game
-//! Boys link and have a colour correction; only the GBA and the SNES have a core to pick; only
-//! the Game Boys leave L1 and R1 to the picture's size.
+//! SELECT+R2 and swaps discs on SELECT+MENU; only the GBA and the Game Boys link and have a
+//! colour correction; only the PlayStation and the DS have no core to pick; the handhelds play X
+//! and Y as B and A, and the Game Boys L1 and R1 as A and B.
 //!
 //! It is a lone panel, as flow.html's `#screen=controls`: SHELF and IN GAME side by side, each a
 //! heading and then a line a button, the buttons in the frame's bright colour and what they do

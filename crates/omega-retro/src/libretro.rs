@@ -887,23 +887,27 @@ impl RetroCore for LibretroCore {
         }
     }
 
+    /// The battery save, and after it the cartridge clock where the core keeps that apart, as
+    /// Gambatte does a Game Boy game's: one file holds both, as mGBA's own saves do.
     fn save_ram(&self) -> Option<Vec<u8>> {
-        let data = unsafe { (self.api.get_memory_data)(MEMORY_SAVE_RAM) };
-        let len = unsafe { (self.api.get_memory_size)(MEMORY_SAVE_RAM) };
-        if data.is_null() || len == 0 {
-            return None;
+        let mut sav = unsafe { memory(&self.api, MEMORY_SAVE_RAM) }?.to_vec();
+        if let Some(rtc) = unsafe { memory(&self.api, MEMORY_RTC) } {
+            sav.extend_from_slice(rtc);
         }
-        Some(unsafe { std::slice::from_raw_parts(data as *const u8, len) }.to_vec())
+        Some(sav)
     }
 
     fn load_save_ram(&mut self, data: &[u8]) -> Result<(), CoreError> {
-        let dst = unsafe { (self.api.get_memory_data)(MEMORY_SAVE_RAM) };
-        let len = unsafe { (self.api.get_memory_size)(MEMORY_SAVE_RAM) };
-        if dst.is_null() || len == 0 {
+        let Some(dst) = (unsafe { memory_mut(&self.api, MEMORY_SAVE_RAM) }) else {
             return Err(CoreError::Unsupported("core exposes no save ram".into()));
+        };
+        let n = dst.len().min(data.len());
+        dst[..n].copy_from_slice(&data[..n]);
+        let clock = &data[n..];
+        if let Some(rtc) = unsafe { memory_mut(&self.api, MEMORY_RTC) } {
+            let n = rtc.len().min(clock.len());
+            rtc[..n].copy_from_slice(&clock[..n]);
         }
-        let n = len.min(data.len());
-        unsafe { ptr::copy_nonoverlapping(data.as_ptr(), dst as *mut u8, n) };
         Ok(())
     }
 
@@ -975,6 +979,27 @@ impl RetroCore for LibretroCore {
         let _a = Active::bind(&mut self.host);
         unsafe { halt_link() };
     }
+}
+
+/// The core's memory `id`, or none where it has none of that kind.
+///
+/// # Safety
+/// `api` is a loaded core's, and nothing else holds the slice while it is alive.
+unsafe fn memory(api: &Api, id: c_uint) -> Option<&[u8]> {
+    let data = (api.get_memory_data)(id);
+    let len = (api.get_memory_size)(id);
+    (!data.is_null() && len > 0).then(|| std::slice::from_raw_parts(data as *const u8, len))
+}
+
+/// As [`memory`], to write.
+///
+/// # Safety
+/// As [`memory`].
+#[allow(clippy::mut_from_ref)]
+unsafe fn memory_mut(api: &Api, id: c_uint) -> Option<&mut [u8]> {
+    let data = (api.get_memory_data)(id);
+    let len = (api.get_memory_size)(id);
+    (!data.is_null() && len > 0).then(|| std::slice::from_raw_parts_mut(data as *mut u8, len))
 }
 
 #[cfg(test)]

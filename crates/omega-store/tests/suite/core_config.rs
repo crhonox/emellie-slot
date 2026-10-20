@@ -157,15 +157,15 @@ fn writing_the_default_still_records_it() {
 }
 
 #[test]
-fn every_platform_defaults_to_mgba() {
+fn the_game_boys_default_to_gambatte_and_the_gba_to_mgba() {
     let d = tempfile::tempdir().unwrap();
     assert_eq!(
         core_for_platform(d.path(), "Tetris", Platform::Gb),
-        Core::Mgba
+        Core::Gambatte
     );
     assert_eq!(
         core_for_platform(d.path(), "Tetris Chromatic", Platform::Gbc),
-        Core::Mgba
+        Core::Gambatte
     );
     assert_eq!(
         core_for_platform(d.path(), "Emerald", Platform::Gba),
@@ -190,11 +190,17 @@ fn a_line_naming_a_core_the_platform_cannot_run_is_dropped() {
     write_selected_core(d.path(), "Tetris", Core::Gpsp).unwrap();
     assert_eq!(
         core_for_platform(d.path(), "Tetris", Platform::Gb),
-        Core::Mgba
+        Core::Gambatte
     );
     assert_eq!(
         core_for_platform(d.path(), "Tetris", Platform::Gbc),
-        Core::Mgba
+        Core::Gambatte
+    );
+    write_selected_core(d.path(), "Tetris", Core::Mgba).unwrap();
+    assert_eq!(
+        core_for_platform(d.path(), "Tetris", Platform::Gb),
+        Core::Mgba,
+        "a Game Boy game set to mGBA by hand lost it"
     );
 }
 

@@ -995,16 +995,16 @@ fn x_on(mut pressed: App, mut untouched: App) -> (Option<Core>, f32, bool) {
 }
 
 #[test]
-fn x_opens_no_picker_on_a_game_boy_cart() {
+fn x_opens_the_picker_on_a_game_boy_cart_and_on_a_gba_one() {
     let (_d, gb) = on_shelf_gb(&["Tetris", "Zzz"]);
     let (_twin, gb_twin) = on_shelf_gb(&["Tetris", "Zzz"]);
-    let (picker, shake, moved) = x_on(gb, gb_twin);
-    assert_eq!(picker, None, "a Game Boy cart opened the GBA picker");
+    let (picker, _, moved) = x_on(gb, gb_twin);
     assert_eq!(
-        shake, 0.0,
-        "X on a Game Boy cart was answered with a refusal shake"
+        picker,
+        Some(Core::Gambatte),
+        "a Game Boy cart opened no picker"
     );
-    assert!(!moved, "X changed what the shelf draws");
+    assert!(moved, "the picker opened and the shelf drew the same frame");
 
     let (_d, gba) = on_shelf(&["Emerald", "Zzz"]);
     let (_twin, gba_twin) = on_shelf(&["Emerald", "Zzz"]);

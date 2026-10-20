@@ -141,14 +141,10 @@ fn controls_says_what_the_shelf_and_a_gba_game_do_with_each_button() {
 }
 
 #[test]
-fn a_game_boy_has_no_core_to_pick_and_plays_l1_and_r1_as_a_and_b() {
+fn a_game_boy_has_a_core_to_pick_and_plays_l1_and_r1_as_a_and_b() {
     for platform in [Platform::Gb, Platform::Gbc] {
         let view = ControlsView::new(platform);
-        assert!(
-            !view.groups[0].lines.contains(&("X", "CORE")),
-            "{platform:?} offers a core to pick"
-        );
-        assert_eq!(view.groups[0].lines.len(), SHELF_WITH_CORES.len() - 1);
+        assert_eq!(view.groups[0].lines, SHELF_WITH_CORES, "{platform:?}");
         let game = &view.groups[1].lines;
         for line in [
             ("X Y", "B A"),
