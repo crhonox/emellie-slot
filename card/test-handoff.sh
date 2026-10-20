@@ -118,7 +118,7 @@ grep -q "^args=$rom --fullscreen --config $TMP/card/Config/dsperate/nds-nostick.
 # the frontend's volume, none saved here, its default; the handheld's own keys over the player's
 grep -q -- " --volume 60 " "$TMP/dsperate.log" || fail "DSperate did not start at the frontend's volume"
 for set in padhotkeys.volume_up=misc1 padhotkeys.volume_down=paddle1 \
-	padhotkeys.brightness_up=mod+misc1 padhotkeys.brightness_down=mod+paddle1 padhotkeys.quit_hold_ms=1000; do
+	padhotkeys.brightness_up=misc1+back padhotkeys.brightness_down=paddle1+back padhotkeys.quit_hold_ms=1000; do
 	grep -q -- "--set $set" "$TMP/dsperate.log" || fail "DSperate was not given $set"
 done
 grep -q 'misc1:b2,paddle1:b1,' "$TMP/dsperate.log" \

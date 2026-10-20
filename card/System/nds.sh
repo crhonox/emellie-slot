@@ -2,7 +2,7 @@
 # Runs a DS game in DSperate, which launch_frontend.sh hands the handheld over to once omega-zero
 # has left. DSperate draws straight to fb0 through the mali-fbdev SDL2 beside it in dsperate/lib
 # (BaseOS's own SDL2 cannot reach the panel), keeps its own battery saves, states and resume,
-# and comes back here when MENU held, or MENU+START, quits it. VOL+/VOL- are its volume, MENU
+# and comes back here when MENU held, or MENU+START, quits it. VOL+/VOL- are its volume, SELECT
 # with them the panel's light, which brightness.sh keeps in the frontend's steps.
 SD="${OMEGA_ROOT:-/mnt/sdcard}"
 SYS="$SD/System"
@@ -95,7 +95,7 @@ cd "$DIR" || exit 2
 $LOADER "$DIR/dsperate" "$rom" --fullscreen --config "$CONFIG" $resume \
 	--volume "$volume" \
 	--set padhotkeys.volume_up=misc1 --set padhotkeys.volume_down=paddle1 \
-	--set padhotkeys.brightness_up=mod+misc1 --set padhotkeys.brightness_down=mod+paddle1 \
+	--set padhotkeys.brightness_up=misc1+back --set padhotkeys.brightness_down=paddle1+back \
 	--set padhotkeys.quit_hold_ms=1000
 status=$?
 

@@ -85,7 +85,7 @@ impl ControlsView {
                 ("MENU+L1", "LOAD STATE"),
                 ("MENU+R1", "SAVE STATE"),
                 ("VOL+ VOL-", "VOLUME"),
-                ("MENU+VOL", "BRIGHTNESS"),
+                ("SELECT+VOL", "BRIGHTNESS"),
             ]);
         } else if platform.game_owns_l2_r2() {
             game.extend([
