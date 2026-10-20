@@ -251,11 +251,20 @@ fn a_ds_game_is_worked_as_its_own_emulator_binds_it_on_each_pad() {
         PadLayout::TwoSticks,
     ] {
         let lines = game(pad);
-        for line in [("MENU", "PAUSE MENU"), ("MENU+START", "BACK TO SHELF")] {
+        for line in [
+            ("MENU", "PAUSE MENU"),
+            ("HOLD MENU", "BACK TO SHELF"),
+            ("VOL+ VOL-", "VOLUME"),
+            ("MENU+VOL", "BRIGHTNESS"),
+        ] {
             assert!(lines.contains(&line), "{pad:?} has no {line:?}");
         }
         // omega-zero's own in-game controls are not there while DSperate runs the game
-        for gone in [("HOLD MENU", "EJECT"), ("SELECT+R1", "SAVE STATE")] {
+        for gone in [
+            ("HOLD MENU", "EJECT"),
+            ("SELECT+R1", "SAVE STATE"),
+            ("VOL+ VOL-", "MUTE"),
+        ] {
             assert!(!lines.contains(&gone), "{pad:?} still says {gone:?}");
         }
     }

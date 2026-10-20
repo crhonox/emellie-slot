@@ -2,7 +2,8 @@
 # Runs a DS game in DSperate, which launch_frontend.sh hands the handheld over to once omega-zero
 # has left. DSperate draws straight to fb0 through the mali-fbdev SDL2 beside it in dsperate/lib
 # (BaseOS's own SDL2 cannot reach the panel), keeps its own battery saves, states and resume,
-# and comes back here when MENU+START quits it.
+# and comes back here when MENU held, or MENU+START, quits it. VOL+/VOL- are its volume, MENU
+# with them the panel's light, which brightness.sh keeps in the frontend's steps.
 SD="${OMEGA_ROOT:-/mnt/sdcard}"
 SYS="$SD/System"
 DIR="${AGS_DSPERATE_DIR:-$SYS/dsperate}"
@@ -38,9 +39,10 @@ pad_layout() {
 
 # The pad as the mali SDL2 numbers it: the node's three phantom keys (ESC, VOL-, VOL+) come
 # first, so A is b3; above MENU the stick clicks interleave with the triggers, one map for each
-# layout. As spruceOS's AnbernicXXCommon.cfg, which measured them on an RG CubeXX.
+# layout. As spruceOS's AnbernicXXCommon.cfg, which measured them on an RG CubeXX. VOL+ and
+# VOL- are SDL's misc1 and paddle1, buttons no DS key is bound to, for the hotkeys below.
 pad_map() {
-	base="19000000010000000100000000010000,ANBERNIC-keys,a:b3,b:b4,x:b6,y:b5,leftshoulder:b7,rightshoulder:b8,guide:b11,start:b10,back:b9,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2"
+	base="19000000010000000100000000010000,ANBERNIC-keys,a:b3,b:b4,x:b6,y:b5,leftshoulder:b7,rightshoulder:b8,guide:b11,start:b10,back:b9,misc1:b2,paddle1:b1,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2"
 	case "$1" in
 	nostick)
 		echo "$base,lefttrigger:b12,righttrigger:b13,leftx:a0,lefty:a1,platform:Linux," ;;
@@ -81,8 +83,20 @@ export SDL_GAMECONTROLLERCONFIG="$(pad_map "$layout" |
 governor="$(cat "$CPU/scaling_governor" 2>/dev/null)"
 echo performance > "$CPU/scaling_governor" 2>/dev/null
 
+# The frontend's volume, the speaker's, as DSperate's own to start from: it steps it by itself
+state="$SD/Config/emellie-slot.state"
+volume="$(sed -n 's/^volume=//p' "$state" 2>/dev/null)"
+case "$volume" in '' | *[!0-9]*) volume=60 ;; esac
+[ "$(sed -n 's/^muted=//p' "$state" 2>/dev/null)" = true ] && volume=0
+export DS_BRIGHTNESS="sh $SYS/brightness.sh"
+
+# Over whatever the player's settings say: these keys are the handheld's, not the game's
 cd "$DIR" || exit 2
-$LOADER "$DIR/dsperate" "$rom" --fullscreen --config "$CONFIG" $resume
+$LOADER "$DIR/dsperate" "$rom" --fullscreen --config "$CONFIG" $resume \
+	--volume "$volume" \
+	--set padhotkeys.volume_up=misc1 --set padhotkeys.volume_down=paddle1 \
+	--set padhotkeys.brightness_up=mod+misc1 --set padhotkeys.brightness_down=mod+paddle1 \
+	--set padhotkeys.quit_hold_ms=1000
 status=$?
 
 [ -n "$governor" ] && echo "$governor" > "$CPU/scaling_governor" 2>/dev/null

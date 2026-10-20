@@ -113,8 +113,16 @@ status=0
 TMP="$TMP" CPUDIR="$TMP/cpu" OMEGA_ROOT="$TMP/card" AGS_LOADER=sh AGS_CPUFREQ="$TMP/cpu" \
 	AGS_BASEOS_RELEASE="$TMP/release" sh "$TMP/card/System/nds.sh" "$rom" || status=$?
 [ "$status" = 3 ] || fail "nds.sh did not leave with DSperate's status: $status"
-grep -qx "args=$rom --fullscreen --config $TMP/card/Config/dsperate/nds-nostick.ini" "$TMP/dsperate.log" \
+grep -q "^args=$rom --fullscreen --config $TMP/card/Config/dsperate/nds-nostick.ini " "$TMP/dsperate.log" \
 	|| fail "DSperate was not run with the game and the settings: [$(cat "$TMP/dsperate.log")]"
+# the frontend's volume, none saved here, its default; the handheld's own keys over the player's
+grep -q -- " --volume 60 " "$TMP/dsperate.log" || fail "DSperate did not start at the frontend's volume"
+for set in padhotkeys.volume_up=misc1 padhotkeys.volume_down=paddle1 \
+	padhotkeys.brightness_up=mod+misc1 padhotkeys.brightness_down=mod+paddle1 padhotkeys.quit_hold_ms=1000; do
+	grep -q -- "--set $set" "$TMP/dsperate.log" || fail "DSperate was not given $set"
+done
+grep -q 'misc1:b2,paddle1:b1,' "$TMP/dsperate.log" \
+	|| fail "VOL+ and VOL- are not SDL's misc1 and paddle1: [$(grep map= "$TMP/dsperate.log")]"
 grep -q 'lefttrigger:b12,righttrigger:b13' "$TMP/dsperate.log" \
 	|| fail "the RG35XX SP's triggers are not b12/b13: [$(grep map= "$TMP/dsperate.log")]"
 grep -q 'rightx' "$TMP/dsperate.log" && fail "a pad with no sticks was given a right stick"
@@ -136,7 +144,7 @@ grep -q '@SD@' "$TMP/card/Config/dsperate/nds-nostick.ini" && fail "a path was l
 # held A: DSperate's resume is not taken up
 TMP="$TMP" CPUDIR="$TMP/cpu" OMEGA_ROOT="$TMP/card" AGS_LOADER=sh AGS_CPUFREQ="$TMP/cpu" \
 	AGS_BASEOS_RELEASE="$TMP/release" sh "$TMP/card/System/nds.sh" "$rom" --clean || true
-grep -qx "args=$rom --fullscreen --config $TMP/card/Config/dsperate/nds-nostick.ini --no-autoload" "$TMP/dsperate.log" \
+grep -q "^args=$rom --fullscreen --config $TMP/card/Config/dsperate/nds-nostick.ini --no-autoload " "$TMP/dsperate.log" \
 	|| fail "a clean start still resumed: [$(grep args= "$TMP/dsperate.log")]"
 
 # the player's settings are theirs once seeded
@@ -154,7 +162,7 @@ printf 'BASEOS_TARGET=rgcubexx\n' > "$TMP/release"
 TMP="$TMP" CPUDIR="$TMP/cpu" OMEGA_ROOT="$TMP/card" AGS_LOADER=sh AGS_CPUFREQ="$TMP/cpu" \
 	AGS_BASEOS_RELEASE="$TMP/release" sh "$TMP/card/System/nds.sh" "$rom" || true
 cube="$TMP/card/Config/dsperate/nds-2stick.ini"
-grep -qx "args=$rom --fullscreen --config $cube" "$TMP/dsperate.log" \
+grep -q "^args=$rom --fullscreen --config $cube " "$TMP/dsperate.log" \
 	|| fail "the CubeXX did not get settings of its own: [$(grep args= "$TMP/dsperate.log")]"
 grep -q 'lefttrigger:b13,righttrigger:b14' "$TMP/dsperate.log" \
 	|| fail "the CubeXX's triggers are not b13/b14: [$(grep map= "$TMP/dsperate.log")]"

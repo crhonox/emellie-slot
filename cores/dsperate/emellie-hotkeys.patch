@@ -1,0 +1,104 @@
+diff --git a/src/frontend/sdl/input.cpp b/src/frontend/sdl/input.cpp
+--- a/src/frontend/sdl/input.cpp
++++ b/src/frontend/sdl/input.cpp
+@@ -27,12 +27,15 @@
+ 
+ const char* const kActionNames[static_cast<int>(Action::Count)] = {
+   "quit", "pause", "fast_forward", "fast_forward_toggle", "save_state", "load_state", "slot_next", "slot_prev",
+-  "volume_up", "volume_down", "mute", "layout_next", "layout_prev", "screen_swap", "pip_corner_next", "fullscreen", "screenshot", "lid", "mic", "fps"};
++  "volume_up", "volume_down", "mute", "layout_next", "layout_prev", "screen_swap", "pip_corner_next", "fullscreen", "screenshot", "lid", "mic", "fps",
++  "brightness_up", "brightness_down"};
+ const char* const kKeyHotDefaults[static_cast<int>(Action::Count)] = {
+-  "Escape", "p", "Tab", "none", "F5", "F7", "F3", "F2", "=", "-", "0", "F4", "F10", "F6", "F8", "f", "F9", "l", "m", "none"};
++  "Escape", "p", "Tab", "none", "F5", "F7", "F3", "F2", "=", "-", "0", "F4", "F10", "F6", "F8", "f", "F9", "l", "m", "none",
++  "none", "none"};
+ const char* const kPadHotDefaults[static_cast<int>(Action::Count)] = {
+   "mod+start+back", "mod+start", "mod++righttrigger", "none", "mod+rightshoulder", "mod+leftshoulder", "mod+dpright", "mod+dpleft",
+-  "none", "none", "none", "mod+back", "mod+x", "mod+y", "none", "none", "none", "none", "leftstick", "none"};
++  "none", "none", "none", "mod+back", "mod+x", "mod+y", "none", "none", "none", "none", "leftstick", "none",
++  "none", "none"};
+ 
+ // Controls that are neither a DS button nor a hotkey: hotkey modifier and
+ // the pad-driven pen. Kept as one copy readable from both configure() and
+@@ -236,6 +239,7 @@
+       std::fprintf(stderr, "config: pad.stick_dpad and pad.stick_face are both the %s stick; it will work both the d-pad and X/B/Y/A\n", sf.c_str());
+   }
+   deadzone_ = cfg.num("pad.stick_deadzone", 12000);
++  quit_hold_ms_ = cfg.num("padhotkeys.quit_hold_ms", 0);
+   {
+     const std::string ff = cfg.str("pad.face_fix", "auto");
+     if (ff != "auto" && ff != "off") std::fprintf(stderr, "config: pad.face_fix \"%s\" is not auto | off\n", ff.c_str());
+@@ -547,7 +551,7 @@
+       }
+   }
+   if (same(pad_mod_)) {
+-    if (down) { pad_mod_down_ = true; pad_mod_used_ = false; }
++    if (down) { pad_mod_down_ = true; pad_mod_used_ = false; pad_mod_since_ = SDL_GetTicks(); }
+     else {
+       pad_mod_down_ = false;
+       // Released alone: the "mod" hotkey if there is one, else its button for one frame.
+diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
+--- a/src/frontend/sdl/input.h
++++ b/src/frontend/sdl/input.h
+@@ -17,7 +17,8 @@
+ // Things a hotkey can do. The frontend drains them once a frame.
+ enum class Action : u8 {
+   Quit, Pause, FastForward, FastForwardToggle, SaveState, LoadState, SlotNext, SlotPrev,
+-  VolumeUp, VolumeDown, Mute, LayoutNext, LayoutPrev, ScreenSwap, PipCornerNext, Fullscreen, Screenshot, Lid, Mic, FpsToggle, Count
++  VolumeUp, VolumeDown, Mute, LayoutNext, LayoutPrev, ScreenSwap, PipCornerNext, Fullscreen, Screenshot, Lid, Mic, FpsToggle,
++  BrightnessUp, BrightnessDown, Count
+ };
+ const char* action_name(Action a);
+ 
+@@ -45,6 +46,11 @@
+   // State for the coming frame. A press+release both arrived since the last
+   // frame still counts as held this frame; the release lands on the next one.
+   input::Frame frame() {
++    // The pad's modifier held alone for padhotkeys.quit_hold_ms quits, and is then no lone press.
++    if (quit_hold_ms_ > 0 && pad_mod_down_ && !pad_mod_used_ && SDL_GetTicks() - pad_mod_since_ >= static_cast<u32>(quit_hold_ms_)) {
++      pad_mod_used_ = true;
++      quit_ = true;
++    }
+     const input::Frame f{static_cast<u16>(buttons_ | pressed_ | stick_ | face_stick_), static_cast<u8>(touch_x_), static_cast<u8>(touch_y_), touching_ || touched_ || stylus_down_ != 0};
+     pressed_ = 0; stick_pressed_ = 0; touched_ = false;
+     menu_fb_pressed_ = 0;   // menu fallback presses die with their frame
+@@ -209,6 +215,8 @@
+   Bind pad_hot_[static_cast<int>(Action::Count)][HOT_SLOTS];
+   Bind key_mod_, pad_mod_;
+   bool key_mod_down_ = false, key_mod_used_ = false, pad_mod_down_ = false, pad_mod_used_ = false;
++  u32 pad_mod_since_ = 0;   // SDL_GetTicks() when the pad's modifier went down
++  int quit_hold_ms_ = 0;    // padhotkeys.quit_hold_ms; 0 = holding it quits nothing
+   int  key_mod_alone_ = -1, pad_mod_alone_ = -1;   // the action bound to "mod" alone, or -1
+   int  pad_mod_button_ = -1;   // the DS button the pad modifier would otherwise be
+   bool axis_state_[SDL_CONTROLLER_AXIS_MAX][2] = {};   // per axis: - and + past the threshold
+diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
+--- a/src/frontend/sdl/main.cpp
++++ b/src/frontend/sdl/main.cpp
+@@ -1103,6 +1103,13 @@
+     else if (flag("--no-gpu-present")) cli.set("video.gpu_present", "false");
+     else if (flag("--no-audio")) cli.set("audio.enabled", "false");
+     else if (arg("--volume")) cli.set("audio.volume", argv[++i]);
++    // Any setting, over the files: --set section.key=value.
++    else if (arg("--set")) {
++      const std::string kv = argv[++i];
++      const size_t eq = kv.find('=');
++      if (eq != std::string::npos && eq > 0) cli.set(kv.substr(0, eq), kv.substr(eq + 1));
++      else std::fprintf(stderr, "--set %s: not section.key=value\n", kv.c_str());
++    }
+     else if (arg("--audio-buffer")) cli.set("audio.buffer_size", argv[++i]);
+     else if (arg("--speed")) cli.set("emu.speed", argv[++i]);
+     else if (arg("--limiter")) cli.set("emu.limiter", argv[++i]);
+@@ -3230,6 +3237,13 @@
+       case A::VolumeUp: audio.set_volume(audio.volume() + 10); audio.set_muted(false); VLOG("volume %d%%\n", audio.volume()); break;
+       case A::VolumeDown: audio.set_volume(audio.volume() - 10); VLOG("volume %d%%\n", audio.volume()); break;
+       case A::Mute: audio.set_muted(!audio.muted()); VLOG("%s\n", audio.muted() ? "muted" : "unmuted"); break;
++      // The panel's light is the frontend's: DS_BRIGHTNESS names a command taking up or down.
++      case A::BrightnessUp: case A::BrightnessDown:
++        if (const char* cmd = std::getenv("DS_BRIGHTNESS"); cmd && *cmd) {
++          const std::string run = std::string(cmd) + (a == A::BrightnessUp ? " up" : " down") + " >/dev/null 2>&1 &";
++          if (std::system(run.c_str()) != 0) VLOG("brightness: %s failed\n", cmd);
++        }
++        break;
+       // Anything moving the screens while paused must recomposite the menu.
+       case A::Fullscreen: display.toggle_fullscreen(); if (dual_window) display2.toggle_fullscreen(); menu_dirty = true; break;
+       case A::LayoutNext: case A::LayoutPrev: {

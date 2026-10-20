@@ -65,9 +65,9 @@ impl ControlsView {
             Platform::Snes | Platform::Ps1 | Platform::Nds => {}
         }
         if platform.external() {
-            // what the card's System/dsperate/nds.ini and pad-*.ini bind, DSperate's own menu
-            // on MENU
-            game.extend([("MENU", "PAUSE MENU"), ("MENU+START", "BACK TO SHELF")]);
+            // what the card's System/dsperate/nds.ini and pad-*.ini bind, and nds.sh over
+            // them, DSperate's own menu on MENU
+            game.extend([("MENU", "PAUSE MENU"), ("HOLD MENU", "BACK TO SHELF")]);
             game.extend(match pad {
                 PadLayout::NoStick => [("HOLD L2+✚", "MOVE STYLUS"), ("R2", "TOUCH")].as_slice(),
                 PadLayout::OneStick => [("STICK", "MOVE STYLUS"), ("R2", "TOUCH")].as_slice(),
@@ -84,6 +84,8 @@ impl ControlsView {
                 ("MENU+R2", "FAST FORWARD"),
                 ("MENU+L1", "LOAD STATE"),
                 ("MENU+R1", "SAVE STATE"),
+                ("VOL+ VOL-", "VOLUME"),
+                ("MENU+VOL", "BRIGHTNESS"),
             ]);
         } else if platform.game_owns_l2_r2() {
             game.extend([
