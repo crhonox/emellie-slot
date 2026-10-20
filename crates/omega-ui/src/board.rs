@@ -616,7 +616,7 @@ pub const SNES_SOCKETS: Sockets = Sockets {
 pub fn sockets_for(platform: Platform) -> Sockets {
     match platform {
         Platform::Snes => SNES_SOCKETS,
-        Platform::Gba | Platform::Gb | Platform::Gbc | Platform::Ps1 => GBA_SOCKETS,
+        Platform::Gba | Platform::Gb | Platform::Gbc | Platform::Ps1 | Platform::Nds => GBA_SOCKETS,
     }
 }
 
@@ -624,7 +624,7 @@ pub fn sockets_for(platform: Platform) -> Sockets {
 pub fn sockets_of(core: Core) -> Sockets {
     match core {
         Core::Snes9x | Core::Supafaust => SNES_SOCKETS,
-        Core::Mgba | Core::Gpsp | Core::PcsxRearmed => GBA_SOCKETS,
+        Core::Mgba | Core::Gpsp | Core::PcsxRearmed | Core::Dsperate => GBA_SOCKETS,
     }
 }
 

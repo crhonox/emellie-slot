@@ -165,11 +165,11 @@ impl Script {
             sounds: vec![(0.0, Sfx::Blip)],
             gaps: KEY_GAPS.iter().cycle(),
         };
-        s.shown(0, 0.0, "OMEGA ZERO HANDHELD SYSTEM");
+        s.shown(0, 0.0, "EMELLIE SLOT HANDHELD SYSTEM");
         let model: String = facts.model.chars().take(COLS as usize - 6).collect();
         s.shown(1, 0.0, &format!("Model {model}"));
         s.shown(3, 450.0, "Copyright (c) 2026 OAURAMOS");
-        s.shown(4, 450.0, "omega-zero on BaseOS");
+        s.shown(4, 450.0, "Emellie Slot on BaseOS");
         s.shown(5, 450.0, "GPL-3.0 Free Software");
         s.counted(7, 850.0, "real  mem =", facts.mem_mb);
         s.counted(8, 850.0 + COUNT_MS + 150.0, "avail mem =", facts.avail_mb);
@@ -391,6 +391,12 @@ impl App {
         if self.boot_fades() {
             self.opening = Some(Opening::new(facts));
         }
+    }
+
+    /// What the boot does instead of the opening: no terminal, the shelf straight up, but the
+    /// start notice still told, so a game that took the frontend down is still named.
+    pub fn start_without_opening(&mut self, facts: &Facts) {
+        self.tell_start_notice(facts);
     }
 
     /// Whether the opening is playing.

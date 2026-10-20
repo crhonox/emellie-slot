@@ -1,7 +1,7 @@
 use omega_gfx::{out_h, spun_x, Draw, MeshId, MeshVertex, TexId};
 
 use crate::models::disc::StackMeshes;
-use crate::models::{disc, snes, snes::SnesShell};
+use crate::models::{disc, nds, snes, snes::SnesShell};
 use crate::silhouette::GbShell;
 
 /// How thick a cart is, as a share of its width: a Game Pak is about 8 mm thick and 57 wide.
@@ -53,16 +53,19 @@ pub enum CartModel {
     Gb(GbShell),
     Snes(SnesShell),
     Disc,
+    /// The DS game card.
+    Nds,
 }
 
 impl CartModel {
-    pub const ALL: [CartModel; 6] = [
+    pub const ALL: [CartModel; 7] = [
         CartModel::Gba,
         CartModel::Gb(GbShell::Notched),
         CartModel::Gb(GbShell::Rounded),
         CartModel::Snes(SnesShell::Ntsc),
         CartModel::Snes(SnesShell::Famicom),
         CartModel::Disc,
+        CartModel::Nds,
     ];
 
     /// Its place in [`CartModel::ALL`].
@@ -74,6 +77,7 @@ impl CartModel {
             CartModel::Snes(SnesShell::Ntsc) => 3,
             CartModel::Snes(SnesShell::Famicom) => 4,
             CartModel::Disc => 5,
+            CartModel::Nds => 6,
         }
     }
 
@@ -83,6 +87,7 @@ impl CartModel {
             CartModel::Gba | CartModel::Gb(_) => THICK,
             CartModel::Snes(_) => snes::THICK,
             CartModel::Disc => disc::THICK,
+            CartModel::Nds => nds::THICK,
         }
     }
 }
@@ -211,6 +216,7 @@ pub fn outline(model: CartModel) -> (Vec<(f32, f32)>, (f32, f32)) {
         CartModel::Gb(GbShell::Rounded) => (GBC_OUTLINE.to_vec(), (240.0, 259.0)),
         CartModel::Snes(shell) => snes::outline(shell),
         CartModel::Disc => disc::outline(),
+        CartModel::Nds => nds::outline(),
     }
 }
 

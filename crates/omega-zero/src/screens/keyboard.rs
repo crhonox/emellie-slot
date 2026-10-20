@@ -49,6 +49,11 @@ pub(crate) fn typing_of(phase: &Phase) -> Option<TypingView<'_>> {
             keys: &t.keys,
             refused: false,
         }),
+        Phase::Cheevos(screen) => screen.typing.as_ref().map(|t| TypingView {
+            prompt: t.prompt(),
+            keys: &t.keys,
+            refused: false,
+        }),
         _ => None,
     }
 }

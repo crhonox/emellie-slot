@@ -20,7 +20,7 @@ use omega_store::{ps1, Cart, Platform, Region};
 use crate::json::Json;
 
 const API: &str = "https://api.screenscraper.fr/api2";
-pub const SOFTNAME: &str = "omega-zero";
+pub const SOFTNAME: &str = "Emellie Slot";
 pub const ACCOUNT_FILE: &str = "Config/screenscraper.conf";
 
 /// The widest label scan worth fetching for `platform`: half as wide again as its widest face's
@@ -204,6 +204,7 @@ pub fn system_id(platform: Platform) -> u32 {
         Platform::Gbc => 10,
         Platform::Snes => 4,
         Platform::Ps1 => 57,
+        Platform::Nds => 15,
     }
 }
 
@@ -311,7 +312,10 @@ fn region_code(region: Region) -> Option<&'static str> {
 pub fn label_regions(want: &Want) -> Vec<&'static str> {
     let mut out = tag_regions(&want.stem);
     match want.platform {
-        Platform::Gba | Platform::Gb | Platform::Gbc => return regions(&want.stem, &want.code),
+        // a DS game code ends in its region letter, as a GBA one does
+        Platform::Gba | Platform::Gb | Platform::Gbc | Platform::Nds => {
+            return regions(&want.stem, &want.code)
+        }
         Platform::Snes => {
             let region = omega_store::snes::region(&want.rom, &want.stem);
             out.extend(region.and_then(region_code));
@@ -416,6 +420,9 @@ pub fn lookups(want: &Want) -> Vec<Lookup> {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let system = system_id(want.platform);
+    if want.platform == Platform::Nds {
+        return nds_lookups(want, system, file_name);
+    }
     if want.platform != Platform::Ps1 {
         let Ok(bytes) = std::fs::read(&want.rom) else {
             return Vec::new();
@@ -469,6 +476,31 @@ pub fn lookups(want: &Want) -> Vec<Lookup> {
     if serial.is_some() {
         out.push(Lookup {
             serial,
+            ..named.clone()
+        });
+    }
+    out.push(named);
+    out
+}
+
+/// A DS cart is hundreds of megabytes, too much to read whole on the console for its CRC: it is
+/// asked about by its game code, then by its file's name and size alone.
+fn nds_lookups(want: &Want, system: u32, file_name: String) -> Vec<Lookup> {
+    let Ok(meta) = std::fs::metadata(&want.rom) else {
+        return Vec::new();
+    };
+    let named = Lookup {
+        system,
+        kind: "rom",
+        crc: None,
+        file_name,
+        size: meta.len(),
+        serial: None,
+    };
+    let mut out = Vec::new();
+    if !want.code.is_empty() {
+        out.push(Lookup {
+            serial: Some(want.code.clone()),
             ..named.clone()
         });
     }

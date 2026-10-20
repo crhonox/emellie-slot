@@ -26,8 +26,10 @@ use crate::background_screen::{Backdrop, BackgroundScreen};
 use crate::bluetooth::bluetooth_jobs;
 use crate::bluetooth_screen::{Bluetooth, BluetoothScreen};
 use crate::boot_fade::BootFade;
+use crate::cheevos_screen::CheevosScreen;
 use crate::core_picker::{Chip, CorePicker, Outcome, Press};
 use crate::disc_screen::{DiscBar, DiscScreen};
+use crate::handoff::{self, Handoff};
 use crate::label_screen::{Labels, LabelsScreen};
 use crate::label_sync::{label_jobs, Account, LabelJobs, NoKey, Want};
 use crate::link_kind::{link_carried, link_kind, serial_option, LinkKind};
@@ -253,6 +255,8 @@ pub enum Phase {
     /// The panel Y opened on one of Network's rows: Wi-Fi, network time or SSH.
     Info(InfoScreen),
     Labels(LabelsScreen),
+    /// RetroAchievements, opened from Settings.
+    Cheevos(CheevosScreen),
     Background(BackgroundScreen),
     Doze {
         cart: Option<String>,
@@ -318,6 +322,9 @@ pub struct App {
     starting: Option<LinkStarting>,
     pub(crate) link_transport: Option<(u16, Box<dyn LinkChannel>)>,
     pub(crate) restarting: bool,
+    /// A game gone into the handheld that runs in an emulator of its own, waiting for
+    /// omega-zero to leave so that it can run.
+    handoff: Option<Handoff>,
     pub(crate) act_at: Millis,
     pub(crate) root: Option<PathBuf>,
     pub(crate) state: AppState,
@@ -377,6 +384,9 @@ pub struct App {
     pub(crate) bluetooth_faces: Option<omega_ui::network::NetworkFaces>,
     pub(crate) labels: Labels,
     pub(crate) labels_panel: Option<Lone>,
+    pub(crate) cheevos_panel: Option<Lone>,
+    /// The RetroAchievements account as the card has it, for Settings.
+    pub(crate) cheevos_account: omega_cheevos::config::Account,
     /// Carts whose labels arrived and whose faces are still drawn without them.
     pub(crate) stale_faces: Vec<(Platform, String)>,
     pub(crate) background_panel: Option<Lone>,
@@ -431,6 +441,8 @@ impl App {
             bluetooth_faces: None,
             labels: Labels::new(Box::new(NoKey::default()), None),
             labels_panel: None,
+            cheevos_panel: None,
+            cheevos_account: omega_cheevos::config::Account::default(),
             stale_faces: Vec::new(),
             background_panel: None,
             backdrop_face: None,
@@ -479,6 +491,7 @@ impl App {
             starting: None,
             link_transport: None,
             restarting: false,
+            handoff: None,
             act_at: 0,
             root: None,
             state: AppState::default(),
@@ -533,10 +546,16 @@ impl App {
         app.ssh.start(app.state.ssh, Some(root));
         app.bluetooth.start(app.state.bluetooth);
         app.labels = Labels::new(label_jobs(root), Account::load(root));
+        app.cheevos_account = omega_cheevos::config::account(root);
         if let Some(fell) = persist::take_starting(root) {
             eprintln!("omega-zero: {fell} took omega-zero down as it started; it is not resumed");
             app.hold_resume = true;
             app.start_notice = StartNotice::of(root, &fell);
+        }
+        // back from a game played in its own emulator, which has kept its own resume: the cart
+        // is left on the shelf rather than handed straight back
+        if handoff::returned() {
+            app.hold_resume = true;
         }
         if app.state.clock_set {
             app.start();
@@ -1263,6 +1282,7 @@ impl App {
             Phase::Bluetooth(_) => self.bluetooth_input(action),
             Phase::Info(_) => self.info_input(action),
             Phase::Labels(_) => self.labels_input(action),
+            Phase::Cheevos(_) => self.cheevos_input(action),
             Phase::Background(_) => self.background_input(action),
             _ => {}
         }
@@ -1342,9 +1362,11 @@ impl App {
         match self.phase {
             Phase::Network(_) | Phase::Info(_) => Watch::Networks,
             Phase::Settings { .. } => Watch::Status,
-            Phase::Shelf | Phase::Inserting { .. } | Phase::Ejecting { .. } | Phase::Labels(_) => {
-                Watch::Glance
-            }
+            Phase::Shelf
+            | Phase::Inserting { .. }
+            | Phase::Ejecting { .. }
+            | Phase::Labels(_)
+            | Phase::Cheevos(_) => Watch::Glance,
             _ => Watch::Idle,
         }
     }
@@ -1668,6 +1690,7 @@ impl App {
             self.power_slide = None;
         }
         let mut touched = false;
+        let external = self.external_seated();
         let next = match &mut self.phase {
             Phase::Inserting {
                 cart,
@@ -1680,9 +1703,20 @@ impl App {
                 *t += dt;
                 let at = SEATED_AT - Sfx::Insert.lead();
                 touched = !*resumed && was < at && *t >= at;
-                (*t >= INSERT_S && *core_ready).then(|| Phase::Playing {
-                    cart: std::mem::take(cart),
-                })
+                match external {
+                    // all the way in, the cart stays there while omega-zero makes way
+                    Some(h) if *t >= INSERT_S => {
+                        if self.handoff.is_none() {
+                            eprintln!("omega-zero: handoff: {} goes to its own emulator", h.stem);
+                            self.handoff = Some(h);
+                        }
+                        None
+                    }
+                    Some(_) => None,
+                    None => (*t >= INSERT_S && *core_ready).then(|| Phase::Playing {
+                        cart: std::mem::take(cart),
+                    }),
+                }
             }
             Phase::Ejecting { t, .. } => {
                 if self.screen <= 0.0 {
@@ -1826,6 +1860,51 @@ impl App {
         self.last_led = Some(state);
         if let Some(power) = self.power.as_mut() {
             power.set_led(state);
+        }
+    }
+
+    /// The seated cart as a handoff, when its system runs in an emulator of its own.
+    fn external_seated(&self) -> Option<Handoff> {
+        let clean = self.starting_clean();
+        self.seated_cart()
+            .filter(|c| c.platform.external())
+            .map(|c| Handoff {
+                platform: c.platform,
+                stem: c.stem.clone(),
+                rom: c.rom.clone(),
+                clean,
+            })
+    }
+
+    /// The game waiting for omega-zero to leave so that its own emulator can run.
+    pub fn handoff(&self) -> Option<&Handoff> {
+        self.handoff.as_ref()
+    }
+
+    /// Writes the handoff for `launch_frontend.sh`, and notes the game as the one in the
+    /// handheld, so that a boot that did not come back through omega-zero, the handheld
+    /// switched off in the game, hands it over again. False when it could not be written: the
+    /// cart then comes back out.
+    pub fn hand_over(&mut self) -> bool {
+        let (Some(root), Some(h)) = (self.root.clone(), self.handoff.clone()) else {
+            return false;
+        };
+        self.settle_saves();
+        match h.write(&root) {
+            Ok(path) => {
+                eprintln!("omega-zero: handoff: wrote {}", path.display());
+                self.state.cart = Some(h.stem.clone());
+                self.state.cart_platform = Some(h.platform);
+                self.persist();
+                true
+            }
+            Err(e) => {
+                eprintln!("omega-zero: handoff: could not write it: {e}");
+                self.handoff = None;
+                self.on_core_failed();
+                self.refuse();
+                false
+            }
         }
     }
 
@@ -2008,10 +2087,11 @@ impl App {
             Phase::Controls => self.draw_controls(out),
             Phase::Background(_) => self.draw_background_screen(out),
             Phase::Labels(_) if typing_of(phase).is_none() => self.draw_labels(out),
+            Phase::Cheevos(_) if typing_of(phase).is_none() => self.draw_cheevos(out),
             // the modal and its panels stand over the backdrop, with nothing between
             Phase::Network(screen) if screen.typing.is_none() => self.draw_network(out),
             // the keyboard's modal stands on the backdrop itself
-            Phase::Network(_) | Phase::Labels(_) => {
+            Phase::Network(_) | Phase::Labels(_) | Phase::Cheevos(_) => {
                 if let Some(t) = typing_of(phase) {
                     self.draw_keyboard(&t, out);
                 }

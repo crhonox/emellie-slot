@@ -199,3 +199,79 @@ fn a_few_stray_pixels_over_the_game_are_forgiven() {
         "one line over the picture is under 1% of it"
     );
 }
+
+/// An LCD grid as overlays draw one: every game pixel's edges darkened, its middle left light,
+/// and the console's name solid in the band under the picture.
+fn grid_overlay(w: u32, h: u32, picture_h: u32, strongest: u8) -> Vec<u8> {
+    let mut rgba = vec![0u8; (w * h * 4) as usize];
+    for y in 0..h {
+        for x in 0..w {
+            let a = if y >= picture_h {
+                255
+            } else if x % 3 == 2 || y % 3 == 2 {
+                strongest
+            } else {
+                40
+            };
+            rgba[((y * w + x) * 4 + 3) as usize] = a;
+        }
+    }
+    rgba
+}
+
+#[test]
+fn a_grid_the_game_shows_through_everywhere_is_used() {
+    let rgba = grid_overlay(640, 480, 427, 234);
+    assert!(
+        omega_ui::overlay_clear(&rgba, 640, 480, [0.0, 0.0, 640.0, 427.0]),
+        "an LCD grid over the GBA picture was refused"
+    );
+}
+
+#[test]
+fn a_grid_solid_anywhere_over_the_game_is_refused() {
+    let rgba = grid_overlay(640, 480, 427, 255);
+    assert!(
+        !omega_ui::overlay_clear(&rgba, 640, 480, [0.0, 0.0, 640.0, 427.0]),
+        "a grid with solid lines hides the game"
+    );
+    let laid_too_low = grid_overlay(640, 480, 400, 234);
+    assert!(
+        !omega_ui::overlay_clear(&laid_too_low, 640, 480, [0.0, 0.0, 640.0, 427.0]),
+        "a grid whose solid band runs over the picture was used"
+    );
+}
+
+#[test]
+fn a_frame_a_pixel_over_the_pictures_edge_is_used() {
+    // a Game Boy's 640x576 at (40, 61) on 720x720, its grid over every fourth line and the
+    // frame's last row and column a pixel into the picture, as a RetroArch overlay has them
+    let (w, h) = (720u32, 720u32);
+    let mut rgba = vec![0u8; (w * h * 4) as usize];
+    for y in 0..h {
+        for x in 0..w {
+            let inside = (40..679).contains(&x) && (61..636).contains(&y);
+            let a = if !inside {
+                255
+            } else if (x - 40) % 4 == 3 || (y - 61) % 4 == 3 {
+                153
+            } else {
+                0
+            };
+            rgba[((y * w + x) * 4 + 3) as usize] = a;
+        }
+    }
+    assert!(omega_ui::overlay_clear(
+        &rgba,
+        w,
+        h,
+        [40.0, 61.0, 640.0, 576.0]
+    ));
+    // laid for a picture 30 pixels higher, its frame covers a row of the game's
+    assert!(!omega_ui::overlay_clear(
+        &rgba,
+        w,
+        h,
+        [40.0, 31.0, 640.0, 576.0]
+    ));
+}

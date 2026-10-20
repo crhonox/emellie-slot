@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::RwLock;
 
 use omega_gfx::{canvas, Canvas, Filter, GameView, SCALE, SRC_H, SRC_W, WHOLE_TEXTURE};
 use omega_store::{ini, Platform};
@@ -31,6 +32,76 @@ impl VideoMode {
             "stretch" => Some(VideoMode::Stretch),
             _ => None,
         }
+    }
+}
+
+/// Where an overlay puts the game, read from beside it: `Overlays/<system>/<w>x<h>.ini`, its
+/// `x`, `y`, `w` and `h` in the canvas's pixels, as RetroArch's custom viewport for the overlay
+/// says them. With one, the game is drawn there on that canvas, whatever its picture mode, so
+/// an overlay made for RetroArch frames it as it was made to.
+static OVERLAY_PICTURES: RwLock<Vec<OverlayPicture>> = RwLock::new(Vec::new());
+
+/// A system's overlay picture on the canvas of that size.
+type OverlayPicture = (Platform, (u32, u32), [f32; 4]);
+
+/// Reads every overlay's picture on the card at `root`, for every canvas.
+pub fn read_overlay_pictures(root: &Path) {
+    let mut found = Vec::new();
+    for platform in Platform::ALL {
+        for c in Canvas::ALL {
+            let file = format!("Overlays/{}/{}x{}.ini", platform.dir_name(), c.w, c.h);
+            if let Some(rect) = parse_picture(&ini::read(root, &file), c) {
+                eprintln!("omega-zero: overlay: {file} puts the game at {rect:?}");
+                found.push((platform, (c.w, c.h), rect));
+            }
+        }
+    }
+    if let Ok(mut pictures) = OVERLAY_PICTURES.write() {
+        *pictures = found;
+    }
+}
+
+/// The picture `keys` say, when it is whole and on canvas `c`.
+pub fn parse_picture(
+    keys: &std::collections::HashMap<String, String>,
+    c: Canvas,
+) -> Option<[f32; 4]> {
+    let num = |k: &str| keys.get(k)?.trim().parse::<f32>().ok();
+    let rect = [num("x")?, num("y")?, num("w")?, num("h")?];
+    let fits = rect[0] >= 0.0
+        && rect[1] >= 0.0
+        && rect[2] > 0.0
+        && rect[3] > 0.0
+        && rect[0] + rect[2] <= c.w as f32
+        && rect[1] + rect[3] <= c.h as f32;
+    fits.then_some(rect)
+}
+
+fn overlay_picture(c: Canvas, platform: Platform) -> Option<[f32; 4]> {
+    let pictures = OVERLAY_PICTURES.read().ok()?;
+    pictures
+        .iter()
+        .find(|(p, size, _)| *p == platform && *size == (c.w, c.h))
+        .map(|(_, _, rect)| *rect)
+}
+
+/// The game in `rect` on canvas `c`: a Game Boy's own window of the texture, or a console's
+/// whole frame, through the sharp filter, at the scale the rect makes.
+pub fn placed(c: Canvas, platform: Platform, rect: [f32; 4]) -> Screen {
+    let uv = if is_console(platform) {
+        WHOLE_TEXTURE
+    } else {
+        source_rect(platform, VideoMode::Stretch)
+    };
+    let view = GameView {
+        rect,
+        uv,
+        filter: Filter::Sharp,
+    };
+    Screen {
+        view,
+        still: view,
+        bands: around(c, rect),
     }
 }
 
@@ -89,7 +160,8 @@ pub fn screen_for(platform: Platform, mode: VideoMode, frame: (u32, u32)) -> Scr
 /// Whether `platform` is a console played on a television, whose pictures come in every size
 /// and are laid out by their own, rather than a handheld drawn for the GBA's screen.
 fn is_console(platform: Platform) -> bool {
-    matches!(platform, Platform::Snes | Platform::Ps1)
+    // the DS is never drawn here, its emulator draws itself; laid out as a console if it is
+    matches!(platform, Platform::Snes | Platform::Ps1 | Platform::Nds)
 }
 
 /// The GBA frame at three panel pixels to a game pixel, which every canvas but 640x480 holds.
@@ -112,6 +184,9 @@ pub fn screen_on_frame(
     mode: VideoMode,
     frame: (u32, u32),
 ) -> Screen {
+    if let Some(rect) = overlay_picture(c, platform) {
+        return placed(c, platform, rect);
+    }
     if is_console(platform) {
         return console_screen(c, platform, mode, frame);
     }
@@ -133,7 +208,7 @@ pub fn screen_on_frame(
         };
     }
     match platform {
-        Platform::Gba | Platform::Snes | Platform::Ps1 => {
+        Platform::Gba | Platform::Snes | Platform::Ps1 | Platform::Nds => {
             let h = (cw * SRC_H as f32 / SRC_W as f32).round();
             let view = GameView {
                 rect: [0.0, 0.0, cw, h],

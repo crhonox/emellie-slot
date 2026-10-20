@@ -36,10 +36,19 @@ fn kept(scan: &Path, w: u32, h: u32) -> Option<PathBuf> {
 
 /// The scan at `scan` as drawn at `w` by `h`: from its cut when one is kept, from the scan itself
 /// when not.
-pub(crate) fn label_art(scan: &Path, w: u32, h: u32) -> Option<Vec<u8>> {
+pub(crate) fn label_art(scan: &Path, w: u32, h: u32, platform: Platform) -> Option<Vec<u8>> {
     kept(scan, w, h)
         .and_then(|cut| art::exact(&cut, w, h))
-        .or_else(|| art::cover(scan, w, h))
+        .or_else(|| cover(scan, w, h, platform))
+}
+
+/// The scan at `scan` covering `w` by `h`: a DS scan of the whole sticker only by the rows of
+/// its art, the card's own band being drawn over it.
+fn cover(scan: &Path, w: u32, h: u32, platform: Platform) -> Option<Vec<u8>> {
+    match platform {
+        Platform::Nds => art::cover_rows(scan, w, h, crate::models::nds::art_rows),
+        _ => art::cover(scan, w, h),
+    }
 }
 
 /// Whether `cart`'s face is drawn with a label scan at all. A cart with no scan, or a PlayStation
@@ -61,7 +70,7 @@ pub fn label_uncut(cart: &Cart) -> bool {
 pub fn cut_label(cart: &Cart) -> bool {
     let mut any = false;
     for (scan, w, h) in label_scans(cart) {
-        if kept(&scan, w, h).is_some() || cut(&scan, w, h) {
+        if kept(&scan, w, h).is_some() || cut(&scan, w, h, cart.platform) {
             any = true;
         }
     }
@@ -70,11 +79,11 @@ pub fn cut_label(cart: &Cart) -> bool {
 
 /// Cuts the scan at `scan` to `w` by `h` and keeps the cut, with the scan's time; false when the
 /// scan does not decode or the cut could not be kept.
-fn cut(scan: &Path, w: u32, h: u32) -> bool {
+fn cut(scan: &Path, w: u32, h: u32, platform: Platform) -> bool {
     let (Some(cut), Some(scanned)) = (cut_path(scan), modified(scan)) else {
         return false;
     };
-    let Some(png) = art::cover(scan, w, h).and_then(|rgba| art::encode(&rgba, w, h)) else {
+    let Some(png) = cover(scan, w, h, platform).and_then(|rgba| art::encode(&rgba, w, h)) else {
         return false;
     };
     match keep_dated(&cut, &png, scanned) {

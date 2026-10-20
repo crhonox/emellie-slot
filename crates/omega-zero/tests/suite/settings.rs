@@ -140,6 +140,7 @@ fn up_and_down_move_the_bar_and_wrap_at_the_ends() {
         SettingsRow::ColourCorrection,
         SettingsRow::Rumble,
         SettingsRow::Labels,
+        SettingsRow::Achievements,
         SettingsRow::DateTime,
         SettingsRow::Network,
         SettingsRow::Bluetooth,
@@ -257,7 +258,7 @@ fn colour_correction_leaves_the_settings_around_it_alone() {
 fn the_arrows_change_nothing_on_a_row_that_opens() {
     let (d, mut a, _) = on_carousel();
     let before =
-        std::fs::read(d.path().join("Config/omega-zero.state")).expect("read omega-zero.state");
+        std::fs::read(d.path().join("Config/emellie-slot.state")).expect("read omega-zero.state");
     for row in [SettingsRow::DateTime, SettingsRow::About] {
         open_at(&mut a, row);
         press(&mut a, Btn::Left);
@@ -266,7 +267,7 @@ fn the_arrows_change_nothing_on_a_row_that_opens() {
         a.apply(Action::QuickMenu);
     }
     assert_eq!(
-        std::fs::read(d.path().join("Config/omega-zero.state")).expect("read omega-zero.state"),
+        std::fs::read(d.path().join("Config/emellie-slot.state")).expect("read omega-zero.state"),
         before,
         "an arrow on a row that opens wrote the card"
     );
@@ -405,7 +406,7 @@ fn brightness_and_volume_still_answer_over_settings() {
 /// and 111, and each row 200 and its index.
 fn fake_faces(a: &mut App) -> SettingsFaces {
     let id = TexId::from_raw;
-    let frame = settings_frame(5, palette(0));
+    let frame = settings_frame(omega_ui::configs_in(&SettingsRow::ALL), palette(0));
     let mut faces = SettingsFaces::new(&frame, id(100), [(id(110), [42, 11]), (id(111), [42, 11])]);
     for row in a.settings_rows() {
         faces.rows[row.index()] = Some((id(200 + row.index()), [270, ROW_H]));
@@ -534,6 +535,7 @@ fn the_rows_say_what_is_set_in_flows_capitals() {
             text("OFF"),
             text("ON"),
             None,
+            text("ON"),
             clock_text,
             text("OFF"),
             text("OFF"),

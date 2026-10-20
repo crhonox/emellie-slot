@@ -10,6 +10,7 @@ pub use omega_ui::{SettingsGroup, SettingsRow};
 use crate::app::{App, Phase};
 use crate::background_screen::BackgroundScreen;
 use crate::bluetooth_screen::{BluetoothScreen, Summary as BluetoothSummary};
+use crate::cheevos_screen::CheevosScreen;
 use crate::label_screen::LabelsScreen;
 use crate::nav::Dir;
 use crate::screens::clock::clock_screen;
@@ -32,6 +33,7 @@ impl App {
             SettingsRow::ColourCorrection => Some(QuickValue::flag(self.state.colour_correction)),
             SettingsRow::Rumble => Some(QuickValue::flag(self.state.rumble)),
             SettingsRow::Labels
+            | SettingsRow::Achievements
             | SettingsRow::DateTime
             | SettingsRow::Network
             | SettingsRow::Bluetooth
@@ -46,6 +48,11 @@ impl App {
     pub fn settings_text(&self, row: SettingsRow) -> Option<String> {
         match row {
             SettingsRow::DateTime => Some(date_time_text(self.wall_secs())),
+            SettingsRow::Achievements => Some(match &self.cheevos_account {
+                a if !a.enabled => QuickValue::Off.text().to_string(),
+                a if a.signed && !a.username.is_empty() => a.username.to_uppercase(),
+                _ => QuickValue::On.text().to_string(),
+            }),
             SettingsRow::Network => Some(match self.wifi_summary() {
                 Summary::Off => QuickValue::Off.text().to_string(),
                 Summary::On => QuickValue::On.text().to_string(),
@@ -123,6 +130,7 @@ impl App {
     fn open_settings_row(&mut self, row: SettingsRow) {
         let to = match row {
             SettingsRow::Labels => Phase::Labels(LabelsScreen::default()),
+            SettingsRow::Achievements => Phase::Cheevos(CheevosScreen::default()),
             SettingsRow::DateTime => clock_screen(self.utc_secs(), self.state.utc_offset_min, true),
             SettingsRow::Network => Phase::Network(WifiScreen::default()),
             SettingsRow::Bluetooth => Phase::Bluetooth(BluetoothScreen::default()),
@@ -153,6 +161,7 @@ impl App {
             }
             SettingsRow::Rumble => s.rumble = !s.rumble,
             SettingsRow::Labels
+            | SettingsRow::Achievements
             | SettingsRow::DateTime
             | SettingsRow::Network
             | SettingsRow::Bluetooth

@@ -306,7 +306,7 @@ pub(crate) fn face(cart: &Cart, scans: bool) -> Option<CartFace> {
     for disc in 0..discs {
         let art = label_of(cart, &paths, disc)
             .filter(|_| scans)
-            .and_then(|p| label_art(&p, DISC_PX, DISC_PX));
+            .and_then(|p| label_art(&p, DISC_PX, DISC_PX, cart.platform));
         let one = disc_face(&title, disc, discs, art.as_deref());
         let row = (DISC_PX * 4) as usize;
         for (y, line) in one.chunks_exact(row).enumerate() {

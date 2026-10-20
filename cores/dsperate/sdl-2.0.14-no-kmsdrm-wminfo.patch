@@ -1,0 +1,26 @@
+diff --git a/src/frontend/sdl/display_drm.cpp b/src/frontend/sdl/display_drm.cpp
+index cc8c5c2..a09f85d 100644
+--- a/src/frontend/sdl/display_drm.cpp
++++ b/src/frontend/sdl/display_drm.cpp
+@@ -35,6 +35,13 @@ int sdl_drm_fd(SDL_Window* win) {
+   SDL_SysWMinfo wm;
+   SDL_VERSION(&wm.version);
+   if (!SDL_GetWindowWMInfo(win, &wm)) { std::fprintf(stderr, "drm: SDL_GetWindowWMInfo: %s\n", SDL_GetError()); return -1; }
++#if !SDL_VERSION_ATLEAST(2, 0, 16)
++  // SDL 2.0.14's headers (Debian bullseye, the glibc the H700 builds target) name no KMSDRM
++  // window; those handhelds draw through fbdev and never come here.
++  std::fprintf(stderr, "drm: built against SDL %d.%d.%d, which has no KMSDRM window info\n",
++               SDL_MAJOR_VERSION, SDL_MINOR_VERSION, SDL_PATCHLEVEL);
++  return -1;
++#else
+   if (wm.subsystem != SDL_SYSWM_KMSDRM) { std::fprintf(stderr, "drm: not a KMSDRM window\n"); return -1; }
+ #if defined(SDL_VIDEO_DRIVER_KMSDRM)
+   return wm.info.kmsdrm.drm_fd;
+@@ -43,6 +50,7 @@ int sdl_drm_fd(SDL_Window* win) {
+   std::memcpy(ints, wm.info.dummy, sizeof ints);
+   return ints[1];
+ #endif
++#endif
+ }
+ 
+ } // namespace

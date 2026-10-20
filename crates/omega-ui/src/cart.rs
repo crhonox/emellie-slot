@@ -4,7 +4,7 @@ use omega_store::gb::Class;
 use omega_store::{Cart, Outline, Platform};
 
 use crate::label_cut::label_art;
-use crate::models::{disc, snes, snes::SnesShell};
+use crate::models::{disc, nds, snes, snes::SnesShell};
 use crate::shell::{shell_for, Finish, Shell};
 use crate::silhouette::{
     cart_depth, cart_mask, detail_mask, gb_cart_depth, gb_cart_mask, gb_detail_mask, Detail,
@@ -91,7 +91,7 @@ pub(crate) struct Board {
 
 pub fn gb_shell_of(cart: &Cart) -> Option<GbShell> {
     match cart.platform {
-        Platform::Gba | Platform::Snes | Platform::Ps1 => None,
+        Platform::Gba | Platform::Snes | Platform::Ps1 | Platform::Nds => None,
         Platform::Gb | Platform::Gbc => Some(match cart.shell.map(|c| c.outline) {
             Some(Outline::Notched) => GbShell::Notched,
             Some(Outline::Rounded) => GbShell::Rounded,
@@ -107,6 +107,7 @@ pub fn gb_shell_of(cart: &Cart) -> Option<GbShell> {
 pub fn model_of(cart: &Cart) -> CartModel {
     match cart.platform {
         Platform::Gba => CartModel::Gba,
+        Platform::Nds => CartModel::Nds,
         Platform::Gb | Platform::Gbc => {
             CartModel::Gb(gb_shell_of(cart).unwrap_or(GbShell::Notched))
         }
@@ -131,6 +132,7 @@ pub(crate) fn spec(model: CartModel) -> Spec {
     match model {
         CartModel::Snes(shell) => snes::spec(shell),
         CartModel::Disc => disc::spec(),
+        CartModel::Nds => nds::spec(),
         CartModel::Gba => Spec {
             w: CART_W,
             h: CART_H,
@@ -177,6 +179,10 @@ const GB_SEATED_H: u32 = 259;
 pub fn seated_box(platform: Platform) -> (u32, u32) {
     match platform {
         Platform::Gba => (SEATED_W, SEATED_H),
+        Platform::Nds => {
+            let (_, (w, h)) = crate::spin::outline(CartModel::Nds);
+            (w.round() as u32, h.round() as u32)
+        }
         Platform::Gb | Platform::Gbc => (SEATED_W, GB_SEATED_H),
         Platform::Snes => {
             let (_, (w, h)) = snes::outline(SnesShell::Famicom);
@@ -193,6 +199,7 @@ pub fn seated_box(platform: Platform) -> (u32, u32) {
 pub fn cart_box(platform: Platform) -> (u32, u32) {
     model_box(match platform {
         Platform::Gba => CartModel::Gba,
+        Platform::Nds => CartModel::Nds,
         Platform::Gb | Platform::Gbc => CartModel::Gb(GbShell::Notched),
         Platform::Snes => CartModel::Snes(SnesShell::Famicom),
         Platform::Ps1 => CartModel::Disc,
@@ -232,6 +239,7 @@ pub fn face_labels(platform: Platform) -> Vec<(u32, u32)> {
         .into_iter()
         .filter(|model| match model {
             CartModel::Gba => platform == Platform::Gba,
+            CartModel::Nds => platform == Platform::Nds,
             CartModel::Gb(_) => matches!(platform, Platform::Gb | Platform::Gbc),
             CartModel::Snes(_) => platform == Platform::Snes,
             CartModel::Disc => platform == Platform::Ps1,
@@ -266,14 +274,18 @@ fn face_of(cart: &Cart, scans: bool) -> CartFace {
         }
     }
     let s = spec(model);
-    let shell = shell_for(cart);
-    let mut face = shell_face(&s, &shell);
     let (_, _, lw, lh) = s.label;
     let scan = cart.label.as_deref().filter(|_| scans);
-    let label = match scan.and_then(|p| label_art(p, lw, lh)) {
+    let label = match scan.and_then(|p| label_art(p, lw, lh, cart.platform)) {
         Some(rgba) => rgba,
         None => generated_label(&s, &label_text(cart)),
     };
+    // the DS card is its picture laid over the label, its plastic and band the picture's own
+    if model == CartModel::Nds {
+        return nds::face(&label);
+    }
+    let shell = shell_for(cart);
+    let mut face = shell_face(&s, &shell);
     mould_detail(&s, &mut face);
     recess_label(&s, &mut face, &shell);
     paste_label(&s, &mut face, &label);

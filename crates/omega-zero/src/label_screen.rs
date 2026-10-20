@@ -168,7 +168,7 @@ fn failed_lines(fail: SyncFail) -> Vec<String> {
         ),
         SyncFail::Refused(Who::Program) => said(
             "ScreenScraper refused this build.",
-            "A newer omega-zero may be let in.",
+            "A newer Emellie Slot may be let in.",
         ),
         SyncFail::Spent => said(
             "Today's ScreenScraper lookups are spent.",

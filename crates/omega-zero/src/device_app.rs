@@ -149,7 +149,11 @@ pub fn run() {
     if let Some(logo) = logo.and_then(|reading| reading.join().ok()).flatten() {
         frontend.show_boot_logo(&mut compositor, &logo);
     }
-    frontend.start_opening(&omega_zero::opening::Facts::read());
+    // no opening, so the shelf comes straight up; back from a game in its own emulator there is
+    // nothing to tell either
+    if !omega_zero::handoff::returned() {
+        frontend.start_without_opening(&omega_zero::opening::Facts::read());
+    }
     let mut input = DeviceInput::open(&root);
     let card = root.clone();
     let _ = std::thread::Builder::new()
@@ -168,6 +172,11 @@ pub fn run() {
         }
         if frontend.powering_off() {
             frontend.poweroff();
+            return;
+        }
+        // leaving lets go of the panel, the sound card and the buttons for the game's own
+        // emulator, which launch_frontend.sh runs before starting omega-zero again
+        if frontend.handing_over() && frontend.hand_over() {
             return;
         }
         frontend.step_emulator(pacer.period, STEP_TIMEOUT);

@@ -111,6 +111,8 @@ impl Pace {
 pub struct Rules {
     pub turbo: bool,
     pub rewinds: bool,
+    /// The system, which RetroAchievements identifies the game by.
+    pub platform: Platform,
 }
 
 impl Rules {
@@ -118,6 +120,7 @@ impl Rules {
         Rules {
             turbo: platform.turbo_xy(),
             rewinds: platform.rewinds(),
+            platform,
         }
     }
 }
@@ -627,6 +630,7 @@ impl Worker {
                 self.shared.sav_refused.store(true, Ordering::Release);
             }
         }
+        let _cheevos = crate::cheevos::loaded(self.rules.platform, &rom, resume.is_some());
         if let Some(resume) = resume {
             if let Err(e) = core.unserialize(&self.for_core(resume)) {
                 eprintln!("omega-zero: resume: {e}");
@@ -680,6 +684,7 @@ impl Worker {
             for cmd in self.cmds.try_iter() {
                 self.apply(cmd, core.as_mut(), &mut transport, &mut cable, &link);
             }
+            crate::cheevos::idle(core.as_ref());
 
             if let Some(t) = transport.as_mut() {
                 match cable.as_mut() {
@@ -695,6 +700,7 @@ impl Worker {
                             } else {
                                 match core.unserialize(&state) {
                                     Ok(()) => {
+                                        crate::cheevos::reset();
                                         eprintln!(
                                         "omega-zero: cable: restored {} bytes, running the host's game",
                                         state.len()
@@ -763,6 +769,8 @@ impl Worker {
                     core.set_frame_skip(false);
                     core.run_frame(ButtonMask(0));
                     self.publish(core.video_xrgb8888(), core.video_size());
+                    // played backwards, the game is not where any achievement was waiting
+                    crate::cheevos::reset();
                 }
                 self.shared
                     .rewind_fill
@@ -829,6 +837,7 @@ impl Worker {
                         }
                         None => core.run_frame(input),
                     }
+                    crate::cheevos::frame(core.as_ref());
                     let took = frame_began.elapsed();
                     if last {
                         drawn = took;
@@ -1015,6 +1024,7 @@ impl Worker {
                 if let Err(e) = core.unserialize(&self.for_core(state)) {
                     eprintln!("omega-zero: {e}");
                 }
+                crate::cheevos::reset();
             }
             Cmd::Sav(reply) => {
                 let _ = reply.send(core.save_ram());
@@ -1501,7 +1511,11 @@ mod tests {
                 matches!(platform, Platform::Gba | Platform::Gb | Platform::Gbc),
                 "{platform:?}"
             );
-            assert_eq!(rules.rewinds, platform != Platform::Ps1, "{platform:?}");
+            assert_eq!(
+                rules.rewinds,
+                !matches!(platform, Platform::Ps1 | Platform::Nds),
+                "{platform:?}"
+            );
         }
         assert_eq!(Rules::default(), Rules::of(Platform::Gba));
     }

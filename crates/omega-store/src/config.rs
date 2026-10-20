@@ -11,6 +11,9 @@ const MOVED: [&str; 5] = [
     "theme.txt",
 ];
 
+/// The state's name before the frontend was Emellie Slot, which a card from then still has.
+const OMEGA_STATE: &str = "omega-zero.state";
+
 pub fn move_config(root: &Path) -> io::Result<()> {
     let config = root.join(CONFIG_DIR);
     std::fs::create_dir_all(&config)?;
@@ -20,6 +23,12 @@ pub fn move_config(root: &Path) -> io::Result<()> {
         if old.is_file() && !new.exists() {
             std::fs::rename(&old, &new)?;
         }
+    }
+    // the state kept under omega-zero's name goes on under Emellie Slot's
+    let old = config.join(OMEGA_STATE);
+    let new = config.join(crate::app_state::STATE_FILE);
+    if old.is_file() && !new.exists() {
+        std::fs::rename(&old, &new)?;
     }
     Ok(())
 }

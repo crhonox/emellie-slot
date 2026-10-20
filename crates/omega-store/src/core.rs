@@ -13,15 +13,17 @@ pub enum Core {
     Snes9x,
     Supafaust,
     PcsxRearmed,
+    Dsperate,
 }
 
 impl Core {
-    pub const ALL: [Core; 5] = [
+    pub const ALL: [Core; 6] = [
         Core::Mgba,
         Core::Gpsp,
         Core::Snes9x,
         Core::Supafaust,
         Core::PcsxRearmed,
+        Core::Dsperate,
     ];
 
     pub fn as_str(&self) -> &'static str {
@@ -31,6 +33,7 @@ impl Core {
             Core::Snes9x => "snes9x",
             Core::Supafaust => "supafaust",
             Core::PcsxRearmed => "pcsx_rearmed",
+            Core::Dsperate => "dsperate",
         }
     }
 
@@ -40,6 +43,12 @@ impl Core {
             Core::Supafaust => "mednafen_supafaust",
             other => other.as_str(),
         }
+    }
+
+    /// Whether it is an emulator of its own that the handheld is handed over to, not a
+    /// libretro core omega-zero loads.
+    pub fn external(self) -> bool {
+        self == Core::Dsperate
     }
 
     pub fn index(self) -> usize {
@@ -55,6 +64,7 @@ impl Core {
             Core::Snes9x => "Snes9x",
             Core::Supafaust => "Faust",
             Core::PcsxRearmed => "PCSX",
+            Core::Dsperate => "DSpr",
         }
     }
 
@@ -66,6 +76,7 @@ impl Core {
             Core::Snes9x => "Snes9x",
             Core::Supafaust => "Supafaust",
             Core::PcsxRearmed => "PCSX-ReARMed",
+            Core::Dsperate => "DSperate",
         }
     }
 
@@ -76,6 +87,7 @@ impl Core {
             "snes9x" => Some(Core::Snes9x),
             "supafaust" => Some(Core::Supafaust),
             "pcsx_rearmed" => Some(Core::PcsxRearmed),
+            "dsperate" => Some(Core::Dsperate),
             _ => None,
         }
     }
@@ -92,6 +104,7 @@ impl Core {
             Platform::Gb | Platform::Gbc => &[Core::Mgba],
             Platform::Snes => &[Core::Snes9x, Core::Supafaust],
             Platform::Ps1 => &[Core::PcsxRearmed],
+            Platform::Nds => &[Core::Dsperate],
         }
     }
 

@@ -36,7 +36,7 @@ pub fn bezel_mark_face(platform: Platform, height: u32) -> Option<UndoFace> {
         Platform::Gba => GBA_MARK,
         Platform::Gb => GB_MARK,
         Platform::Gbc => GBC_MARK,
-        Platform::Snes | Platform::Ps1 => return None,
+        Platform::Snes | Platform::Ps1 | Platform::Nds => return None,
     };
     let mark = decode(png)?;
     let (sw, sh) = (mark.w, mark.h);
@@ -193,11 +193,15 @@ pub fn overlay_path(root: &Path, platform: Platform) -> PathBuf {
         .join(format!("{}x{}.png", out_w(), out_h()))
 }
 
-/// The most of the game an overlay may hide: a frame drawn for another layout, or with an
-/// opaque centre, would cover the picture, so it is refused.
+/// The most of the game an overlay may hide behind solid pixels: a frame drawn for another
+/// layout, or with an opaque centre, would cover the picture, so it is refused. What it lays
+/// over the game part of the way, an LCD grid or the shadow of a screen's edge, lets the game
+/// through and is drawn; so is a frame that overlaps the picture's edge by a pixel, as overlays
+/// made for RetroArch's viewports do.
 const OVERLAY_COVER: f32 = 0.01;
 
-/// Whether a `w` by `h` RGBA overlay leaves `picture` clear, so the game shows through it.
+/// Whether a `w` by `h` RGBA overlay leaves `picture` clear, so the game shows through it: no
+/// more than [`OVERLAY_COVER`] of it under solid pixels.
 pub fn overlay_clear(rgba: &[u8], w: u32, h: u32, picture: [f32; 4]) -> bool {
     let x0 = picture[0].max(0.0).round() as u32;
     let y0 = picture[1].max(0.0).round() as u32;
@@ -207,9 +211,9 @@ pub fn overlay_clear(rgba: &[u8], w: u32, h: u32, picture: [f32; 4]) -> bool {
         return false;
     }
     let total = ((x1 - x0) * (y1 - y0)) as f32;
-    let covered = (y0..y1)
+    let solid = (y0..y1)
         .flat_map(|y| (x0..x1).map(move |x| (y * w + x) as usize * 4 + 3))
-        .filter(|&a| rgba[a] > 8)
+        .filter(|&a| rgba[a] == 255)
         .count() as f32;
-    covered / total <= OVERLAY_COVER
+    solid / total <= OVERLAY_COVER
 }

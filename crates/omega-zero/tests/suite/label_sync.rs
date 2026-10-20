@@ -92,7 +92,7 @@ fn a_lookup_carries_both_credentials_and_the_rom_escaped() {
     assert!(url.starts_with("https://api.screenscraper.fr/api2/jeuInfos.php?devid=devid&"));
     for part in [
         "devpassword=devpw",
-        "softname=omega-zero",
+        "softname=Emellie%20Slot",
         "output=json",
         "ssid=middle%20baws",
         "sspassword=p%26ss%3Dword",

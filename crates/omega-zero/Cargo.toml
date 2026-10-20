@@ -4,6 +4,12 @@ version = "1.2.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+# the program on the card is System/emellie-slot; the crate keeps omega-zero's name
+autobins = false
+
+[[bin]]
+name = "emellie-slot"
+path = "src/main.rs"
 
 [features]
 default = ["host"]
@@ -17,6 +23,7 @@ omega-power = { path = "../omega-power" }
 omega-retro = { path = "../omega-retro" }
 omega-store = { path = "../omega-store" }
 omega-ui = { path = "../omega-ui" }
+omega-cheevos = { path = "../omega-cheevos" }
 winit = { workspace = true, optional = true }
 cpal = { workspace = true, optional = true }
 gilrs = { workspace = true, optional = true }

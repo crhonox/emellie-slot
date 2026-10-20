@@ -5,6 +5,9 @@ use crate::backdrop::{colour_index, BackdropStyle, BACKDROP_COLOURS};
 use crate::font::Font;
 use crate::platform::Platform;
 
+/// The file in Config/ the frontend keeps its state in.
+pub const STATE_FILE: &str = "emellie-slot.state";
+
 pub const BRIGHTNESS_MAX: u8 = 9;
 pub const BLUE_LIGHT_MAX: u8 = 9;
 pub const VOLUME_MAX: u8 = 100;
@@ -80,7 +83,7 @@ impl Default for AppState {
 }
 
 fn state_path(root: &Path) -> PathBuf {
-    root.join("Config").join("omega-zero.state")
+    root.join("Config").join(STATE_FILE)
 }
 
 pub fn read_app_state(root: &Path) -> AppState {

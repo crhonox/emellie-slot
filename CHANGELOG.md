@@ -1,5 +1,65 @@
 # Changelog
 
+## Unreleased
+
+omega-zero is now **Emellie Slot**, a personal fork of it.
+
+- The program on the card is `System/emellie-slot`, its log `emellie-slot.log` and its state
+  `Config/emellie-slot.state`; a card's `Config/omega-zero.state` is taken on at the first boot,
+  so nothing set is lost. About, the start notice, the boot logo, ScreenScraper's software name
+  and RetroAchievements' user agent say Emellie Slot.
+- No opening at boot: the shelf comes straight up after the boot logo. A game that took the
+  frontend down is still named over the shelf at the next boot.
+- The boot logo is EMELLIE SLOT in Pixel Code, for each panel.
+
+The DS joins the shelf: its games run in DSperate, which omega-zero hands the handheld over to.
+
+- DS games go in `Games/NDS` (`.nds`). They stand on a shelf of their own, with their labels from
+  ScreenScraper, looked up by the game
+  code in the cart's header rather than by a CRC of hundreds of megabytes.
+- A DS game is not a libretro core's: once its cart is in, omega-zero writes what to run to
+  `$OMEGA_HANDOFF` and leaves, and `launch_frontend.sh` runs DSperate through `System/nds.sh`.
+  When DSperate quits, omega-zero starts again without its opening, the game selected on the
+  shelf. Switched off in a DS game, the handheld goes back into it at the next boot, as it does
+  for any game.
+- DSperate draws straight to the panel through the mali-fbdev SDL2 in `System/dsperate/lib/`,
+  under the performance governor, 640x480, 720x480 and the RG CubeXX's 720x720 alike. Its
+  settings are seeded once for each kind of pad into `Config/dsperate/nds-nostick.ini`,
+  `nds-1stick.ini` or `nds-2stick.ini`, so one card played in an RG35XX SP and an RG CubeXX
+  keeps the settings of each; battery saves go to `Saves/NDS` and states to `States/NDS` for
+  both, its own resume included.
+- In a DS game, MENU opens DSperate's pause menu and MENU+START goes back to the shelf. With no
+  sticks (RG35XX SP), held L2 moves the stylus with the d-pad and R2 touches; with two (RG
+  CubeXX), the left stick is a d-pad, the right one moves the stylus, and R2 or R3 touches.
+  MENU+▲▼ changes the layout of the two screens, MENU+L2 swaps them, MENU+R2 fast-forwards, and
+  MENU+L1 / MENU+R1 load and save a state. SELECT on the DS shelf shows all of it, for the
+  handheld it is on.
+- The DS shelf stands DS game cards, drawn from a picture of a real one: the game's label
+  fills the well under the NINTENDO DS band, a label from ScreenScraper of the whole sticker
+  keeping only its art, and a game with no label wears its title there.
+- RetroAchievements for every game omega-zero runs itself: GBA and Game Boy on mGBA and gpSP,
+  SNES on Snes9x, and PlayStation discs as a `.cue` with its `.bin`, or an `.m3u`. Settings
+  has an ACHIEVEMENTS screen to turn it on or off and to sign in, the user name and password
+  typed on the keyboard as the Labels account is; once signed in, a token is kept in
+  `Config/retroachievements.txt` in place of the password. A banner over the game says what
+  happens: signed in, the game found and how many of its achievements are earned, each one
+  earned, the game mastered, and when the handheld goes offline and back. Softcore only, so
+  save states, rewind and fast forward stay; a state loaded or a rewind starts each
+  achievement's wait over. Supafaust lets no frontend read the SNES's memory, so its games
+  earn none, nor do `.chd` and `.pbp` discs yet; the DS keeps DSperate's own achievements.
+  Ported from [slot-plus](https://github.com/nickclyde/slot-plus) by nickclyde, on
+  [rcheevos](https://github.com/RetroAchievements/rcheevos) (MIT).
+- An overlay can say where the game goes under it, as RetroArch's custom viewport does: an
+  `Overlays/<system>/<w>x<h>.ini` beside its png, with `x`, `y`, `w` and `h`, draws the game
+  there through the sharp filter, whatever its picture mode. So a Game Boy can stand at 4x,
+  640x576, under an overlay for that on the RG CubeXX's 720x720.
+- An overlay is refused only when solid pixels hide more than 1% of the game: an LCD grid or a
+  screen's shadow laid over it is drawn, as is a frame a pixel over the picture's edge.
+- `task core:dsperate` builds DSperate from its pinned source and stages the SDL2 from a spruceOS
+  checkout (`SPRUCE=`, `../spruceOS` by default). The device build's container is now asked for
+  as arm64, and the build installs its packages from Debian's snapshot of bullseye once the
+  mirrors have dropped it.
+
 ## omega-zero 1.2.0
 
 Supafaust runs SNES games, a game that takes the console down can no longer trap it at boot, and

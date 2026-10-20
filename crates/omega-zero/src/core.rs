@@ -86,6 +86,7 @@ fn stand_in(core: Core) -> MockCore {
         Core::Mgba | Core::Gpsp => MockCore::new(),
         Core::Snes9x | Core::Supafaust => MockCore::sized(256, 224),
         Core::PcsxRearmed => MockCore::sized(320, 240),
+        Core::Dsperate => MockCore::sized(256, 384),
     }
 }
 
@@ -170,7 +171,7 @@ pub fn colour_option(which: Core, on: bool) -> Option<(&'static str, &'static st
             "gpsp_color_correction",
             if on { "enabled" } else { "disabled" },
         )),
-        Core::Snes9x | Core::Supafaust | Core::PcsxRearmed => None,
+        Core::Snes9x | Core::Supafaust | Core::PcsxRearmed | Core::Dsperate => None,
     }
 }
 
@@ -241,6 +242,7 @@ pub fn core_options(
             put("pcsx_rearmed_memcard1", "libretro");
             put("pcsx_rearmed_memcard2", "none");
         }
+        Core::Dsperate => {}
     }
     if let Some((key, value)) = colour_option(which, colour) {
         put(key, value);

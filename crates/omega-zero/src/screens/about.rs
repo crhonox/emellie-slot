@@ -26,11 +26,11 @@ use crate::nav::Dir;
 use crate::screens::lone::{fitted, over, Lone, NOTE_GAP, NOTE_X};
 
 /// The panels' titles, top first.
-pub const TITLE: &str = "OMEGA-ZERO";
+pub const TITLE: &str = "EMELLIE SLOT";
 pub const CREDITS_TITLE: &str = "CREDITS";
 
-/// Who made it.
-pub const AUTHOR: &str = "@OAURAMOS";
+/// What it was made from: omega-zero, by @oauramos, itself made from slot.
+pub const FORK_OF: &str = "OMEGA-ZERO @OAURAMOS";
 
 /// What omega-zero is made with and on, a line each, each name in its own case: the cores first,
 /// with their licences, Snes9x's allowing no commercial use. The longest is as long as a line
@@ -67,7 +67,7 @@ impl AboutView {
             rows: vec![
                 ("VERSION", build.version.to_string()),
                 ("BUILD", build.shown()),
-                ("AUTHOR", AUTHOR.to_string()),
+                ("FORK OF", FORK_OF.to_string()),
                 ("HANDHELD", handheld.unwrap_or(UNKNOWN).to_uppercase()),
                 ("BATTERY", battery_words(battery)),
             ],

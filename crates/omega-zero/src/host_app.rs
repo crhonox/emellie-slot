@@ -52,7 +52,7 @@ impl ApplicationHandler for HostApp {
             self.frontend.show_boot_logo(&mut compositor, &logo);
         }
         self.frontend
-            .start_opening(&omega_zero::opening::Facts::read());
+            .start_without_opening(&omega_zero::opening::Facts::read());
         self.gfx = Some((surface, compositor));
     }
 
@@ -82,6 +82,10 @@ impl ApplicationHandler for HostApp {
                 }
                 if self.frontend.powering_off() {
                     self.frontend.poweroff();
+                    events.exit();
+                    return;
+                }
+                if self.frontend.handing_over() && self.frontend.hand_over() {
                     events.exit();
                     return;
                 }

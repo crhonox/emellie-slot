@@ -59,6 +59,8 @@ pub enum SettingsRow {
     ColourCorrection,
     Rumble,
     Labels,
+    /// RetroAchievements: on or off, and the account.
+    Achievements,
     DateTime,
     Network,
     Bluetooth,
@@ -69,12 +71,13 @@ pub enum SettingsRow {
 }
 
 impl SettingsRow {
-    pub const ALL: [SettingsRow; 10] = [
+    pub const ALL: [SettingsRow; 11] = [
         SettingsRow::FastForward,
         SettingsRow::FastForwardSound,
         SettingsRow::ColourCorrection,
         SettingsRow::Rumble,
         SettingsRow::Labels,
+        SettingsRow::Achievements,
         SettingsRow::DateTime,
         SettingsRow::Network,
         SettingsRow::Bluetooth,
@@ -93,6 +96,7 @@ impl SettingsRow {
             SettingsRow::ColourCorrection => "Colour Correction",
             SettingsRow::Rumble => "Rumble",
             SettingsRow::Labels => "Labels",
+            SettingsRow::Achievements => "Achievements",
             SettingsRow::DateTime => "Date & Time",
             SettingsRow::Network => "Network",
             SettingsRow::Bluetooth => "Bluetooth",
@@ -107,7 +111,8 @@ impl SettingsRow {
             | SettingsRow::FastForwardSound
             | SettingsRow::ColourCorrection
             | SettingsRow::Rumble
-            | SettingsRow::Labels => SettingsGroup::Configs,
+            | SettingsRow::Labels
+            | SettingsRow::Achievements => SettingsGroup::Configs,
             SettingsRow::DateTime
             | SettingsRow::Network
             | SettingsRow::Bluetooth
@@ -122,6 +127,7 @@ impl SettingsRow {
         matches!(
             self,
             SettingsRow::Labels
+                | SettingsRow::Achievements
                 | SettingsRow::DateTime
                 | SettingsRow::Network
                 | SettingsRow::Bluetooth

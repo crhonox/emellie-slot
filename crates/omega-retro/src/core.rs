@@ -106,6 +106,14 @@ pub trait RetroCore: Send {
     fn rumble(&self) -> Rumble {
         Rumble::default()
     }
+    /// The memory map the core declared, for RetroAchievements to read the game's RAM through.
+    fn memory_map(&self) -> &[crate::memory::MemoryDescriptor] {
+        &[]
+    }
+    /// The system and save RAM `retro_get_memory_data` hands out, for a core with no map.
+    fn core_memory(&self) -> crate::memory::CoreMemory {
+        crate::memory::CoreMemory::default()
+    }
     fn net(&self) -> Link {
         Link::default()
     }

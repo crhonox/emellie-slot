@@ -134,13 +134,13 @@ fn the_notice_comes_up_on_the_openings_black_in_place_of_the_shelf() {
     assert_eq!(a.start_notice_levels(), Some((1.0, 1.0)));
     let lines: Vec<(usize, String)> = a.start_notice_lines();
     let want: Vec<(usize, String)> = [
-        (0, "OMEGA ZERO HANDHELD SYSTEM"),
+        (0, "EMELLIE SLOT HANDHELD SYSTEM"),
         (1, "Model RG35XX SP"),
         (3, "!! LAST START FAILED"),
         (5, "game : Mega Man X"),
         (6, "sys  : SNES"),
         (7, "core : Supafaust"),
-        (9, "The game took omega-zero down"),
+        (9, "The game took Emellie Slot down"),
         (10, "as it started. It was left on"),
         (11, "the shelf, not resumed."),
         (13, "X on the shelf picks another"),

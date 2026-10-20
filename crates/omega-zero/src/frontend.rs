@@ -27,6 +27,7 @@ mod sync_about;
 mod sync_background;
 mod sync_bar;
 mod sync_bluetooth;
+mod sync_cheevos;
 mod sync_clock;
 mod sync_controls;
 mod sync_core_picker;
@@ -49,6 +50,7 @@ use sync_about::sync_about;
 use sync_background::{sync_background, BackdropTex};
 use sync_bar::{sync_bar, BarTexes};
 use sync_bluetooth::{sync_bluetooth, BluetoothTexes};
+use sync_cheevos::sync_cheevos;
 use sync_clock::{sync_clock, Clocks};
 use sync_controls::sync_controls;
 use sync_core_picker::sync_core_picker;
@@ -108,6 +110,7 @@ pub struct Frontend {
     keyboard: KeyboardTexes,
     info: InfoTexes,
     labels: Baked<(ListView, u8)>,
+    cheevos: Baked<(ListView, u8)>,
     controls: Baked<(crate::screens::controls::ControlsView, u8)>,
     background: Baked<(ListView, u8)>,
     /// The POWER menu's panel and the one shown after its choice.
@@ -166,6 +169,8 @@ struct BezelMark {
 impl Frontend {
     pub fn boot(platform: Box<dyn Platform>) -> Self {
         let now = Instant::now();
+        crate::cheevos::start(platform.root());
+        crate::video_mode::read_overlay_pictures(platform.root());
         let mut session = Session::boot(platform.root().to_path_buf());
         session
             .app_mut()
@@ -196,6 +201,7 @@ impl Frontend {
             keyboard: KeyboardTexes::default(),
             info: InfoTexes::default(),
             labels: Baked::default(),
+            cheevos: Baked::default(),
             controls: Baked::default(),
             background: Baked::default(),
             power: PowerPanels::default(),
@@ -225,6 +231,11 @@ impl Frontend {
     /// landed on the shelf. The boot logo, when it is shown, fades out over its black.
     pub fn start_opening(&mut self, facts: &Facts) {
         self.session.app_mut().start_opening(facts);
+    }
+
+    /// The boot without the opening: the shelf comes straight up.
+    pub fn start_without_opening(&mut self, facts: &Facts) {
+        self.session.app_mut().start_without_opening(facts);
     }
 
     /// Once the boot logo has faded, its texture shrinks to a pixel and gives its memory back.
@@ -347,6 +358,7 @@ impl Frontend {
         sync_info(self.session.app_mut(), compositor, &mut self.info);
         sync_controls(self.session.app_mut(), compositor, &mut self.controls);
         sync_labels(self.session.app_mut(), compositor, &mut self.labels);
+        sync_cheevos(self.session.app_mut(), compositor, &mut self.cheevos);
         sync_background(
             self.session.app_mut(),
             compositor,
@@ -379,6 +391,9 @@ impl Frontend {
         self.drop_boot_logo(compositor);
         self.draws.clear();
         self.session.app().draw(&mut self.draws);
+        // on a desktop the computer is online; on the handheld, once Wi-Fi has joined
+        crate::cheevos::set_online(cfg!(feature = "host") || self.session.app().online());
+        crate::cheevos::overlay(compositor, &mut self.draws);
         compositor.draw_list(&self.draws);
     }
 
@@ -599,5 +614,17 @@ impl Frontend {
 
     pub fn poweroff(&mut self) {
         self.session.app_mut().poweroff();
+    }
+
+    /// Whether a game is in the handheld that runs in an emulator of its own, for omega-zero
+    /// to leave so that it can.
+    pub fn handing_over(&self) -> bool {
+        self.session.app().handoff().is_some()
+    }
+
+    /// Writes what `launch_frontend.sh` is to run once omega-zero has left. False when it could
+    /// not be, the cart coming back out instead.
+    pub fn hand_over(&mut self) -> bool {
+        self.session.app_mut().hand_over()
     }
 }

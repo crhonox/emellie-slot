@@ -10,6 +10,7 @@
 //! in cream, on the grid flow.css's .keymap sets. It is baked once for each system and palette.
 
 use omega_input::{Action, Btn};
+use omega_power::PadLayout;
 use omega_store::{Core, Platform};
 use omega_ui::kit::palette::Palette;
 use omega_ui::kit::panel::panel_face;
@@ -37,8 +38,14 @@ pub struct ControlsView {
 }
 
 impl ControlsView {
-    /// What the buttons do on the shelf of `platform`'s games, and in one of them.
+    /// What the buttons do on the shelf of `platform`'s games, and in one of them, on this
+    /// handheld's pad.
     pub fn new(platform: Platform) -> Self {
+        Self::for_pad(platform, PadLayout::current())
+    }
+
+    /// As [`ControlsView::new`] on a pad of `pad`'s sticks, which only the DS's stylus minds.
+    pub fn for_pad(platform: Platform, pad: PadLayout) -> Self {
         let mut shelf = vec![("A", "PLAY"), ("HOLD A", "CLEAN START")];
         if Core::for_platform(platform).len() > 1 {
             shelf.push(("X", "CORE"));
@@ -52,7 +59,28 @@ impl ControlsView {
         ]);
 
         let mut game = Vec::new();
-        if platform.game_owns_l2_r2() {
+        if platform.external() {
+            // what the card's System/dsperate/nds.ini and pad-*.ini bind, DSperate's own menu
+            // on MENU
+            game.extend([("MENU", "PAUSE MENU"), ("MENU+START", "BACK TO SHELF")]);
+            game.extend(match pad {
+                PadLayout::NoStick => [("HOLD L2+✚", "MOVE STYLUS"), ("R2", "TOUCH")].as_slice(),
+                PadLayout::OneStick => [("STICK", "MOVE STYLUS"), ("R2", "TOUCH")].as_slice(),
+                PadLayout::TwoSticks => [
+                    ("L STICK", "D-PAD"),
+                    ("R STICK", "MOVE STYLUS"),
+                    ("R2 R3", "TOUCH"),
+                ]
+                .as_slice(),
+            });
+            game.extend([
+                ("MENU+▲▼", "SCREEN LAYOUT"),
+                ("MENU+L2", "SWAP SCREENS"),
+                ("MENU+R2", "FAST FORWARD"),
+                ("MENU+L1", "LOAD STATE"),
+                ("MENU+R1", "SAVE STATE"),
+            ]);
+        } else if platform.game_owns_l2_r2() {
             game.extend([
                 ("SELECT+R2", "FAST FORWARD"),
                 ("SELECT+R2 ×2", "LATCH FAST FWD"),
@@ -63,25 +91,27 @@ impl ControlsView {
             }
             game.extend([("R2", "FAST FORWARD"), ("R2 ×2", "LATCH FAST FWD")]);
         }
-        game.extend([("MENU ×2", "SAVE STATES"), ("HOLD MENU", "EJECT")]);
-        match platform {
-            Platform::Gba | Platform::Gb | Platform::Gbc => game.push(("SELECT+MENU", "LINK")),
-            Platform::Ps1 => game.push(("SELECT+MENU", "DISC")),
-            Platform::Snes => {}
+        if !platform.external() {
+            game.extend([("MENU ×2", "SAVE STATES"), ("HOLD MENU", "EJECT")]);
+            match platform {
+                Platform::Gba | Platform::Gb | Platform::Gbc => game.push(("SELECT+MENU", "LINK")),
+                Platform::Ps1 => game.push(("SELECT+MENU", "DISC")),
+                Platform::Snes | Platform::Nds => {}
+            }
+            game.extend([
+                ("SELECT+▲▼", "BRIGHTNESS"),
+                ("SELECT+◀▶", "BLUE LIGHT"),
+                ("SELECT+L1", "LOAD STATE"),
+                ("SELECT+R1", "SAVE STATE"),
+            ]);
+            if platform.colour_correction() {
+                game.push(("SELECT+Y", "COLOUR"));
+            }
+            if platform.owns_shoulders() {
+                game.push(("L1 R1", "PICTURE SIZE"));
+            }
+            game.extend([("VOL+ VOL-", "MUTE"), ("HOLD POWER", "POWER MENU")]);
         }
-        game.extend([
-            ("SELECT+▲▼", "BRIGHTNESS"),
-            ("SELECT+◀▶", "BLUE LIGHT"),
-            ("SELECT+L1", "LOAD STATE"),
-            ("SELECT+R1", "SAVE STATE"),
-        ]);
-        if platform.colour_correction() {
-            game.push(("SELECT+Y", "COLOUR"));
-        }
-        if platform.owns_shoulders() {
-            game.push(("L1 R1", "PICTURE SIZE"));
-        }
-        game.extend([("VOL+ VOL-", "MUTE"), ("HOLD POWER", "POWER MENU")]);
 
         ControlsView {
             title: "CONTROLS",

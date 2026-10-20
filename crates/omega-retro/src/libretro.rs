@@ -52,6 +52,8 @@ struct Host {
     /// omega-zero leaves alone reads as, as in any frontend, so no core falls back on defaults
     /// of its own. Supafaust forgets its own once a game is loaded.
     defaults: std::collections::HashMap<String, std::ffi::CString>,
+    /// The memory map the core declared, for RetroAchievements.
+    memory_map: Vec<crate::memory::MemoryDescriptor>,
 }
 
 impl Host {
@@ -81,6 +83,7 @@ impl Host {
             options_dirty: false,
             declared: std::collections::HashMap::new(),
             defaults: std::collections::HashMap::new(),
+            memory_map: Vec::new(),
         }
     }
 
@@ -171,6 +174,9 @@ unsafe extern "C" fn set_rumble_state(port: c_uint, effect: c_uint, strength: u1
 
 unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
     match cmd {
+        crate::memory::SET_MEMORY_MAPS | crate::memory::SET_MEMORY_MAPS_PLAIN => {
+            with_host(|h| h.memory_map = crate::memory::descriptors(data)).is_some()
+        }
         GET_AUDIO_VIDEO_ENABLE => {
             if data.is_null() {
                 return false;
@@ -929,6 +935,26 @@ impl RetroCore for LibretroCore {
 
     fn rumble(&self) -> Rumble {
         self.host.rumble.clone()
+    }
+
+    fn memory_map(&self) -> &[crate::memory::MemoryDescriptor] {
+        &self.host.memory_map
+    }
+
+    fn core_memory(&self) -> crate::memory::CoreMemory {
+        let region = |id| unsafe {
+            let data = (self.api.get_memory_data)(id);
+            let len = (self.api.get_memory_size)(id);
+            if data.is_null() || len == 0 {
+                (0, 0)
+            } else {
+                (data as usize, len)
+            }
+        };
+        crate::memory::CoreMemory {
+            system_ram: region(MEMORY_SYSTEM_RAM),
+            save_ram: region(MEMORY_SAVE_RAM),
+        }
     }
 
     fn net(&self) -> Link {

@@ -231,3 +231,34 @@ fn controls_speaks_for_the_shelf_it_was_opened_on() {
         Some(ControlsView::new(Platform::Ps1))
     );
 }
+
+#[test]
+fn a_ds_game_is_worked_as_its_own_emulator_binds_it_on_each_pad() {
+    use omega_power::PadLayout;
+    let game = |pad| {
+        ControlsView::for_pad(Platform::Nds, pad).groups[1]
+            .lines
+            .clone()
+    };
+    let none = game(PadLayout::NoStick);
+    assert!(none.contains(&("HOLD L2+✚", "MOVE STYLUS")), "{none:?}");
+    assert!(none.contains(&("R2", "TOUCH")), "{none:?}");
+    let two = game(PadLayout::TwoSticks);
+    assert!(two.contains(&("R STICK", "MOVE STYLUS")), "{two:?}");
+    assert!(two.contains(&("L STICK", "D-PAD")), "{two:?}");
+    assert!(game(PadLayout::OneStick).contains(&("STICK", "MOVE STYLUS")));
+    for pad in [
+        PadLayout::NoStick,
+        PadLayout::OneStick,
+        PadLayout::TwoSticks,
+    ] {
+        let lines = game(pad);
+        for line in [("MENU", "PAUSE MENU"), ("MENU+START", "BACK TO SHELF")] {
+            assert!(lines.contains(&line), "{pad:?} has no {line:?}");
+        }
+        // omega-zero's own in-game controls are not there while DSperate runs the game
+        for gone in [("HOLD MENU", "EJECT"), ("SELECT+R1", "SAVE STATE")] {
+            assert!(!lines.contains(&gone), "{pad:?} still says {gone:?}");
+        }
+    }
+}

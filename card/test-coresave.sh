@@ -24,12 +24,12 @@ run() {
 }
 
 kept() {
-	gzip -dc "$TMP/card/crash/omega-zero.core.gz"
+	gzip -dc "$TMP/card/crash/emellie-slot.core.gz"
 }
 
 # the core kept as one saved long before the last ten minutes
 age() {
-	touch -t 202601010000 "$TMP/card/crash/omega-zero.core.gz"
+	touch -t 202601010000 "$TMP/card/crash/emellie-slot.core.gz"
 }
 
 setup
@@ -40,49 +40,49 @@ grep -q 'signal=11 thread=omega-emu exe=/usr/bin/busybox$' "$TMP/card/crash/core
 	|| { echo "kept a core for a process that is not the frontend" >&2; exit 1; }
 
 setup
-run /mnt/sdcard/System/omega-zero "first core"
+run /mnt/sdcard/System/emellie-slot "first core"
 [ "$(kept)" = "first core" ] \
 	|| { echo "the frontend's core was not saved" >&2; exit 1; }
-grep -q 'exe=/mnt/sdcard/System/omega-zero core=saved$' "$TMP/card/crash/cores.log" \
+grep -q 'exe=/mnt/sdcard/System/emellie-slot core=saved$' "$TMP/card/crash/cores.log" \
 	|| { echo "cores.log does not say the core was saved: [$(cat "$TMP/card/crash/cores.log")]" >&2; exit 1; }
 
-run /mnt/sdcard/System/omega-zero "second core"
+run /mnt/sdcard/System/emellie-slot "second core"
 [ "$(kept)" = "first core" ] \
 	|| { echo "a crash minutes after the last wrote over its core" >&2; exit 1; }
 grep -q 'core=kept-earlier$' "$TMP/card/crash/cores.log" \
 	|| { echo "cores.log does not say the earlier core was kept" >&2; exit 1; }
 
 age
-run /mnt/sdcard/System/omega-zero "third core"
+run /mnt/sdcard/System/emellie-slot "third core"
 [ "$(kept)" = "third core" ] \
 	|| { echo "a crash after the ten minutes did not replace the core" >&2; exit 1; }
-[ ! -f "$TMP/card/crash/omega-zero.core.gz.tmp" ] \
+[ ! -f "$TMP/card/crash/emellie-slot.core.gz.tmp" ] \
 	|| { echo "left a half-written core behind" >&2; exit 1; }
 [ "$(grep -c . "$TMP/card/crash/cores.log")" = "3" ] \
 	|| { echo "cores.log did not record all three crashes" >&2; exit 1; }
 
 setup
-echo "fatal runtime error: Rust cannot catch foreign exceptions, aborting" > "$TMP/card/omega-zero.log"
-run "$LOADER" "core through the loader" 4321 6 omega-emu /mnt/sdcard/System/omega-zero
+echo "fatal runtime error: Rust cannot catch foreign exceptions, aborting" > "$TMP/card/emellie-slot.log"
+run "$LOADER" "core through the loader" 4321 6 omega-emu /mnt/sdcard/System/emellie-slot
 [ "$(kept)" = "core through the loader" ] \
 	|| { echo "the core of omega-zero run through the loader was not saved" >&2; exit 1; }
-grep -q 'cannot catch foreign exceptions' "$TMP/card/crash/omega-zero.log" \
+grep -q 'cannot catch foreign exceptions' "$TMP/card/crash/emellie-slot.log" \
 	|| { echo "the log of the run that went down was not kept" >&2; exit 1; }
-grep -q "signal=6 thread=omega-emu exe=$LOADER prog=/mnt/sdcard/System/omega-zero core=saved" \
+grep -q "signal=6 thread=omega-emu exe=$LOADER prog=/mnt/sdcard/System/emellie-slot core=saved" \
 	"$TMP/card/crash/cores.log" \
 	|| { echo "cores.log does not name the program: [$(cat "$TMP/card/crash/cores.log")]" >&2; exit 1; }
 
 setup
-echo "omega-zero is fine" > "$TMP/card/omega-zero.log"
+echo "omega-zero is fine" > "$TMP/card/emellie-slot.log"
 run "$LOADER" "another program" 4321 11 worker /usr/bin/other
-[ ! -f "$TMP/card/crash/omega-zero.log" ] \
+[ ! -f "$TMP/card/crash/emellie-slot.log" ] \
 	|| { echo "kept omega-zero's log for another program run through the loader" >&2; exit 1; }
-[ ! -f "$TMP/card/crash/omega-zero.core.gz" ] \
+[ ! -f "$TMP/card/crash/emellie-slot.core.gz" ] \
 	|| { echo "kept a core for another program run through the loader" >&2; exit 1; }
 
 setup
-MIN_FREE_KB=999999999999 run /mnt/sdcard/System/omega-zero "core with no room for it"
-[ ! -f "$TMP/card/crash/omega-zero.core.gz" ] \
+MIN_FREE_KB=999999999999 run /mnt/sdcard/System/emellie-slot "core with no room for it"
+[ ! -f "$TMP/card/crash/emellie-slot.core.gz" ] \
 	|| { echo "wrote a core to a card with no room for it" >&2; exit 1; }
 grep -q 'core=no-room$' "$TMP/card/crash/cores.log" \
 	|| { echo "cores.log does not say there was no room: [$(cat "$TMP/card/crash/cores.log")]" >&2; exit 1; }
@@ -93,7 +93,7 @@ cat > "$TMP/mountpoint" <<-SH
 	exit 1
 SH
 chmod +x "$TMP/mountpoint"
-run /mnt/sdcard/System/omega-zero "core with nowhere to go" \
+run /mnt/sdcard/System/emellie-slot "core with nowhere to go" \
 	|| { echo "a missing card made the helper fail" >&2; exit 1; }
 [ ! -d "$TMP/card/crash" ] \
 	|| { echo "wrote to a card that is not mounted" >&2; exit 1; }

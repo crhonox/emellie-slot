@@ -139,6 +139,7 @@ pub fn actions_on(phase: &Phase) -> Option<Actions> {
         | Phase::Bluetooth(_)
         | Phase::Info(_)
         | Phase::Labels(_)
+        | Phase::Cheevos(_)
         | Phase::Background(_)
         | Phase::SetClock { .. }
         | Phase::About => Some(Actions::Menu),
@@ -261,6 +262,17 @@ impl App {
             Phase::Bluetooth(screen) => self.bluetooth_hints(screen),
             Phase::Labels(screen) if screen.typing.is_none() => {
                 labels_hints(&screen.view(&self.labels, self.online()).legend)
+            }
+            Phase::Cheevos(screen) if screen.typing.is_none() => {
+                crate::screens::cheevos::cheevos_hints(
+                    &screen
+                        .view(
+                            &self.cheevos_account,
+                            &crate::cheevos::status(),
+                            self.online(),
+                        )
+                        .legend,
+                )
             }
             _ => Vec::new(),
         }

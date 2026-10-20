@@ -11,6 +11,13 @@ vars:
   SNES9X_COMMIT: fae2fea08f74180759ef540ee94259213f503480
   SUPAFAUST_COMMIT: 642d1d1b6684aa7e306a02a89885f3f5456a5157
   PCSX_COMMIT: c8816799b50388e61cfe237fe2cdbb7d8175f20a
+  # DSperate is no libretro core: the DS games are handed over to it, System/dsperate/dsperate
+  DSPERATE_COMMIT: 59fce36e59d5c7d181009d72ff824446c27f7d99
+  # The mali-fbdev SDL2 DSperate draws to fb0 through (BaseOS's own cannot reach the panel), and
+  # the libsamplerate it needs, taken from a spruceOS checkout, which builds them for the H700
+  SPRUCE: '{{.SPRUCE | default "../spruceOS"}}'
+  # Files for the card beyond the build (Overlays/, Config/...), copied over dist-device
+  SD_EXTRAS: '{{.SD_EXTRAS | default "../sd-extras"}}'
   # The libretro names of the cores the device bundle ships, <name>_libretro.so in System/
   DEVICE_CORES: mgba gpsp snes9x mednafen_supafaust pcsx_rearmed
   # The cores built by cores/<name>/build.sh whose source archive ships in System/licenses/
@@ -100,6 +107,7 @@ tasks:
       - sh card/test-probe.sh
       - sh card/test-wifi.sh
       - sh card/test-bluetooth.sh
+      - sh card/test-handoff.sh
 
   screens:
     desc: >-
@@ -275,7 +283,7 @@ tasks:
     vars:
       ROOT: '{{.ROOT | default "./sdcard"}}'
     cmds:
-      - ./target/debug/omega-zero --init-root {{.ROOT}}
+      - ./target/debug/emellie-slot --init-root {{.ROOT}}
       - 'echo "content root ready at {{.ROOT}}: roms in Games/GBA, Games/GB or Games/GBC, labels in the matching Labels/GBA, Labels/GB or Labels/GBC, battery saves in the matching Saves/GBA, Saves/GB or Saves/GBC, save states under the matching States/GBA, States/GB or States/GBC, gba_bios.bin in BIOS, pngs in Wallpapers, palette in Config/theme.txt, overlays in Overlays/GBA, Overlays/GB or Overlays/GBC named for the canvas, eg 640x480.png"'
       - 'echo "nothing is moved for you: a file loose at the top of Games/, Saves/, Labels/ or States/ is left where it is and never reaches the shelf"'
 
@@ -314,8 +322,8 @@ tasks:
       OUT: '{{.OUT | default "dist"}}'
     cmds:
       - rm -rf {{.OUT}}
-      - ./target/release/omega-zero --init-root {{.OUT}}
-      - cp target/release/omega-zero {{.OUT}}/System/omega-zero
+      - ./target/release/emellie-slot --init-root {{.OUT}}
+      - cp target/release/emellie-slot {{.OUT}}/System/emellie-slot
       - >-
         cp {{.CORE}} {{.GPSP_HOST}} {{.SNES9X_HOST}} {{.SUPAFAUST_HOST}} {{.PCSX_HOST}}
         {{.OUT}}/System/
@@ -460,15 +468,60 @@ tasks:
         vendor/pcsx_rearmed-src.tar.gz vendor/pcsx_rearmed-src.sha
       - task: core:pcsx
 
+  core:dsperate:
+    desc: >-
+      Build the aarch64 DSperate the DS games are handed over to, from its pinned source archive,
+      which ships beside it as its GPL-3.0 corresponding source, and stage the mali-fbdev SDL2 it
+      draws through from SPRUCE (a spruceOS checkout, ../spruceOS by default)
+    status:
+      - test -f vendor/dsperate
+      - test -f vendor/dsperate-lib/libSDL2-2.0.so.0
+      - test -f vendor/dsperate-lib/libsamplerate.so.0
+      - test "$(cat vendor/DSperate-src.sha 2>/dev/null)" = "{{.DSPERATE_COMMIT}}"
+      - test "$(cat vendor/dsperate.meta 2>/dev/null)" = "$(sh cores/dsperate/build.sh stamp {{.DSPERATE_COMMIT}})"
+    cmds:
+      - |
+        set -euo pipefail
+        mkdir -p vendor
+        if [ "$(cat vendor/DSperate-src.sha 2>/dev/null)" != "{{.DSPERATE_COMMIT}}" ]; then
+          rm -f vendor/DSperate-src.tar.gz vendor/DSperate-src.sha
+          curl -fsSL -o vendor/DSperate-src.tar.gz \
+            "https://github.com/beebono/DSperate/archive/{{.DSPERATE_COMMIT}}.tar.gz"
+          tar -tzf vendor/DSperate-src.tar.gz | grep "^DSperate-{{.DSPERATE_COMMIT}}/CMakeLists.txt$" > /dev/null
+          echo "{{.DSPERATE_COMMIT}}" > vendor/DSperate-src.sha
+        fi
+      - task: device:sh
+        vars:
+          CMD: >-
+            sh cores/dsperate/apt.sh cmake ninja-build pkg-config libsdl2-dev &&
+            sh cores/dsperate/build.sh build {{.DSPERATE_COMMIT}} vendor/DSperate-src.tar.gz
+            target-device/dsperate vendor/dsperate
+      - file vendor/dsperate | grep -q aarch64
+      - |
+        set -euo pipefail
+        mali="{{.SPRUCE}}/App/PyUI/dll-mali"
+        test -f "$mali/libSDL2-2.0.so.0" || { echo "no mali SDL2 at $mali, set SPRUCE to a spruceOS checkout" >&2; exit 1; }
+        mkdir -p vendor/dsperate-lib
+        cp "$mali/libSDL2-2.0.so.0" "$mali/libsamplerate.so.0" vendor/dsperate-lib/
+        file vendor/dsperate-lib/libSDL2-2.0.so.0 | grep -q aarch64
+      - 'echo "built vendor/dsperate from vendor/DSperate-src.tar.gz @ {{.DSPERATE_COMMIT}}"'
+
+  core:dsperate:update:
+    desc: Refetch DSperate's source archive and rebuild it, even if the set is current
+    cmds:
+      - rm -rf vendor/dsperate vendor/dsperate.meta vendor/dsperate-lib vendor/DSperate-src.tar.gz vendor/DSperate-src.sha
+      - task: core:dsperate
+
   cores:device:
-    desc: Build every core the device bundle ships, mGBA, gpSP, Snes9x, Supafaust and pcsx_rearmed
-    deps: [core:device, core:gpsp, core:snes9x, core:supafaust, core:pcsx]
+    desc: Build every core the device bundle ships, mGBA, gpSP, Snes9x, Supafaust, pcsx_rearmed and DSperate
+    deps: [core:device, core:gpsp, core:snes9x, core:supafaust, core:pcsx, core:dsperate]
 
   device:sh:
     desc: >-
       Run CMD on the box the device build wants, fetching one if this is not it. The container
       keeps the pinned toolchain and the crates it downloads in two docker volumes, so a build
-      does not fetch them all again
+      does not fetch them all again. On a Linux host the container's root would own what it
+      writes into the checkout, so whatever it leaves there is handed back to the user running it
     internal: true
     requires:
       vars: [CMD]
@@ -478,9 +531,13 @@ tasks:
         if [ "$(uname -s)-$(uname -m)" = "Linux-aarch64" ]; then
           sh -c '{{.CMD}}'
         else
-          docker run --rm -e OMEGA_SS_DEVID -e OMEGA_SS_DEVPASSWORD \
+          docker run --rm --platform linux/arm64 -e OMEGA_SS_DEVID -e OMEGA_SS_DEVPASSWORD \
+            -e HOST_ID="$(id -u):$(id -g)" \
             -v omega-zero-rustup:/usr/local/rustup -v omega-zero-cargo:/usr/local/cargo/registry \
-            -v "$PWD":/src -w /src rust:1-bullseye sh -c '{{.CMD}}'
+            -v "$PWD":/src -w /src rust:1-bullseye sh -c '{{.CMD}}
+            status=$?
+            find /src -xdev -user 0 -exec chown "$HOST_ID" {} + 2>/dev/null
+            exit $status'
         fi
 
   build:device:
@@ -496,8 +553,8 @@ tasks:
           CMD: >-
             cargo build --profile {{.PROFILE}} --target-dir target-device
             -p omega-zero --no-default-features --features device
-      - file target-device/{{.PROFILE}}/omega-zero | grep -q aarch64
-      - 'echo "built target-device/{{.PROFILE}}/omega-zero"'
+      - file target-device/{{.PROFILE}}/emellie-slot | grep -q aarch64
+      - 'echo "built target-device/{{.PROFILE}}/emellie-slot"'
 
   bench:device:
     desc: Build core_bench, omega-retro's headless core benchmark, for the H700. It never ships
@@ -519,9 +576,15 @@ tasks:
       - rm -rf {{.OUT}}
       - task: device:sh
         vars:
-          CMD: ./target-device/device/omega-zero --init-root {{.OUT}}
-      - cp target-device/device/omega-zero {{.OUT}}/System/omega-zero
-      - cp card/System/* {{.OUT}}/System/
+          CMD: ./target-device/device/emellie-slot --init-root {{.OUT}}
+      - cp target-device/device/emellie-slot {{.OUT}}/System/emellie-slot
+      - cp -R card/System/. {{.OUT}}/System/
+      - |
+        set -eu
+        file vendor/dsperate | grep -q aarch64
+        mkdir -p {{.OUT}}/System/dsperate/lib
+        cp vendor/dsperate {{.OUT}}/System/dsperate/dsperate
+        cp vendor/dsperate-lib/* {{.OUT}}/System/dsperate/lib/
       - |
         set -eu
         for lib in {{.DEVICE_CORES}}; do
@@ -558,6 +621,21 @@ tasks:
             cp "$p" "{{.OUT}}/System/licenses/$name-$(basename "$p")"
           done
         done
+      - |
+        set -euo pipefail
+        # DSperate is GPL-3.0: its source archive and build stamp ship beside it
+        sha="$(cat vendor/DSperate-src.sha)"
+        cp vendor/DSperate-src.tar.gz "{{.OUT}}/System/licenses/DSperate-${sha}.tar.gz"
+        cp vendor/dsperate.meta "{{.OUT}}/System/licenses/DSperate-${sha}.meta"
+      - |
+        set -eu
+        # what the card keeps beyond the build, overlays and the like, laid over the tree:
+        # SD_EXTRAS, ../sd-extras by default, survives the tree being made again
+        extras="{{.SD_EXTRAS}}"
+        if [ -d "$extras" ]; then
+          cp -R "$extras/." {{.OUT}}/
+          echo "added $extras"
+        fi
       - 'echo "device tree ready at {{.OUT}}, copy its contents to SD2"'
 
   deploy:device:
@@ -572,8 +650,10 @@ tasks:
         for lib in {{.DEVICE_CORES}}; do
           file "vendor/${lib}_libretro.so" | grep -q aarch64
         done
-      - adb push target-device/device/omega-zero '{{.SD}}/System/omega-zero'
+      - adb push target-device/device/emellie-slot '{{.SD}}/System/emellie-slot'
       - for f in card/System/*; do adb push "$f" '{{.SD}}/System/'; done
+      - adb push vendor/dsperate '{{.SD}}/System/dsperate/dsperate'
+      - for f in vendor/dsperate-lib/*; do adb push "$f" '{{.SD}}/System/dsperate/lib/'; done
       - |
         set -euo pipefail
         for lib in {{.DEVICE_CORES}}; do
@@ -607,7 +687,12 @@ tasks:
             adb push "$p" "{{.SD}}/System/licenses/$name-$(basename "$p")"
           done
         done
-      - adb shell 'chmod +x {{.SD}}/System/omega-zero && sync'
+      - |
+        set -euo pipefail
+        sha="$(cat vendor/DSperate-src.sha)"
+        adb push vendor/DSperate-src.tar.gz "{{.SD}}/System/licenses/DSperate-${sha}.tar.gz"
+        adb push vendor/dsperate.meta "{{.SD}}/System/licenses/DSperate-${sha}.meta"
+      - adb shell 'chmod +x {{.SD}}/System/emellie-slot {{.SD}}/System/dsperate/dsperate && sync'
       - adb reboot
       - adb wait-for-device
       - 'echo "deployed to {{.SD}}, device rebooting"'
@@ -617,7 +702,7 @@ tasks:
     vars:
       SD: '{{.SD | default "/mnt/sdcard"}}'
     cmds:
-      - adb shell 'cat {{.SD}}/omega-zero.log'
+      - adb shell 'cat {{.SD}}/emellie-slot.log'
 
   deploy:wifi:
     desc: >-
@@ -643,7 +728,7 @@ tasks:
       - task: build:device
         vars:
           PROFILE: '{{.PROFILE}}'
-      - sh scripts/console.sh deploy target-device/{{.PROFILE}}/omega-zero {{if .SCRIPTS}}card/System/*.sh{{end}}
+      - sh scripts/console.sh deploy target-device/{{.PROFILE}}/emellie-slot {{if .SCRIPTS}}card/System/*.sh{{end}}
 
   log:wifi:
     desc: >-

@@ -20,8 +20,14 @@ fn the_players_files_move_from_system_to_config() {
     move_config(d.path()).unwrap();
 
     for f in FILES {
+        // the state goes on under Emellie Slot's name
+        let kept = if f == "omega-zero.state" {
+            "emellie-slot.state"
+        } else {
+            f
+        };
         assert_eq!(
-            std::fs::read_to_string(d.path().join("Config").join(f)).unwrap(),
+            std::fs::read_to_string(d.path().join("Config").join(kept)).unwrap(),
             f
         );
         assert!(
@@ -69,4 +75,28 @@ fn settings_written_before_the_move_are_still_read_after_it() {
         (s.cart.as_deref(), s.volume, s.utc_offset_min),
         (Some("Emerald"), 40, -240)
     );
+}
+
+#[test]
+fn omega_zeros_state_goes_on_under_emellie_slots_name() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join("Config")).unwrap();
+    std::fs::write(
+        d.path().join("Config/omega-zero.state"),
+        "cart=Emerald\nbrightness=3\nblue_light=1\nvolume=40\nmuted=0\nclock_set=1\nutc_offset_min=-240\n",
+    )
+    .unwrap();
+    move_config(d.path()).unwrap();
+    assert!(!d.path().join("Config/omega-zero.state").exists());
+    assert_eq!(read_app_state(d.path()).cart.as_deref(), Some("Emerald"));
+}
+
+#[test]
+fn emellie_slots_own_state_is_not_written_over_by_an_old_one() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join("Config")).unwrap();
+    std::fs::write(d.path().join("Config/omega-zero.state"), "cart=Old\nbrightness=3\nblue_light=1\nvolume=40\nmuted=0\nclock_set=1\nutc_offset_min=-240\n").unwrap();
+    std::fs::write(d.path().join("Config/emellie-slot.state"), "cart=New\nbrightness=3\nblue_light=1\nvolume=40\nmuted=0\nclock_set=1\nutc_offset_min=-240\n").unwrap();
+    move_config(d.path()).unwrap();
+    assert_eq!(read_app_state(d.path()).cart.as_deref(), Some("New"));
 }

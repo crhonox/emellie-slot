@@ -1,7 +1,7 @@
 #!/bin/sh
 # Talks to a console on the home network over SSH, for task deploy:wifi and task log:wifi.
 #
-#   console.sh deploy BINARY [FILE...]   copy BINARY to System/omega-zero, and every FILE into
+#   console.sh deploy BINARY [FILE...]   copy BINARY to System/emellie-slot, and every FILE into
 #                                        System/, then reboot into it and wait for it to start
 #   console.sh log                       print omega-zero's log
 #
@@ -123,10 +123,10 @@ deploy)
 		;;
 	*) exit 1 ;;
 	esac
-	log="$sd/omega-zero-session.log"
+	log="$sd/emellie-slot-session.log"
 	before="$(lines "$log")"
-	put "$binary" "$sd/System/omega-zero"
-	on "chmod +x '$sd/System/omega-zero'"
+	put "$binary" "$sd/System/emellie-slot"
+	on "chmod +x '$sd/System/emellie-slot'"
 	for f in "$@"; do
 		put "$f" "$sd/System/$(basename "$f")"
 	done
@@ -174,7 +174,7 @@ deploy)
 	exit 1
 	;;
 log)
-	on "cat '$sd/omega-zero.log'"
+	on "cat '$sd/emellie-slot.log'"
 	;;
 *)
 	echo "usage: console.sh deploy BINARY [FILE...] | console.sh log" >&2

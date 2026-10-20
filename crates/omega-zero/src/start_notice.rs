@@ -77,7 +77,7 @@ fn script(fell: &Fell, model: &str) -> (Vec<Row>, Vec<(f32, Sfx)>) {
             line: Line::Shown(text),
         })
     };
-    shown(0, 0.0, "OMEGA ZERO HANDHELD SYSTEM".into());
+    shown(0, 0.0, "EMELLIE SLOT HANDHELD SYSTEM".into());
     let model: String = model.chars().take(COLS as usize - 6).collect();
     shown(1, 0.0, format!("Model {model}"));
     shown(3, 400.0, "!! LAST START FAILED".into());
@@ -95,7 +95,7 @@ fn script(fell: &Fell, model: &str) -> (Vec<Row>, Vec<(f32, Sfx)>) {
     shown(row + 1, 1100.0, format!("core : {}", fell.core.name()));
     row += 3;
     for text in [
-        "The game took omega-zero down",
+        "The game took Emellie Slot down",
         "as it started. It was left on",
         "the shelf, not resumed.",
     ] {

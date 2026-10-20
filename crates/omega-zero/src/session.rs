@@ -387,6 +387,15 @@ impl Session {
             Phase::Inserting { cart, .. } => cart.clone(),
             _ => return,
         };
+        // a game that runs in an emulator of its own opens no core here: once in, omega-zero
+        // hands the handheld over to it
+        if self
+            .app
+            .seated_cart()
+            .is_some_and(|c| c.platform.external())
+        {
+            return;
+        }
         if self.emu.is_none() {
             let (_, serial) = self.app.link_mode(&stem);
             self.spawn_core(&stem, serial);
@@ -421,7 +430,7 @@ impl Session {
             .flatten();
         let player = self.app.link_player();
         let setup = match platform {
-            Platform::Snes | Platform::Ps1 => Setup::Console,
+            Platform::Snes | Platform::Ps1 | Platform::Nds => Setup::Console,
             Platform::Gba | Platform::Gb | Platform::Gbc => Setup::Handheld {
                 serial,
                 colour: self.app.colour_correction(),
