@@ -172,7 +172,10 @@ void main() {
 "#;
 
 /// The game at a scale that is not a whole number: each game pixel stays a sharp square, and
-/// only the one panel pixel where two meet is blended, so nothing shimmers as it scrolls.
+/// only the one panel pixel where two meet is blended, so nothing shimmers as it scrolls. With
+/// `u_grid` above nothing, the last panel pixel across and down each game pixel is darkened by
+/// it, a dot-matrix screen's grid: covered in part at a scale that is not whole, it is darkened
+/// in part, so the grid does not shimmer either.
 pub const GAME_SHARP_FRAG: &str = r#"
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -185,6 +188,7 @@ uniform vec4 u_uv;
 uniform vec2 u_scale;
 uniform float u_bright;
 uniform float u_glow;
+uniform float u_grid;
 varying vec2 v_uv;
 void main() {
     vec2 texel = (u_uv.xy + v_uv * u_uv.zw) * u_src;
@@ -192,6 +196,8 @@ void main() {
     vec2 region = 0.5 - 0.5 / u_scale;
     vec2 f = (from_centre - clamp(from_centre, -region, region)) * u_scale + 0.5;
     vec3 rgb = texture2D(u_game, (floor(texel) + f) / u_src).rgb;
+    vec2 line = clamp(fract(texel) * u_scale - u_scale + 1.5, 0.0, 1.0);
+    rgb *= 1.0 - u_grid * max(line.x, line.y);
     FRAG_COLOR = vec4(mix(rgb * u_bright, vec3(1.0), u_glow), 1.0);
 }
 "#;

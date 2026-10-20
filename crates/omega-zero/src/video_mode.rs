@@ -38,11 +38,12 @@ impl VideoMode {
 /// Where an overlay puts the game, read from beside it: `Overlays/<system>/<w>x<h>.ini`, its
 /// `x`, `y`, `w` and `h` in the canvas's pixels, as RetroArch's custom viewport for the overlay
 /// says them. With one, the game is drawn there on that canvas, whatever its picture mode, so
-/// an overlay made for RetroArch frames it as it was made to.
+/// an overlay made for RetroArch frames it as it was made to. Its `grid`, from 0 to 1, draws a
+/// dot-matrix grid, that dark, between the game's pixels, for an overlay whose picture has none.
 static OVERLAY_PICTURES: RwLock<Vec<OverlayPicture>> = RwLock::new(Vec::new());
 
-/// A system's overlay picture on the canvas of that size.
-type OverlayPicture = (Platform, (u32, u32), [f32; 4]);
+/// A system's overlay picture on the canvas of that size, and its grid's darkness.
+type OverlayPicture = (Platform, (u32, u32), [f32; 4], u8);
 
 /// Reads every overlay's picture on the card at `root`, for every canvas.
 pub fn read_overlay_pictures(root: &Path) {
@@ -50,9 +51,11 @@ pub fn read_overlay_pictures(root: &Path) {
     for platform in Platform::ALL {
         for c in Canvas::ALL {
             let file = format!("Overlays/{}/{}x{}.ini", platform.dir_name(), c.w, c.h);
-            if let Some(rect) = parse_picture(&ini::read(root, &file), c) {
-                eprintln!("omega-zero: overlay: {file} puts the game at {rect:?}");
-                found.push((platform, (c.w, c.h), rect));
+            let keys = ini::read(root, &file);
+            if let Some(rect) = parse_picture(&keys, c) {
+                let grid = parse_grid(&keys);
+                eprintln!("omega-zero: overlay: {file} puts the game at {rect:?}, grid {grid}%");
+                found.push((platform, (c.w, c.h), rect, grid));
             }
         }
     }
@@ -77,17 +80,26 @@ pub fn parse_picture(
     fits.then_some(rect)
 }
 
-fn overlay_picture(c: Canvas, platform: Platform) -> Option<[f32; 4]> {
+/// How dark `keys`' grid is, in hundredths: none unless it says one between 0 and 1.
+pub fn parse_grid(keys: &std::collections::HashMap<String, String>) -> u8 {
+    keys.get("grid")
+        .and_then(|v| v.trim().parse::<f32>().ok())
+        .filter(|g| g.is_finite())
+        .map_or(0, |g| (g.clamp(0.0, 1.0) * 100.0).round() as u8)
+}
+
+fn overlay_picture(c: Canvas, platform: Platform) -> Option<([f32; 4], u8)> {
     let pictures = OVERLAY_PICTURES.read().ok()?;
     pictures
         .iter()
-        .find(|(p, size, _)| *p == platform && *size == (c.w, c.h))
-        .map(|(_, _, rect)| *rect)
+        .find(|(p, size, _, _)| *p == platform && *size == (c.w, c.h))
+        .map(|(_, _, rect, grid)| (*rect, *grid))
 }
 
 /// The game in `rect` on canvas `c`: a Game Boy's own window of the texture, or a console's
-/// whole frame, through the sharp filter, at the scale the rect makes.
-pub fn placed(c: Canvas, platform: Platform, rect: [f32; 4]) -> Screen {
+/// whole frame, through the sharp filter, at the scale the rect makes, with a grid `grid`
+/// hundredths dark between its pixels.
+pub fn placed(c: Canvas, platform: Platform, rect: [f32; 4], grid: u8) -> Screen {
     let uv = if is_console(platform) {
         WHOLE_TEXTURE
     } else {
@@ -96,7 +108,10 @@ pub fn placed(c: Canvas, platform: Platform, rect: [f32; 4]) -> Screen {
     let view = GameView {
         rect,
         uv,
-        filter: Filter::Sharp,
+        filter: match grid {
+            0 => Filter::Sharp,
+            dark => Filter::Grid(dark),
+        },
     };
     Screen {
         view,
@@ -184,8 +199,8 @@ pub fn screen_on_frame(
     mode: VideoMode,
     frame: (u32, u32),
 ) -> Screen {
-    if let Some(rect) = overlay_picture(c, platform) {
-        return placed(c, platform, rect);
+    if let Some((rect, grid)) = overlay_picture(c, platform) {
+        return placed(c, platform, rect, grid);
     }
     if is_console(platform) {
         return console_screen(c, platform, mode, frame);

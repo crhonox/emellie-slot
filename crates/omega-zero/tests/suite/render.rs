@@ -58,7 +58,8 @@ fn deviation(frame: &[u8], src: &[u8], view: GameView, samples: &[(usize, usize)
                     }
                 }
             }
-            Filter::Sharp => {
+            // a grid darkens only a game pixel's edge, never its middle
+            Filter::Sharp | Filter::Grid(_) => {
                 let x = rx + (sx as f32 + 0.5) * sx_px;
                 let y = ry + (sy as f32 + 0.5) * sy_px;
                 if let Some(got) = on_canvas(x, y) {

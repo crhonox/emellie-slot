@@ -21,6 +21,9 @@ pub enum Filter {
     Lcd3x,
     /// Any other scale, each game pixel kept square with a one pixel blend where two meet.
     Sharp,
+    /// As `Sharp`, with the last panel pixel across and down each game pixel darkened by this
+    /// many hundredths: a dot-matrix screen's grid, exact at a whole scale.
+    Grid(u8),
 }
 
 /// How the game is laid on the canvas: the part of the game texture shown, the rect it fills
@@ -62,6 +65,7 @@ struct Sharp {
     u_scale: gl::types::GLint,
     /// The size of the texture drawn, in texels.
     u_src: gl::types::GLint,
+    u_grid: gl::types::GLint,
 }
 
 pub struct GamePass {
@@ -119,6 +123,7 @@ impl GamePass {
                 u_uv: uniform(sharp, "u_uv"),
                 u_scale: uniform(sharp, "u_scale"),
                 u_src: uniform(sharp, "u_src"),
+                u_grid: uniform(sharp, "u_grid"),
             },
             game,
             size: (SRC_W, SRC_H),
@@ -234,8 +239,13 @@ impl GamePass {
                 gl::BindTexture(gl::TEXTURE_2D, self.mask);
                 gl::ActiveTexture(gl::TEXTURE0);
             },
-            Filter::Sharp => unsafe {
+            Filter::Sharp | Filter::Grid(_) => unsafe {
+                let grid = match view.filter {
+                    Filter::Grid(dark) => dark.min(100) as f32 / 100.0,
+                    _ => 0.0,
+                };
                 gl::UseProgram(self.sharp.prog);
+                gl::Uniform1f(self.sharp.u_grid, grid);
                 gl::Uniform4f(self.sharp.u_rect, x, y, w, h);
                 gl::Uniform4f(self.sharp.u_uv, uv[0], uv[1], uv[2], uv[3]);
                 gl::Uniform2f(self.sharp.u_src, src_w, src_h);
@@ -252,7 +262,7 @@ impl GamePass {
             },
         }
         quad.draw();
-        if view.filter == Filter::Sharp {
+        if matches!(view.filter, Filter::Sharp | Filter::Grid(_)) {
             unsafe { filter(gl::NEAREST) };
         }
     }
