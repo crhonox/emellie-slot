@@ -435,6 +435,7 @@ impl Session {
                 serial,
                 colour: self.app.colour_correction(),
                 link: player,
+                game_boy: platform == Platform::Gb,
             },
         };
         let opened = open(&self.root, core, setup);

@@ -150,21 +150,22 @@ const FRAMES: [(u32, u32); 10] = [
 ];
 
 #[test]
-fn a_snes_game_is_twice_its_size_in_the_middle_of_every_canvas() {
-    for (c, x, y) in [
-        (Canvas::FOUR_THREE, 64.0, 16.0),
-        (Canvas::WIDE, 104.0, 16.0),
-        (Canvas::SQUARE, 104.0, 136.0),
+fn a_snes_game_is_twice_its_size_where_its_width_does_not_fit_and_fills_720x720_across() {
+    for (c, rect) in [
+        (Canvas::FOUR_THREE, [64.0, 16.0, 512.0, 448.0]),
+        (Canvas::WIDE, [104.0, 16.0, 512.0, 448.0]),
+        (Canvas::SQUARE, [0.0, 45.0, 720.0, 630.0]),
     ] {
         let s = screen_on_frame(c, Platform::Snes, VideoMode::Actual, (256, 224));
-        assert_eq!(s.view.rect, [x, y, 512.0, 448.0], "{c:?}");
+        assert_eq!(s.view.rect, rect, "{c:?}");
         assert_eq!(s.view.uv, WHOLE_TEXTURE);
         assert_eq!(s.view.filter, Filter::Sharp);
         assert_eq!(s.still, s.view);
+        let sides = if c == Canvas::SQUARE { 2 } else { 4 };
         assert_eq!(
             s.bands.len(),
-            4,
-            "{c:?}: the console's body is not all round the picture"
+            sides,
+            "{c:?}: the console's body is not round the picture"
         );
     }
 }
@@ -189,6 +190,13 @@ fn a_snes_game_showing_its_overscan_is_still_twice_its_size() {
         (256, 239),
     );
     assert_eq!(s.view.rect, [64.0, 1.0, 512.0, 478.0]);
+    let s = screen_on_frame(
+        Canvas::SQUARE,
+        Platform::Snes,
+        VideoMode::Actual,
+        (256, 239),
+    );
+    assert_eq!(s.view.rect, [0.0, 24.0, 720.0, 672.0]);
 }
 
 #[test]

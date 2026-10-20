@@ -38,13 +38,15 @@ pub struct Opened {
 }
 
 /// What a game is opened with besides its core: a handheld's link cable mode, its screen's
-/// colour correction and the player it is on a cable. A SNES or PlayStation game has none of it.
+/// colour correction, the player it is on a cable and whether it is a Game Boy game. A SNES or
+/// PlayStation game has none of it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Setup<'a> {
     Handheld {
         serial: &'a str,
         colour: bool,
         link: Option<u8>,
+        game_boy: bool,
     },
     Console,
 }
@@ -57,6 +59,7 @@ impl<'a> Setup<'a> {
                 serial,
                 colour,
                 link,
+                ..
             } => (serial, colour, link),
             Setup::Console => ("auto", false, None),
         }
@@ -99,6 +102,7 @@ pub fn open_core(root: &Path, core: Core, serial: &str, colour: bool, link: Opti
             serial,
             colour,
             link,
+            game_boy: false,
         },
     )
 }
@@ -114,6 +118,7 @@ pub fn open_core_for(
         serial,
         colour,
         link: None,
+        game_boy: false,
     };
     open_named(root, core, setup, paths).unwrap_or_else(|| {
         report_missing(core, paths);
@@ -130,16 +135,25 @@ fn open_named(
     let bios = root::bios_dir(root);
     let saves = root::saves_dir(root);
     let (serial, colour, link) = setup.handheld();
+    let game_boy = match setup {
+        Setup::Handheld { game_boy, .. } => game_boy_options(core, game_boy),
+        Setup::Console => &[],
+    };
     for path in paths {
         if !path.exists() {
             continue;
         }
         // the options are there before the core starts, for one that reads them as it does
-        let options = core_options(core, serial, root::has_real_bios(root), colour);
+        let mut options = core_options(core, serial, root::has_real_bios(root), colour);
+        options.retain(|(key, _)| game_boy.iter().all(|(k, _)| k != key));
+        options.extend(game_boy.iter().map(|(k, v)| (*k, v.to_string())));
         let early: Vec<(&str, &str)> = options.iter().map(|(k, v)| (*k, v.as_str())).collect();
         match LibretroCore::open_with_options(path, &bios, &saves, &early) {
             Ok(mut opened) => {
                 apply_core_options(&mut opened, core, serial, root::has_real_bios(root), colour);
+                for (key, value) in game_boy {
+                    opened.set_option(key, value);
+                }
                 if let Some(player) = link {
                     apply_link_options(&mut opened, core, player);
                 }
@@ -172,6 +186,21 @@ pub fn colour_option(which: Core, on: bool) -> Option<(&'static str, &'static st
             if on { "enabled" } else { "disabled" },
         )),
         Core::Snes9x | Core::Supafaust | Core::PcsxRearmed | Core::Dsperate => None,
+    }
+}
+
+/// What a Game Boy game, one of Games/GB, is played with over the handhelds' options: mGBA plays
+/// it as the original Game Boy, never as the Super Game Boy whose colours a game such as Kirby's
+/// Dream Land 2 sends it, in Gambatte's TI-83 Legacy palette, which
+/// cores/mgba/ti83-legacy-palette.patch adds. A Game Boy Color game keeps its own colours.
+pub fn game_boy_options(which: Core, game_boy: bool) -> &'static [(&'static str, &'static str)] {
+    match which {
+        Core::Mgba if game_boy => &[
+            ("mgba_gb_model", "Game Boy"),
+            ("mgba_gb_colors_preset", "0"),
+            ("mgba_gb_colors", "TI-83 Legacy"),
+        ],
+        _ => &[],
     }
 }
 
@@ -256,6 +285,18 @@ mod tests {
     use std::sync::Mutex;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn a_game_boy_game_is_an_original_game_boy_in_the_ti_83_palette_and_nothing_else_is() {
+        let options = game_boy_options(Core::Mgba, true);
+        assert!(options.contains(&("mgba_gb_model", "Game Boy")));
+        assert!(options.contains(&("mgba_gb_colors_preset", "0")));
+        assert!(options.contains(&("mgba_gb_colors", "TI-83 Legacy")));
+        assert!(game_boy_options(Core::Mgba, false).is_empty());
+        for core in [Core::Gpsp, Core::Snes9x, Core::PcsxRearmed] {
+            assert!(game_boy_options(core, true).is_empty(), "{core:?}");
+        }
+    }
 
     #[test]
     fn each_core_spells_colour_correction_its_own_way() {

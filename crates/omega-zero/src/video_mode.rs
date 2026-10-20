@@ -250,9 +250,11 @@ const SNES_W: f32 = 256.0;
 /// A SNES or PlayStation game on a television's screen, centred with the console's body around
 /// it, every frame size drawn through the sharp filter into the same rect.
 ///
-/// The SNES at its actual size is twice its 256 pixels and its lines, 512x448 (512x478 for a
-/// game showing its overscan), on every canvas: 3x would not fit any of them. A hi-res frame,
-/// 512 pixels a line, or an interlaced one, twice the lines, fills the same rect. Stretched, the
+/// The SNES at its actual size keeps its pixels square. Across 720x720 it fills the width,
+/// 2.8125x: 720x630, 720x672 for a game showing its overscan, through the sharp filter so the
+/// scale that is not a whole number does not shimmer. Where that is too tall, 640x480 and
+/// 720x480, it is twice its 256 pixels and its lines, 512x448 (512x478). A hi-res frame, 512
+/// pixels a line, or an interlaced one, twice the lines, fills the same rect. Stretched, the
 /// SNES takes a television's 4:3, as large as the canvas holds.
 ///
 /// The PlayStation at its actual size is that 4:3: 640x480 on 640x480, where its usual 320x240
@@ -278,7 +280,8 @@ fn console_screen(c: Canvas, platform: Platform, mode: VideoMode, frame: (u32, u
     }
 }
 
-/// The SNES picture at the largest whole scale the canvas holds, for a frame `lines` high: an
+/// The SNES picture with square pixels for a frame `lines` high: across the canvas's whole
+/// width where its height holds that, otherwise at the largest whole scale it holds. An
 /// interlaced frame's lines count as the half they each are of the picture.
 fn snes_whole(cw: f32, ch: f32, lines: u32) -> (f32, f32) {
     let lines = match lines {
@@ -286,6 +289,10 @@ fn snes_whole(cw: f32, ch: f32, lines: u32) -> (f32, f32) {
         l if l > 256 => l / 2,
         l => l,
     } as f32;
+    let across = (lines * cw / SNES_W).round();
+    if across <= ch {
+        return (cw, across);
+    }
     let scale = (cw / SNES_W).min(ch / lines).floor().max(1.0);
     let (w, h) = (SNES_W * scale, lines * scale);
     if w <= cw && h <= ch {

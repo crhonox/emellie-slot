@@ -1,0 +1,11 @@
+--- a/src/gb/overrides.c
++++ b/src/gb/overrides.c
+@@ -707,6 +707,8 @@
+ 	{ "DMG Green", UNIFORM_PAL(0x2691, 0x19A9, 0x1105, 0x04A3), },
+ 	{ "GB Pocket", UNIFORM_PAL(0x52D4, 0x4270, 0x2989, 0x10A3), },
+ 	{ "GB Light", UNIFORM_PAL(0x7FCF, 0x738B, 0x56C3, 0x39E0), },
++	/* Gambatte's "Special 4 (TI-83 Legacy)": 9CA684 727C5A 464A35 181810 */
++	{ "TI-83 Legacy", UNIFORM_PAL(0x4293, 0x2DEE, 0x1928, 0x0863), },
+ 	{ "GBC Brown ↑", PALETTE(0, 0, 0), },
+ 	{ "GBC Red ↑A", PALETTE(4, 3, 28), },
+ 	{ "GBC Dark Brown ↑B", PALETTE(1, 0, 0), },
