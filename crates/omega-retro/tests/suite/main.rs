@@ -12,8 +12,8 @@ mod libretro;
 mod mock;
 mod netpacket;
 mod options;
+mod remap;
 mod rumble;
-mod turbo;
 
 /// A file in this folder that the list above leaves out is never compiled, let alone run.
 #[test]

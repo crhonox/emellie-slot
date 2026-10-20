@@ -105,11 +105,12 @@ impl Pace {
     }
 }
 
-/// How a system's games are played beyond running their core: whether held X and Y are turbo
-/// A and B, and whether L2 rewinds, for which the emulator thread keeps snapshots.
+/// How a system's games are played beyond running their core: which buttons land on others,
+/// and whether L2 rewinds, for which the emulator thread keeps snapshots.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Rules {
-    pub turbo: bool,
+    /// Each held `from` reaches the core as `to`.
+    pub remap: &'static [(u16, u16)],
     pub rewinds: bool,
     /// The system, which RetroAchievements identifies the game by.
     pub platform: Platform,
@@ -118,17 +119,33 @@ pub struct Rules {
 impl Rules {
     pub fn of(platform: Platform) -> Rules {
         Rules {
-            turbo: platform.turbo_xy(),
+            remap: remap(platform),
             rewinds: platform.rewinds(),
             platform,
         }
     }
 }
 
+/// The handhelds' games have no X or Y: X is B and Y is A, and the Game Boys', with no
+/// shoulders either, take L1 as A and R1 as B.
+fn remap(platform: Platform) -> &'static [(u16, u16)] {
+    use ButtonMask as M;
+    match platform {
+        Platform::Gba => &[(M::X, M::B), (M::Y, M::A)],
+        Platform::Gb | Platform::Gbc => &[(M::X, M::B), (M::Y, M::A), (M::L, M::A), (M::R, M::B)],
+        Platform::Snes | Platform::Ps1 | Platform::Nds => &[],
+    }
+}
+
 impl Default for Rules {
-    /// The handhelds', which every game was before the SNES and the PlayStation.
+    /// The emulator thread with all it can do and no buttons moved, for what drives it
+    /// directly rather than for a system's games.
     fn default() -> Self {
-        Rules::of(Platform::Gba)
+        Rules {
+            remap: &[],
+            rewinds: true,
+            platform: Platform::Gba,
+        }
     }
 }
 
@@ -235,8 +252,8 @@ impl EmuHandle {
         Self::spawn_as(core, rom, ring, sav, resume, Some(player), Rules::default())
     }
 
-    /// Runs a game of `platform`, played by its rules: turbo X/Y and rewind only where the
-    /// system has them. A linked `player` is for a GBA game only.
+    /// Runs a game of `platform`, played by its rules: its buttons remapped, and rewind only
+    /// where the system has it. A linked `player` is for a GBA game only.
     pub fn spawn_for(
         platform: Platform,
         core: Box<dyn RetroCore>,
@@ -671,7 +688,6 @@ impl Worker {
         let mut scale = 0.0f64;
         let mut rate = TickRate::new(Instant::now(), 0);
         let mut stalled = false;
-        let mut turbo_frame = 0u32;
         let mut transport: Option<Box<dyn LinkChannel>> = None;
         let mut cable: Option<Cable> = None;
         let mut cable_presents = 0u32;
@@ -789,12 +805,7 @@ impl Worker {
                 loop {
                     ran += 1;
                     let last = ran >= ceiling || cost.last(began.elapsed(), budget);
-                    let input = if self.rules.turbo {
-                        input.turbo(turbo_frame)
-                    } else {
-                        input
-                    };
-                    turbo_frame = turbo_frame.wrapping_add(1);
+                    let input = input.remap(self.rules.remap);
                     core.set_frame_skip(!last);
                     let frame_began = Instant::now();
                     match cable.as_mut() {
@@ -1503,21 +1514,16 @@ mod tests {
     }
 
     #[test]
-    fn only_the_handhelds_have_turbo_and_only_the_playstation_has_no_rewind() {
+    fn only_the_handhelds_remap_and_nothing_rewinds() {
         for platform in Platform::ALL {
             let rules = Rules::of(platform);
             assert_eq!(
-                rules.turbo,
+                !rules.remap.is_empty(),
                 matches!(platform, Platform::Gba | Platform::Gb | Platform::Gbc),
                 "{platform:?}"
             );
-            assert_eq!(
-                rules.rewinds,
-                !matches!(platform, Platform::Ps1 | Platform::Nds),
-                "{platform:?}"
-            );
+            assert!(!rules.rewinds, "{platform:?}");
         }
-        assert_eq!(Rules::default(), Rules::of(Platform::Gba));
     }
 
     #[test]

@@ -238,9 +238,8 @@ fn labels_is_flows() {
     }
 }
 
-/// The Controls panel's lines are its own, trimmed to fit flow.html's grid, and the GBA's has
-/// two more than flow.html's; its title, its headings and the lines both say are flow.html's
-/// pixel for pixel.
+/// The Controls panel's lines are its own, trimmed to fit flow.html's grid, and the GBA's
+/// differs from flow.html's; its title and its headings are flow.html's pixel for pixel.
 #[test]
 fn the_controls_panel_is_flows_where_it_says_what_flow_says() {
     let view = ControlsView::new(omega_store::Platform::Gba);
@@ -248,13 +247,13 @@ fn the_controls_panel_is_flows_where_it_says_what_flow_says() {
         let face = controls_face(&view, palette(colour));
         let flow_h = panel_height(13 + 11 * 11);
         let well_y = 18;
-        // the header, the headings, and the first two lines of each column: A PLAY and HOLD A
-        // CLEAN START, L2 REWIND and R2 FAST FORWARD
+        // the header and the headings: the GBA's game column starts with X Y B A, which
+        // flow.html's, with L2 REWIND, does not
         matches_flow(
             &face,
             &format!("controls-{name}"),
             flow_h,
-            0..well_y + line_y(2),
+            0..well_y + line_y(0),
         );
     }
 }

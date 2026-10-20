@@ -83,13 +83,20 @@ fn each_system_says_what_its_buttons_do() {
         a.keys()
     };
     for p in [Platform::Gba, Platform::Gb, Platform::Gbc] {
-        assert_eq!(keys(&mut a, p), Keys::HANDHELD, "{p:?}");
+        assert_eq!(
+            keys(&mut a, p),
+            Keys {
+                rewind: false,
+                ..Keys::HANDHELD
+            },
+            "{p:?}"
+        );
     }
     assert_eq!(
         keys(&mut a, Platform::Snes),
         Keys {
             game_l2_r2: false,
-            rewind: true,
+            rewind: false,
             colour: false,
         }
     );
@@ -147,7 +154,7 @@ fn select_and_r2_fast_forward_a_playstation_game() {
 }
 
 #[test]
-fn a_snes_game_rewinds_on_l2_and_fast_forwards_on_r2() {
+fn a_snes_game_fast_forwards_on_r2_and_l2_rewinds_nothing() {
     let d = root_with(Platform::Snes, "Super Metroid");
     let (mut s, mut now) = playing(&d, Platform::Snes, "Super Metroid");
 
@@ -161,7 +168,7 @@ fn a_snes_game_rewinds_on_l2_and_fast_forwards_on_r2() {
     for _ in 0..30 {
         step(&mut s, &mut now, None);
     }
-    assert!(rewinding(&s), "L2 did not rewind a SNES game");
+    assert!(!rewinding(&s), "L2 rewound a SNES game");
     assert_eq!(held(&s) & ButtonMask::L2, 0, "L2 reached the game");
     step(&mut s, &mut now, Some(RawEvent::Up(Btn::L2)));
 }

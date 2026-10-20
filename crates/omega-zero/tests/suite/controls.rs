@@ -123,7 +123,7 @@ fn controls_says_what_the_shelf_and_a_gba_game_do_with_each_button() {
     assert_eq!(
         view.groups[1].lines,
         [
-            ("L2", "REWIND"),
+            ("X Y", "B A"),
             ("R2", "FAST FORWARD"),
             ("R2 ×2", "LATCH FAST FWD"),
             ("MENU ×2", "SAVE STATES"),
@@ -141,7 +141,7 @@ fn controls_says_what_the_shelf_and_a_gba_game_do_with_each_button() {
 }
 
 #[test]
-fn a_game_boy_has_no_core_to_pick_and_leaves_l1_and_r1_to_the_picture() {
+fn a_game_boy_has_no_core_to_pick_and_plays_l1_and_r1_as_a_and_b() {
     for platform in [Platform::Gb, Platform::Gbc] {
         let view = ControlsView::new(platform);
         assert!(
@@ -151,24 +151,26 @@ fn a_game_boy_has_no_core_to_pick_and_leaves_l1_and_r1_to_the_picture() {
         assert_eq!(view.groups[0].lines.len(), SHELF_WITH_CORES.len() - 1);
         let game = &view.groups[1].lines;
         for line in [
-            ("L2", "REWIND"),
+            ("X Y", "B A"),
+            ("L1 R1", "A B"),
             ("SELECT+MENU", "LINK"),
             ("SELECT+Y", "COLOUR"),
-            ("L1 R1", "PICTURE SIZE"),
         ] {
             assert!(game.contains(&line), "{platform:?} has no {line:?}");
+        }
+        for line in [("L2", "REWIND"), ("L1 R1", "PICTURE SIZE")] {
+            assert!(!game.contains(&line), "{platform:?} still has {line:?}");
         }
     }
 }
 
 #[test]
-fn a_snes_game_rewinds_and_fast_forwards_but_neither_links_nor_corrects_colour() {
+fn a_snes_game_fast_forwards_but_neither_rewinds_links_nor_corrects_colour() {
     let view = ControlsView::new(Platform::Snes);
     assert_eq!(view.groups[0].lines, SHELF_WITH_CORES);
     assert_eq!(
         view.groups[1].lines,
         [
-            ("L2", "REWIND"),
             ("R2", "FAST FORWARD"),
             ("R2 ×2", "LATCH FAST FWD"),
             ("MENU ×2", "SAVE STATES"),

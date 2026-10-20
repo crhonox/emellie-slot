@@ -20,7 +20,7 @@ use omega_zero::audio::Sfx;
 use omega_zero::emu::{EmuHandle, Speed};
 use omega_zero::screens::bar::SWAP;
 use omega_zero::session::Session;
-use omega_zero::video_mode::{video_mode_for, VideoMode, VIDEO_MODE_FILE};
+use omega_zero::video_mode::{video_mode_for, write_video_mode, VideoMode, VIDEO_MODE_FILE};
 
 fn play(a: &mut App) {
     a.apply(Action::GbaDown(Btn::A));
@@ -2003,44 +2003,23 @@ fn pad(s: &Session) -> u16 {
 }
 
 #[test]
-fn l_and_r_change_the_mode_on_a_game_boy_cart_and_not_on_a_gba_one() {
-    let d = common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]);
-    let mut s = session_playing(d.path());
-    assert_eq!(
-        s.app().source_rect(),
-        WHOLE_TEXTURE,
-        "it did not open actual size"
-    );
-
-    s.feed([RawEvent::Down(Btn::L1)], 100);
-    assert_eq!(
-        s.app().source_rect(),
-        GB_WINDOW,
-        "L did not stretch the picture"
-    );
-    assert_eq!(pad(&s) & ButtonMask::L, 0, "L reached the game as well");
-    s.feed([RawEvent::Up(Btn::L1)], 120);
-
-    s.feed([RawEvent::Down(Btn::R1)], 200);
-    assert_eq!(
-        s.app().source_rect(),
-        WHOLE_TEXTURE,
-        "R did not give it back"
-    );
-    assert_eq!(pad(&s) & ButtonMask::R, 0, "R reached the game as well");
-    s.feed([RawEvent::Up(Btn::R1)], 220);
-
-    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
-    let mut s = session_playing(d.path());
-    s.feed([RawEvent::Down(Btn::L1)], 100);
-    assert_ne!(pad(&s) & ButtonMask::L, 0, "the GBA lost its own L");
-    s.feed([RawEvent::Down(Btn::R1)], 120);
-    assert_ne!(pad(&s) & ButtonMask::R, 0, "the GBA lost its own R");
-    assert_eq!(
-        s.app().source_rect(),
-        WHOLE_TEXTURE,
-        "a GBA picture moved when its shoulders were pressed"
-    );
+fn l_and_r_are_the_games_and_leave_the_picture_on_a_game_boy_cart_and_a_gba_one() {
+    for root in [
+        common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]),
+        common::tmp_root_with_carts(&["Emerald", "Zzz"]),
+    ] {
+        let mut s = session_playing(root.path());
+        let before = s.app().source_rect();
+        s.feed([RawEvent::Down(Btn::L1)], 100);
+        assert_ne!(pad(&s) & ButtonMask::L, 0, "L did not reach the game");
+        s.feed([RawEvent::Down(Btn::R1)], 120);
+        assert_ne!(pad(&s) & ButtonMask::R, 0, "R did not reach the game");
+        assert_eq!(
+            s.app().source_rect(),
+            before,
+            "the picture moved when the shoulders were pressed"
+        );
+    }
 }
 
 #[test]
@@ -2066,17 +2045,15 @@ fn a_shoulder_held_across_the_insert_does_not_stick_on_the_pad() {
 }
 
 #[test]
-fn a_shoulder_still_held_when_the_cart_seats_never_reaches_a_game_boy_core() {
-    for (label, root, want_held) in [
+fn a_shoulder_still_held_when_the_cart_seats_reaches_the_core() {
+    for (label, root) in [
         (
             "Game Boy",
             common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]),
-            false,
         ),
         (
             "Game Boy Advance",
             common::tmp_root_with_carts(&["Emerald", "Zzz"]),
-            true,
         ),
     ] {
         common::clocked(root.path());
@@ -2093,15 +2070,10 @@ fn a_shoulder_still_held_when_the_cart_seats_never_reaches_a_game_boy_core() {
             s.update(1.0 / 60.0);
             std::thread::sleep(Duration::from_millis(1));
         }
-        assert_eq!(
-            pad(&s) & ButtonMask::L != 0,
-            want_held,
-            "{label}: the core is holding L {} the cart seated under a thumb that never moved",
-            if want_held {
-                "nowhere after"
-            } else {
-                "ever since"
-            }
+        assert_ne!(
+            pad(&s) & ButtonMask::L,
+            0,
+            "{label}: the core is not holding L the cart seated under"
         );
     }
 }
@@ -2109,26 +2081,14 @@ fn a_shoulder_still_held_when_the_cart_seats_never_reaches_a_game_boy_core() {
 #[test]
 fn the_picture_mode_is_remembered_per_cart() {
     let d = common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]);
-    let mut s = session_playing(d.path());
-    s.feed([RawEvent::Down(Btn::L1)], 100);
-    s.feed([RawEvent::Up(Btn::L1)], 120);
-    assert_eq!(video_mode_for(d.path(), "Tetris"), VideoMode::Stretch);
-    assert_eq!(
-        video_mode_for(d.path(), "Zzz"),
-        VideoMode::Actual,
-        "the press was recorded against another cart as well"
-    );
-    drop(s);
-
-    let mut s = session_playing(d.path());
+    write_video_mode(d.path(), "Tetris", VideoMode::Stretch).expect("write the picture mode");
+    assert_eq!(video_mode_for(d.path(), "Zzz"), VideoMode::Actual);
+    let s = session_playing(d.path());
     assert_eq!(
         s.app().source_rect(),
         GB_WINDOW,
         "the cart did not come back stretched"
     );
-    s.feed([RawEvent::Down(Btn::R1)], 100);
-    assert_eq!(video_mode_for(d.path(), "Tetris"), VideoMode::Actual);
-    assert_eq!(s.app().source_rect(), WHOLE_TEXTURE);
 }
 
 #[test]

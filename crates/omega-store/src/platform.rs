@@ -65,14 +65,9 @@ impl Platform {
     }
 
     /// Whether the frontend keeps L1/R1 while a game of this system plays, for its picture
-    /// size: only the Game Boys, whose games have no shoulder buttons.
+    /// size: none does, the Game Boys' L1/R1 are their A and B.
     pub fn owns_shoulders(self) -> bool {
-        matches!(self, Platform::Gb | Platform::Gbc)
-    }
-
-    /// Whether held X/Y are turbo A/B: on the handhelds, whose games have no X or Y.
-    pub fn turbo_xy(self) -> bool {
-        matches!(self, Platform::Gba | Platform::Gb | Platform::Gbc)
+        false
     }
 
     /// Whether the core's colour correction for a handheld's screen applies.
@@ -80,10 +75,9 @@ impl Platform {
         matches!(self, Platform::Gba | Platform::Gb | Platform::Gbc)
     }
 
-    /// Whether held L2 rewinds: not on the PlayStation, whose games use L2 and whose states
-    /// are too big for the rewind buffer.
+    /// Whether held L2 rewinds: on none, Emellie Slot plays without rewind.
     pub fn rewinds(self) -> bool {
-        !matches!(self, Platform::Ps1 | Platform::Nds)
+        false
     }
 
     /// Whether L2/R2 belong to the game rather than to rewind and fast-forward.

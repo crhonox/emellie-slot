@@ -280,6 +280,15 @@ pub fn loaded(platform: Platform, rom: &Path, resumed: bool) -> Guard {
     if game::console_for(platform, &[]).is_none() {
         return Guard { ticket: None };
     }
+    // without a network joined nothing is looked up: the game starts with no hash read off
+    // the card beside it
+    if !online() {
+        eprintln!(
+            "omega-zero: cheevos: offline, not checking {}",
+            rom.display()
+        );
+        return Guard { ticket: None };
+    }
     let ticket = live.tickets.fetch_add(1, Ordering::AcqRel) + 1;
     {
         let _switch = live.switch.lock().unwrap();

@@ -36,14 +36,16 @@ impl ButtonMask {
     pub const L3: u16 = 1 << 14;
     pub const R3: u16 = 1 << 15;
 
-    pub fn turbo(self, frame: u32) -> ButtonMask {
-        let mut mask = self.0 & !(Self::X | Self::Y);
-        if (frame / 3).is_multiple_of(2) {
-            if self.0 & Self::X != 0 {
-                mask |= Self::A;
-            }
-            if self.0 & Self::Y != 0 {
-                mask |= Self::B;
+    /// The buttons as a game sees them once each `(from, to)` pair moves a held `from` onto
+    /// `to`: `from` never reaches the core, and a `to` held itself stays down.
+    pub fn remap(self, pairs: &[(u16, u16)]) -> ButtonMask {
+        let mut mask = self.0;
+        for &(from, _) in pairs {
+            mask &= !from;
+        }
+        for &(from, to) in pairs {
+            if self.0 & from != 0 {
+                mask |= to;
             }
         }
         ButtonMask(mask)

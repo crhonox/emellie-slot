@@ -59,6 +59,11 @@ impl ControlsView {
         ]);
 
         let mut game = Vec::new();
+        match platform {
+            Platform::Gba => game.extend([("X Y", "B A")]),
+            Platform::Gb | Platform::Gbc => game.extend([("X Y", "B A"), ("L1 R1", "A B")]),
+            Platform::Snes | Platform::Ps1 | Platform::Nds => {}
+        }
         if platform.external() {
             // what the card's System/dsperate/nds.ini and pad-*.ini bind, DSperate's own menu
             // on MENU

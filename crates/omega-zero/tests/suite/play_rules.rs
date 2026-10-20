@@ -1,6 +1,6 @@
-//! Each system's games are played by its own rules on the emulator thread: held X and Y are
-//! turbo A and B only on the handhelds, and the PlayStation, whose states are too big, keeps no
-//! rewind snapshots.
+//! Each system's games are played by its own rules on the emulator thread: on the handhelds X
+//! is B and Y is A, on the Game Boys L1 is A and R1 is B too, and no system keeps rewind
+//! snapshots.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -108,20 +108,41 @@ fn first_frames(p: &Played, n: usize) -> Vec<u16> {
 const XY: u16 = ButtonMask::X | ButtonMask::Y;
 
 #[test]
-fn on_a_handheld_held_x_and_y_are_turbo_a_and_b() {
+fn on_a_handheld_held_x_is_b_and_y_is_a() {
     for platform in [Platform::Gba, Platform::Gb, Platform::Gbc] {
-        let p = play(platform, XY);
-        let frames = first_frames(&p, 12);
-        assert!(
-            frames.iter().all(|m| m & XY == 0),
-            "{platform:?}: X or Y reached the game"
-        );
-        assert!(
-            frames.iter().any(|m| m & ButtonMask::A != 0)
-                && frames.iter().any(|m| m & ButtonMask::A == 0),
-            "{platform:?}: A did not pulse: {frames:?}"
-        );
+        for (held, lands) in [
+            (ButtonMask::X, ButtonMask::B),
+            (ButtonMask::Y, ButtonMask::A),
+        ] {
+            let p = play(platform, held);
+            let frames = first_frames(&p, 12);
+            assert!(
+                frames.iter().all(|&m| m == lands),
+                "{platform:?}: {held:#x} was not played as {lands:#x}: {frames:?}"
+            );
+        }
     }
+}
+
+#[test]
+fn on_a_game_boy_l1_is_a_and_r1_is_b_and_on_the_gba_they_are_themselves() {
+    for platform in [Platform::Gb, Platform::Gbc] {
+        for (held, lands) in [
+            (ButtonMask::L, ButtonMask::A),
+            (ButtonMask::R, ButtonMask::B),
+        ] {
+            let p = play(platform, held);
+            let frames = first_frames(&p, 12);
+            assert!(
+                frames.iter().all(|&m| m == lands),
+                "{platform:?}: {held:#x} was not played as {lands:#x}: {frames:?}"
+            );
+        }
+    }
+    let lr = ButtonMask::L | ButtonMask::R;
+    let p = play(Platform::Gba, lr);
+    let frames = first_frames(&p, 12);
+    assert!(frames.iter().all(|&m| m == lr), "GBA: {frames:?}");
 }
 
 #[test]
@@ -139,22 +160,17 @@ fn on_a_console_x_and_y_reach_the_game_as_themselves() {
 }
 
 #[test]
-fn the_playstation_keeps_no_rewind_snapshots_and_the_snes_does() {
-    let ps1 = play(Platform::Ps1, 0);
-    let snes = play(Platform::Snes, 0);
-    first_frames(&ps1, 30);
-    first_frames(&snes, 30);
-    assert_eq!(
-        ps1.states.load(Ordering::Relaxed),
-        0,
-        "a PlayStation state was taken for rewind"
-    );
-    assert!(
-        snes.states.load(Ordering::Relaxed) >= 10,
-        "a SNES game kept no rewind snapshots"
-    );
-    ps1.emu.set_rewinding(true);
-    std::thread::sleep(Duration::from_millis(50));
-    assert_eq!(ps1.emu.rewind_fill(), 0);
-    drop(ps1);
+fn no_system_keeps_rewind_snapshots() {
+    for platform in Platform::ALL.into_iter().filter(|p| !p.external()) {
+        let p = play(platform, 0);
+        first_frames(&p, 30);
+        assert_eq!(
+            p.states.load(Ordering::Relaxed),
+            0,
+            "{platform:?}: a state was taken for rewind"
+        );
+        p.emu.set_rewinding(true);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(p.emu.rewind_fill(), 0, "{platform:?}");
+    }
 }
