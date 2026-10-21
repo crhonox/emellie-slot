@@ -332,6 +332,8 @@ pub struct App {
     pub(crate) snapshot: Option<Box<dyn Snapshot>>,
     pub(crate) core: Core,
     pub(crate) colour_pending: Option<bool>,
+    /// X on the DS's Controls put DSperate's hotkeys back since Controls opened.
+    pub(crate) ds_hotkeys_reset: bool,
     pub(crate) link_player: Option<u8>,
     pub(crate) platform: Platform,
     pub(crate) named_core: bool,
@@ -499,6 +501,7 @@ impl App {
             snapshot: None,
             core: Core::default(),
             colour_pending: None,
+            ds_hotkeys_reset: false,
             link_player: None,
             platform: Platform::default(),
             named_core: false,

@@ -39,10 +39,9 @@ pad_layout() {
 
 # The pad as the mali SDL2 numbers it: the node's three phantom keys (ESC, VOL-, VOL+) come
 # first, so A is b3; above MENU the stick clicks interleave with the triggers, one map for each
-# layout. As spruceOS's AnbernicXXCommon.cfg, which measured them on an RG CubeXX. VOL+ and
-# VOL- are SDL's misc1 and paddle1, buttons no DS key is bound to, for the hotkeys below.
+# layout. As spruceOS's AnbernicXXCommon.cfg, which measured them on an RG CubeXX.
 pad_map() {
-	base="19000000010000000100000000010000,ANBERNIC-keys,a:b3,b:b4,x:b6,y:b5,leftshoulder:b7,rightshoulder:b8,guide:b11,start:b10,back:b9,misc1:b2,paddle1:b1,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2"
+	base="19000000010000000100000000010000,ANBERNIC-keys,a:b3,b:b4,x:b6,y:b5,leftshoulder:b7,rightshoulder:b8,guide:b11,start:b10,back:b9,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2"
 	case "$1" in
 	nostick)
 		echo "$base,lefttrigger:b12,righttrigger:b13,leftx:a0,lefty:a1,platform:Linux," ;;
@@ -88,15 +87,15 @@ state="$SD/Config/emellie-slot.state"
 volume="$(sed -n 's/^volume=//p' "$state" 2>/dev/null)"
 case "$volume" in '' | *[!0-9]*) volume=60 ;; esac
 [ "$(sed -n 's/^muted=//p' "$state" 2>/dev/null)" = true ] && volume=0
+# VOL+/VOL- come from an input node of their own, which SDL opens no controller for: DSperate
+# reads them itself (cores/dsperate/emellie-hotkeys.patch), and SELECT with them runs this
+export DS_VOLUME_KEYS=1
 export DS_BRIGHTNESS="sh $SYS/brightness.sh"
 
-# Over whatever the player's settings say: these keys are the handheld's, not the game's
+# MENU held a second quits, over whatever the player's settings say
 cd "$DIR" || exit 2
 $LOADER "$DIR/dsperate" "$rom" --fullscreen --config "$CONFIG" $resume \
-	--volume "$volume" \
-	--set padhotkeys.volume_up=misc1 --set padhotkeys.volume_down=paddle1 \
-	--set padhotkeys.brightness_up=misc1+back --set padhotkeys.brightness_down=paddle1+back \
-	--set padhotkeys.quit_hold_ms=1000
+	--volume "$volume" --set padhotkeys.quit_hold_ms=1000
 status=$?
 
 [ -n "$governor" ] && echo "$governor" > "$CPU/scaling_governor" 2>/dev/null

@@ -62,7 +62,16 @@ diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
      const input::Frame f{static_cast<u16>(buttons_ | pressed_ | stick_ | face_stick_), static_cast<u8>(touch_x_), static_cast<u8>(touch_y_), touching_ || touched_ || stylus_down_ != 0};
      pressed_ = 0; stick_pressed_ = 0; touched_ = false;
      menu_fb_pressed_ = 0;   // menu fallback presses die with their frame
-@@ -209,6 +215,8 @@
+@@ -63,6 +69,8 @@
+   }
+   // What is held right now, for the menu's key repeat (unlike the edges above).
+   u32 menu_held() const { return buttons_ | stick_ | menu_fb_held_; }
++  // Whether the pad's SDL button `b` is down now.
++  bool pad_held(int b) const { return b >= 0 && b < 32 && ((held_ >> b) & 1); }
+   // While the menu is open only Pause and Quit hotkeys fire, so a hotkey that
+   // shares a control with a DS button can't hide that button from the menu.
+   void set_menu_open(bool on) { menu_open_ = on; if (!on) menu_faces_ = 0; }
+@@ -209,6 +217,8 @@
    Bind pad_hot_[static_cast<int>(Action::Count)][HOT_SLOTS];
    Bind key_mod_, pad_mod_;
    bool key_mod_down_ = false, key_mod_used_ = false, pad_mod_down_ = false, pad_mod_used_ = false;
@@ -74,7 +83,62 @@ diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
 diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
 --- a/src/frontend/sdl/main.cpp
 +++ b/src/frontend/sdl/main.cpp
-@@ -1103,6 +1103,13 @@
+@@ -47,6 +47,9 @@
+ #include "present_thread.h"
+ 
+ #include <dirent.h>
++#include <fcntl.h>
++#include <sys/ioctl.h>
++#include <sys/time.h>
+ #include <algorithm>
+ #include "mic_alsa.h"
+ 
+@@ -83,6 +86,44 @@
+ // Gates startup chatter and hotkey echoes; errors, refusals and disk-touching
+ // confirmations are never gated. DS_VERBOSE=1 enables.
+ bool verbose() { static const bool v = std::getenv("DS_VERBOSE") != nullptr; return v; }
++
++// The handheld's VOL+ and VOL-, read from every input node that has them (DS_VOLUME_KEYS set):
++// on the H700 handhelds they come from a node of their own that SDL opens no controller for.
++// linux/input.h is not included: its BTN_* macros would rename the DS's own buttons.
++struct VolumeKeys {
++  struct Event { timeval time; unsigned short type, code; int value; };   // struct input_event
++  static constexpr unsigned kEvKey = 1, kKeyVolumeDown = 114, kKeyVolumeUp = 115, kKeyMax = 0x2ff;
++  std::vector<int> fds;
++  void open_all() {
++    if (!std::getenv("DS_VOLUME_KEYS")) return;
++    constexpr size_t kBits = 8 * sizeof(unsigned long);
++    for (int i = 0; i < 32; ++i) {
++      char path[32];
++      std::snprintf(path, sizeof path, "/dev/input/event%d", i);
++      const int fd = ::open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
++      if (fd < 0) continue;
++      unsigned long keys[kKeyMax / kBits + 1] = {};
++      // EVIOCGBIT(EV_KEY, sizeof keys): the keys the node has
++      const bool has = ::ioctl(fd, _IOC(_IOC_READ, 'E', 0x20 + kEvKey, sizeof keys), keys) >= 0 &&
++                       ((keys[kKeyVolumeUp / kBits] >> (kKeyVolumeUp % kBits)) & 1);
++      if (has) { fds.push_back(fd); std::fprintf(stderr, "volume keys: %s\n", path); }
++      else ::close(fd);
++    }
++  }
++  // VOL+ presses less VOL- presses since the last call, a held key's repeats counted.
++  int take() {
++    int steps = 0;
++    Event ev;
++    for (const int fd : fds)
++      while (::read(fd, &ev, sizeof ev) == static_cast<ssize_t>(sizeof ev))
++        if (ev.type == kEvKey && ev.value != 0) {
++          if (ev.code == kKeyVolumeUp) ++steps;
++          else if (ev.code == kKeyVolumeDown) --steps;
++        }
++    return steps;
++  }
++  ~VolumeKeys() { for (const int fd : fds) ::close(fd); }
++};
+ #define VLOG(...) do { if (verbose()) std::fprintf(stderr, __VA_ARGS__); } while (0)
+ 
+ 
+@@ -1103,6 +1144,13 @@
      else if (flag("--no-gpu-present")) cli.set("video.gpu_present", "false");
      else if (flag("--no-audio")) cli.set("audio.enabled", "false");
      else if (arg("--volume")) cli.set("audio.volume", argv[++i]);
@@ -88,7 +152,35 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
      else if (arg("--audio-buffer")) cli.set("audio.buffer_size", argv[++i]);
      else if (arg("--speed")) cli.set("emu.speed", argv[++i]);
      else if (arg("--limiter")) cli.set("emu.limiter", argv[++i]);
-@@ -3230,6 +3237,13 @@
+@@ -3207,11 +3255,27 @@
+   // for the ones started lazily.
+   ds::place_current_thread(ds::ThreadRole::Emu);
+   ds::place_foreign_threads();
++  VolumeKeys volume_keys;
++  volume_keys.open_all();
+   while (!input.quit() && !g_signalled && (frame_limit == 0 || frames < static_cast<u64>(frame_limit))) {
+     if (frames == 120) ds::place_foreign_threads();
+     SDL_Event e;
+     input.set_menu_open(menu.open());
+     while (SDL_PollEvent(&e)) input.handle(e, display, dual_window ? &display2 : nullptr);
++    // VOL steps the volume; with SELECT (SDL's back) held, the panel's light
++    for (int steps = volume_keys.take(); steps != 0; steps += steps > 0 ? -1 : 1) {
++      const bool up = steps > 0;
++      if (input.pad_held(SDL_CONTROLLER_BUTTON_BACK)) {
++        if (const char* cmd = std::getenv("DS_BRIGHTNESS"); cmd && *cmd) {
++          const std::string run = std::string(cmd) + (up ? " up" : " down") + " >/dev/null 2>&1 &";
++          if (std::system(run.c_str()) != 0) VLOG("brightness: %s failed\n", cmd);
++        }
++      } else {
++        audio.set_volume(audio.volume() + (up ? 10 : -10));
++        if (up) audio.set_muted(false);
++        VLOG("volume %d%%\n", audio.volume());
++      }
++    }
+     for (ds::sdl::Action a : input.take_actions()) {
+       using A = ds::sdl::Action;
+       switch (a) {
+@@ -3230,6 +3294,13 @@
        case A::VolumeUp: audio.set_volume(audio.volume() + 10); audio.set_muted(false); VLOG("volume %d%%\n", audio.volume()); break;
        case A::VolumeDown: audio.set_volume(audio.volume() - 10); VLOG("volume %d%%\n", audio.volume()); break;
        case A::Mute: audio.set_muted(!audio.muted()); VLOG("%s\n", audio.muted() ? "muted" : "unmuted"); break;

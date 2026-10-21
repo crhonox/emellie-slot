@@ -57,6 +57,9 @@ impl ControlsView {
             ("▲▼", "LETTER"),
             ("L1 R1", "SHELF"),
         ]);
+        if platform.external() {
+            shelf.push(("X", RESET_KEYS));
+        }
 
         let mut game = Vec::new();
         match platform {
@@ -142,6 +145,11 @@ impl Default for ControlsView {
     }
 }
 
+/// X on the DS's Controls: DSperate's hotkeys put back as they came, and what the line says
+/// once they are.
+pub const RESET_KEYS: &str = "RESET KEYS";
+pub const KEYS_RESET: &str = "KEYS RESET";
+
 /// How wide the panel is, in art pixels: flow.css's .controls-panel.
 pub const WIDTH: u32 = 304;
 
@@ -219,16 +227,48 @@ pub fn controls_face(view: &ControlsView, pal: &Palette) -> UndoFace {
 
 impl App {
     pub(crate) fn controls_input(&mut self, action: Action) {
-        if matches!(action, Action::GbaDown(Btn::B) | Action::SelectTap) {
-            self.go(Phase::Shelf, Dir::Back);
+        match action {
+            Action::GbaDown(Btn::B) | Action::SelectTap => {
+                self.ds_hotkeys_reset = false;
+                self.go(Phase::Shelf, Dir::Back);
+            }
+            Action::GbaDown(Btn::X) if self.shelves[self.shelf_at].0.external() => {
+                self.reset_ds_hotkeys();
+            }
+            _ => {}
+        }
+    }
+
+    /// DSperate's hotkeys, in every pad's settings on the card, as System/dsperate/nds.ini has
+    /// them; the rest of its settings as they were.
+    fn reset_ds_hotkeys(&mut self) {
+        let Some(root) = self.root.clone() else {
+            return;
+        };
+        match crate::ds_hotkeys::reset(&root) {
+            Ok(n) => {
+                eprintln!("omega-zero: ds hotkeys: put back in {n} settings");
+                self.ds_hotkeys_reset = true;
+            }
+            Err(e) => eprintln!("omega-zero: ds hotkeys: {e}"),
         }
     }
 
     /// What the Controls screen says, while it is open: for the system of the shelf it was
-    /// opened on.
+    /// opened on, the DS's saying its hotkeys were put back once X has.
     pub fn controls_view(&self) -> Option<ControlsView> {
         let platform = self.shelves[self.shelf_at].0;
-        matches!(self.phase, Phase::Controls).then(|| ControlsView::new(platform))
+        matches!(self.phase, Phase::Controls).then(|| {
+            let mut view = ControlsView::new(platform);
+            if self.ds_hotkeys_reset {
+                for line in view.groups.iter_mut().flat_map(|g| g.lines.iter_mut()) {
+                    if line.1 == RESET_KEYS {
+                        line.1 = KEYS_RESET;
+                    }
+                }
+            }
+            view
+        })
     }
 
     pub fn set_controls_panel(&mut self, panel: Lone) {

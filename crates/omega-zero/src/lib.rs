@@ -13,6 +13,7 @@ pub mod core;
 pub mod core_picker;
 pub mod disc_screen;
 pub mod drc;
+pub mod ds_hotkeys;
 pub mod emu;
 pub mod face_builder;
 pub mod frames;

@@ -104,6 +104,7 @@ cat > "$TMP/card/System/dsperate/dsperate" <<-'SH'
 		echo "lib=$LD_LIBRARY_PATH"
 		echo "gov=$(cat "$CPUDIR/scaling_governor")"
 		echo "rotate=${DS_ROTATE:-}"
+		echo "volkeys=${DS_VOLUME_KEYS:-}"
 	} > "$TMP/dsperate.log"
 	exit 3
 SH
@@ -117,12 +118,9 @@ grep -q "^args=$rom --fullscreen --config $TMP/card/Config/dsperate/nds-nostick.
 	|| fail "DSperate was not run with the game and the settings: [$(cat "$TMP/dsperate.log")]"
 # the frontend's volume, none saved here, its default; the handheld's own keys over the player's
 grep -q -- " --volume 60 " "$TMP/dsperate.log" || fail "DSperate did not start at the frontend's volume"
-for set in padhotkeys.volume_up=misc1 padhotkeys.volume_down=paddle1 \
-	padhotkeys.brightness_up=misc1+back padhotkeys.brightness_down=paddle1+back padhotkeys.quit_hold_ms=1000; do
-	grep -q -- "--set $set" "$TMP/dsperate.log" || fail "DSperate was not given $set"
-done
-grep -q 'misc1:b2,paddle1:b1,' "$TMP/dsperate.log" \
-	|| fail "VOL+ and VOL- are not SDL's misc1 and paddle1: [$(grep map= "$TMP/dsperate.log")]"
+grep -q -- "--set padhotkeys.quit_hold_ms=1000" "$TMP/dsperate.log" \
+	|| fail "DSperate was not told a held MENU quits"
+grep -qx 'volkeys=1' "$TMP/dsperate.log" || fail "DSperate was not told to read the volume keys"
 grep -q 'lefttrigger:b12,righttrigger:b13' "$TMP/dsperate.log" \
 	|| fail "the RG35XX SP's triggers are not b12/b13: [$(grep map= "$TMP/dsperate.log")]"
 grep -q 'rightx' "$TMP/dsperate.log" && fail "a pad with no sticks was given a right stick"

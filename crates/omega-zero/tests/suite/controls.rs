@@ -259,6 +259,8 @@ fn a_ds_game_is_worked_as_its_own_emulator_binds_it_on_each_pad() {
         ] {
             assert!(lines.contains(&line), "{pad:?} has no {line:?}");
         }
+        let shelf = &ControlsView::for_pad(Platform::Nds, pad).groups[0].lines;
+        assert!(shelf.contains(&("X", "RESET KEYS")), "{pad:?}: {shelf:?}");
         // omega-zero's own in-game controls are not there while DSperate runs the game
         for gone in [
             ("HOLD MENU", "EJECT"),

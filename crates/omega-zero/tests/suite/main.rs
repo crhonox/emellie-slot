@@ -29,6 +29,7 @@ mod disc_screen;
 mod discs;
 mod dist;
 mod drc;
+mod ds_hotkeys;
 mod eject;
 mod evdev;
 mod face_builder;

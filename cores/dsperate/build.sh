@@ -67,7 +67,11 @@ build() {
 	$recipe $cross -DCMAKE_EXE_LINKER_FLAGS="$device_ldflags" \
 		-DDSPERATE_VERSION="$(printf %s "$commit" | cut -c1-7)" \
 		-S "$src" -B "$work/build"
-	cmake --build "$work/build" --target dsperate -j"$(getconf _NPROCESSORS_ONLN)"
+	# at most 8 at once: each LTO compile run through qemu on a host with many cores, all at
+	# once, left cc1plus crashing for want of memory
+	jobs="$(getconf _NPROCESSORS_ONLN)"
+	[ "$jobs" -gt 8 ] && jobs=8
+	cmake --build "$work/build" --target dsperate -j"$jobs"
 
 	mkdir -p "$(dirname "$out")"
 	cp "$work/build/src/frontend/sdl/dsperate" "$out"
