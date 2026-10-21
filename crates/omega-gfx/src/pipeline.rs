@@ -66,6 +66,7 @@ struct Sharp {
     /// The size of the texture drawn, in texels.
     u_src: gl::types::GLint,
     u_grid: gl::types::GLint,
+    u_cell: gl::types::GLint,
 }
 
 pub struct GamePass {
@@ -124,6 +125,7 @@ impl GamePass {
                 u_scale: uniform(sharp, "u_scale"),
                 u_src: uniform(sharp, "u_src"),
                 u_grid: uniform(sharp, "u_grid"),
+                u_cell: uniform(sharp, "u_cell"),
             },
             game,
             size: (SRC_W, SRC_H),
@@ -246,6 +248,15 @@ impl GamePass {
                 };
                 gl::UseProgram(self.sharp.prog);
                 gl::Uniform1f(self.sharp.u_grid, grid);
+                // the picture's top left corner in gl_FragCoord's terms, y up from the bottom,
+                // and a game pixel's size as it is drawn now
+                gl::Uniform4f(
+                    self.sharp.u_cell,
+                    x,
+                    out_h() as f32 - y,
+                    w / (uv[2] * src_w),
+                    h / (uv[3] * src_h),
+                );
                 gl::Uniform4f(self.sharp.u_rect, x, y, w, h);
                 gl::Uniform4f(self.sharp.u_uv, uv[0], uv[1], uv[2], uv[3]);
                 gl::Uniform2f(self.sharp.u_src, src_w, src_h);
