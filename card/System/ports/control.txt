@@ -1,0 +1,41 @@
+#!/bin/bash
+#
+# SPDX-License-Identifier: MIT
+#
+# PortMaster's control.txt on Emellie Slot, which every port sources first. ports.sh writes it
+# into the PortMaster folder at each launch, @SD@ the card, so a PortMaster update cannot leave
+# its own in place. After spruceOS's (PortMaster/spruce/control.txt).
+
+CUR_TTY=/dev/null
+
+export controlfolder="@SD@/Tools/portmaster/PortMaster"
+
+# Ports keep their files in $directory/ports/<game>: Games/PORTS, the card being FAT
+export directory="@SD@/Games/"
+
+export PM_PYTHON="@SD@/Tools/portmaster/bin/python3.10"
+export PATH="@SD@/System/ports/bin:@SD@/Tools/portmaster/bin:$PATH"
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:@SD@/Tools/portmaster/lib"
+
+export ESUDO=""
+export ESUDOKILL="-1"
+
+export SDL_GAMECONTROLLERCONFIG_FILE="$controlfolder/gamecontrollerdb.txt"
+
+SDLDBFILE="${SDL_GAMECONTROLLERCONFIG_FILE}"
+[ -z "${SDLDBFILE}" ] && SDLDBFILE="${controlfolder}/gamecontrollerdb.txt"
+SDLDBUSERFILE="${HOME}/.config/SDL-GameControllerDB/gamecontrollerdb.txt"
+[ ! -f "${SDLDBUSERFILE}" ] && SDLDBUSERFILE="$SDL_GAMECONTROLLERCONFIG_FILE"
+
+get_controls() {
+  LOWRES="N"
+  ANALOGSTICKS=$ANALOG_STICKS
+  # ports.sh exports the pad's map itself; keep it
+  sdl_controllerconfig="$SDL_GAMECONTROLLERCONFIG"
+}
+
+source $controlfolder/device_info.txt
+source $controlfolder/funcs.txt
+
+export GPTOKEYB2="$ESUDO env LD_PRELOAD=$controlfolder/libinterpose.${DEVICE_ARCH}.so $controlfolder/gptokeyb2 $ESUDOKILL"
+export GPTOKEYB="$ESUDO $controlfolder/gptokeyb $ESUDOKILL"

@@ -131,8 +131,6 @@ fn controls_says_what_the_shelf_and_a_gba_game_do_with_each_button() {
             ("SELECT+MENU", "LINK"),
             ("SELECT+▲▼", "BRIGHTNESS"),
             ("SELECT+◀▶", "BLUE LIGHT"),
-            ("SELECT+L1", "LOAD STATE"),
-            ("SELECT+R1", "SAVE STATE"),
             ("SELECT+Y", "COLOUR"),
             ("VOL+ VOL-", "MUTE"),
             ("HOLD POWER", "POWER MENU"),
@@ -173,8 +171,6 @@ fn a_snes_game_fast_forwards_but_neither_rewinds_links_nor_corrects_colour() {
             ("HOLD MENU", "EJECT"),
             ("SELECT+▲▼", "BRIGHTNESS"),
             ("SELECT+◀▶", "BLUE LIGHT"),
-            ("SELECT+L1", "LOAD STATE"),
-            ("SELECT+R1", "SAVE STATE"),
             ("VOL+ VOL-", "MUTE"),
             ("HOLD POWER", "POWER MENU"),
         ]
@@ -195,8 +191,6 @@ fn a_playstation_game_fast_forwards_on_select_r2_and_swaps_discs() {
             ("SELECT+MENU", "DISC"),
             ("SELECT+▲▼", "BRIGHTNESS"),
             ("SELECT+◀▶", "BLUE LIGHT"),
-            ("SELECT+L1", "LOAD STATE"),
-            ("SELECT+R1", "SAVE STATE"),
             ("VOL+ VOL-", "MUTE"),
             ("HOLD POWER", "POWER MENU"),
         ]
@@ -239,7 +233,7 @@ fn a_ds_game_is_worked_as_its_own_emulator_binds_it_on_each_pad() {
             .clone()
     };
     let none = game(PadLayout::NoStick);
-    assert!(none.contains(&("HOLD L2+✚", "MOVE STYLUS")), "{none:?}");
+    assert!(none.contains(&("MENU+Y", "✚ MOVES STYLUS")), "{none:?}");
     assert!(none.contains(&("R2", "TOUCH")), "{none:?}");
     let two = game(PadLayout::TwoSticks);
     assert!(two.contains(&("R STICK", "MOVE STYLUS")), "{two:?}");
@@ -252,8 +246,11 @@ fn a_ds_game_is_worked_as_its_own_emulator_binds_it_on_each_pad() {
     ] {
         let lines = game(pad);
         for line in [
-            ("MENU", "PAUSE MENU"),
+            ("MENU+START", "PAUSE MENU"),
             ("HOLD MENU", "BACK TO SHELF"),
+            ("MENU+SELECT", "BACK TO SHELF"),
+            ("L2", "SWAP SCREENS"),
+            ("MENU+R1", "FAST FORWARD"),
             ("VOL+ VOL-", "VOLUME"),
             ("SELECT+VOL", "BRIGHTNESS"),
         ] {

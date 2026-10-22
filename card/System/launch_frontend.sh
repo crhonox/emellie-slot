@@ -20,6 +20,14 @@ if [ -z "$pid" ] || [ ! -d "/proc/$pid" ]; then
 	echo $! > "$RUN/omega-led.pid"
 fi
 
+# The lid sleeps the handheld, and switches it off shut LID_OFF_S, whatever is running (lid.sh)
+rm -f "$RUN/omega-lid-off"
+pid="$(cat "$RUN/omega-lid.pid" 2>/dev/null)"
+if [ -z "$pid" ] || [ ! -d "/proc/$pid" ]; then
+	sh "$SYS/lid.sh" > /dev/null 2>&1 &
+	echo $! > "$RUN/omega-lid.pid"
+fi
+
 echo "|/bin/sh $SYS/coresave.sh %p %s %e %t" > /proc/sys/kernel/core_pattern 2>/dev/null
 
 if [ -f "$SD/RUN_PROBE" ]; then
@@ -30,18 +38,20 @@ fi
 [ -f "$SD/emellie-slot.log" ] && mv -f "$SD/emellie-slot.log" "$SD/emellie-slot.log.1"
 : > "$SD/emellie-slot.log"
 
-# A game whose system has an emulator of its own (the DS, in DSperate) is handed over: omega-zero
-# writes what to run here and leaves, letting go of the panel, the sound card and the buttons;
-# the emulator runs, and omega-zero starts again with OMEGA_RETURNED set, the game on its shelf.
+# A game whose system has an emulator of its own (the DS, in DSperate; a port, in ports.sh) is
+# handed over: omega-zero writes what to run here and leaves, letting go of the panel, the sound
+# card and the buttons; the emulator runs, and omega-zero starts again with OMEGA_RETURNED set, the game on its shelf.
 # One left from a boot the handheld went down in is not acted on: omega-zero hands that game
 # over again itself, as the one it was playing.
 export OMEGA_HANDOFF="$RUN/omega-handoff"
 rm -f "$OMEGA_HANDOFF"
+
 returned=0
 while :; do
 	log "start $SYS/emellie-slot returned=$returned"
 	OMEGA_RETURNED=$returned $LOADER "$SYS/emellie-slot" >> "$SD/emellie-slot.log" 2>&1
 	status=$?
+	lid_off
 	if [ ! -f "$OMEGA_HANDOFF" ]; then
 		log "emellie-slot left, status $status"
 		exit "$status"
@@ -57,8 +67,14 @@ while :; do
 		sh "$SYS/nds.sh" "$rom" $clean >> "$SD/emellie-slot.log" 2>&1
 		log "handoff: dsperate left, status $?"
 		;;
+	PORTS)
+		log "handoff: port $rom"
+		sh "$SYS/ports.sh" "$rom" >> "$SD/emellie-slot.log" 2>&1
+		log "handoff: port left, status $?"
+		;;
 	*) log "handoff: nothing here runs $platform" ;;
 	esac
 	sync
+	lid_off
 	returned=1
 done

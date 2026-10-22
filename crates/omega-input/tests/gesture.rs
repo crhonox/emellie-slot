@@ -15,12 +15,25 @@ fn a_select_that_becomes_a_chord_never_reaches_the_game() {
 }
 
 #[test]
+fn select_with_a_shoulder_saves_or_loads_no_state() {
+    let mut g = Gestures::new();
+    g.feed(Down(Select), 0);
+    for b in [L1, R1] {
+        let out = g.feed(Down(b), 50);
+        assert!(
+            !out.contains(&SaveState) && !out.contains(&LoadState),
+            "SELECT+{b:?} still {out:?}"
+        );
+    }
+}
+
+#[test]
 fn a_chord_keeps_both_keys_from_the_game() {
     let mut g = Gestures::new();
     assert!(g.feed(Down(Select), 0).is_empty());
-    assert_eq!(g.feed(Down(R1), 50), vec![SaveState]);
+    assert_eq!(g.feed(Down(Right), 50), vec![BlueLightUp]);
     assert!(
-        g.feed(Up(R1), 60).is_empty(),
+        g.feed(Up(Right), 60).is_empty(),
         "the chord key reached the game"
     );
     assert!(
@@ -253,7 +266,7 @@ fn a_chord_landing_late_is_still_a_chord() {
     let mut g = Gestures::new();
     g.feed(Down(Select), 0);
     g.tick(400);
-    assert_eq!(g.feed(Down(R1), 400), vec![SaveState]);
+    assert_eq!(g.feed(Down(Right), 400), vec![BlueLightUp]);
     assert!(
         g.tick(5_000).is_empty(),
         "the tick handed something over behind a late chord"
@@ -665,8 +678,8 @@ fn a_snes_game_rewinds_and_fast_forwards_as_a_handheld_game_does() {
     assert!(g.feed(Up(R2), 1_150).is_empty());
     assert!(g.ff_latched());
     assert!(g.feed(Down(Select), 2_000).is_empty());
-    assert_eq!(g.feed(Down(R1), 2_050), vec![SaveState]);
-    assert_eq!(g.feed(Down(L1), 2_100), vec![LoadState]);
+    assert_eq!(g.feed(Down(Right), 2_050), vec![BlueLightUp]);
+    assert_eq!(g.feed(Down(Left), 2_100), vec![BlueLightDown]);
 }
 
 #[test]

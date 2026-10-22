@@ -430,7 +430,7 @@ impl Session {
             .flatten();
         let player = self.app.link_player();
         let setup = match platform {
-            Platform::Snes | Platform::Ps1 | Platform::Nds => Setup::Console,
+            Platform::Snes | Platform::Ps1 | Platform::Nds | Platform::Ports => Setup::Console,
             Platform::Gba | Platform::Gb | Platform::Gbc => Setup::Handheld {
                 serial,
                 colour: self.app.colour_correction(),

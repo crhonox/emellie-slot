@@ -133,7 +133,7 @@ fn remap(platform: Platform) -> &'static [(u16, u16)] {
     match platform {
         Platform::Gba => &[(M::X, M::B), (M::Y, M::A)],
         Platform::Gb | Platform::Gbc => &[(M::X, M::B), (M::Y, M::A), (M::L, M::A), (M::R, M::B)],
-        Platform::Snes | Platform::Ps1 | Platform::Nds => &[],
+        Platform::Snes | Platform::Ps1 | Platform::Nds | Platform::Ports => &[],
     }
 }
 

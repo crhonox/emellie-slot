@@ -2,7 +2,7 @@
 # Runs a DS game in DSperate, which launch_frontend.sh hands the handheld over to once omega-zero
 # has left. DSperate draws straight to fb0 through the mali-fbdev SDL2 beside it in dsperate/lib
 # (BaseOS's own SDL2 cannot reach the panel), keeps its own battery saves, states and resume,
-# and comes back here when MENU held, or MENU+START, quits it. VOL+/VOL- are its volume, SELECT
+# and comes back here when MENU held, or MENU+SELECT, quits it. VOL+/VOL- are its volume, SELECT
 # with them the panel's light, which brightness.sh keeps in the frontend's steps.
 SD="${OMEGA_ROOT:-/mnt/sdcard}"
 SYS="$SD/System"
@@ -27,30 +27,8 @@ fi
 
 target="$(sed -n 's/^BASEOS_TARGET=//p' "$RELEASE" 2>/dev/null | tr -d '"' | tr -d ' ')"
 
-# The sticks of each model, as spruceOS sorts the H700 handhelds; omega-power's PadLayout holds
-# the same list for the controls omega-zero shows. A model BaseOS does not name has two.
-pad_layout() {
-	case "$1" in
-	rg35xxsp | rg35xxplus | rg34xx | rgsp | rg28xx) echo nostick ;;
-	rg40xxv) echo 1stick ;;
-	*) echo 2stick ;;
-	esac
-}
-
-# The pad as the mali SDL2 numbers it: the node's three phantom keys (ESC, VOL-, VOL+) come
-# first, so A is b3; above MENU the stick clicks interleave with the triggers, one map for each
-# layout. As spruceOS's AnbernicXXCommon.cfg, which measured them on an RG CubeXX.
-pad_map() {
-	base="19000000010000000100000000010000,ANBERNIC-keys,a:b3,b:b4,x:b6,y:b5,leftshoulder:b7,rightshoulder:b8,guide:b11,start:b10,back:b9,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2"
-	case "$1" in
-	nostick)
-		echo "$base,lefttrigger:b12,righttrigger:b13,leftx:a0,lefty:a1,platform:Linux," ;;
-	1stick)
-		echo "$base,lefttrigger:b13,righttrigger:b14,leftx:a0,lefty:a1,leftstick:b12,platform:Linux," ;;
-	*)
-		echo "$base,lefttrigger:b13,righttrigger:b14,leftx:a0,lefty:a1,leftstick:b12,rightx:a2,righty:a3,rightstick:b15,platform:Linux," ;;
-	esac
-}
+# pad_layout and pad_map_positional
+. "$SYS/pad.sh"
 
 layout="$(pad_layout "$target")"
 CONFIG="$CONFIG_DIR/nds-$layout.ini"
@@ -65,16 +43,29 @@ if [ ! -f "$CONFIG" ]; then
 		{ gsub(/@SD@/, sd); print }
 	' "$DIR/nds.ini" > "$CONFIG.tmp" && mv -f "$CONFIG.tmp" "$CONFIG"
 fi
+# The hotkeys are the card's, not the player's: [hotkeys] and [padhotkeys] are taken again from
+# the copy beside the emulator at every start, as X on the DS's Controls does (ds_hotkeys.rs),
+# so one bound in DSperate's menu lasts until the game is left.
+awk -v shipped="$DIR/nds.ini" '
+	function hot(line, t) {
+		t = line; gsub(/^[ \t]+|[ \t]+$/, "", t)
+		if (t ~ /^\[.*\]$/) { t = substr(t, 2, length(t) - 2); gsub(/^[ \t]+|[ \t]+$/, "", t); inside = t == "hotkeys" || t == "padhotkeys" }
+		return inside
+	}
+	!hot($0) { print; last = $0 }
+	END {
+		if (NR && last != "") print ""
+		inside = 0
+		while ((getline line < shipped) > 0) if (hot(line)) print line
+	}
+' "$CONFIG" > "$CONFIG.tmp" && mv -f "$CONFIG.tmp" "$CONFIG"
 
 export HOME="$DIR"
 export XDG_CONFIG_HOME="$SD/Config"
 export LD_LIBRARY_PATH="$DIR/lib:/usr/lib:/usr/lib/aarch64-linux-gnu"
 # SDL reads the map from SDL_GAMECONTROLLERCONFIG; without it the pad is no game controller,
-# and DSperate, which opens only those, hears no button at all. DSperate binds by position
-# (SDL's a is the bottom face button), so A/B and X/Y are swapped from the printed names, as
-# spruceOS's export_sdl_gamecontroller_map positional does.
-export SDL_GAMECONTROLLERCONFIG="$(pad_map "$layout" |
-	sed -e 's/a:\([^,]*\),b:\([^,]*\)/a:\2,b:\1/' -e 's/x:\([^,]*\),y:\([^,]*\)/x:\2,y:\1/')"
+# and DSperate, which opens only those, hears no button at all. DSperate binds by position.
+export SDL_GAMECONTROLLERCONFIG="$(pad_map_positional "$layout")"
 # the RG28XX's panel stands on its side
 [ "$target" = "rg28xx" ] && export DS_ROTATE=270
 

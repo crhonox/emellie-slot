@@ -57,7 +57,7 @@ impl ControlsView {
             ("▲▼", "LETTER"),
             ("L1 R1", "SHELF"),
         ]);
-        if platform.external() {
+        if platform == Platform::Nds {
             shelf.push(("X", RESET_KEYS));
         }
 
@@ -65,14 +65,21 @@ impl ControlsView {
         match platform {
             Platform::Gba => game.extend([("X Y", "B A")]),
             Platform::Gb | Platform::Gbc => game.extend([("X Y", "B A"), ("L1 R1", "A B")]),
-            Platform::Snes | Platform::Ps1 | Platform::Nds => {}
+            Platform::Snes | Platform::Ps1 | Platform::Nds | Platform::Ports => {}
         }
-        if platform.external() {
+        if platform == Platform::Ports {
+            // gptokeyb's own, which PortMaster's ports start
+            game.push(("SELECT+START", "BACK TO SHELF"));
+        } else if platform.external() {
             // what the card's System/dsperate/nds.ini and pad-*.ini bind, and nds.sh over
             // them, DSperate's own menu on MENU
-            game.extend([("MENU", "PAUSE MENU"), ("HOLD MENU", "BACK TO SHELF")]);
+            game.extend([
+                ("MENU+START", "PAUSE MENU"),
+                ("HOLD MENU", "BACK TO SHELF"),
+                ("MENU+SELECT", "BACK TO SHELF"),
+            ]);
             game.extend(match pad {
-                PadLayout::NoStick => [("HOLD L2+✚", "MOVE STYLUS"), ("R2", "TOUCH")].as_slice(),
+                PadLayout::NoStick => [("MENU+Y", "✚ MOVES STYLUS"), ("R2", "TOUCH")].as_slice(),
                 PadLayout::OneStick => [("STICK", "MOVE STYLUS"), ("R2", "TOUCH")].as_slice(),
                 PadLayout::TwoSticks => [
                     ("L STICK", "D-PAD"),
@@ -82,11 +89,10 @@ impl ControlsView {
                 .as_slice(),
             });
             game.extend([
-                ("MENU+▲▼", "SCREEN LAYOUT"),
-                ("MENU+L2", "SWAP SCREENS"),
-                ("MENU+R2", "FAST FORWARD"),
-                ("MENU+L1", "LOAD STATE"),
-                ("MENU+R1", "SAVE STATE"),
+                ("L2", "SWAP SCREENS"),
+                ("MENU+R1", "FAST FORWARD"),
+                ("MENU+B", "MIC"),
+                ("MENU+X", "LID"),
                 ("VOL+ VOL-", "VOLUME"),
                 ("SELECT+VOL", "BRIGHTNESS"),
             ]);
@@ -106,14 +112,9 @@ impl ControlsView {
             match platform {
                 Platform::Gba | Platform::Gb | Platform::Gbc => game.push(("SELECT+MENU", "LINK")),
                 Platform::Ps1 => game.push(("SELECT+MENU", "DISC")),
-                Platform::Snes | Platform::Nds => {}
+                Platform::Snes | Platform::Nds | Platform::Ports => {}
             }
-            game.extend([
-                ("SELECT+▲▼", "BRIGHTNESS"),
-                ("SELECT+◀▶", "BLUE LIGHT"),
-                ("SELECT+L1", "LOAD STATE"),
-                ("SELECT+R1", "SAVE STATE"),
-            ]);
+            game.extend([("SELECT+▲▼", "BRIGHTNESS"), ("SELECT+◀▶", "BLUE LIGHT")]);
             if platform.colour_correction() {
                 game.push(("SELECT+Y", "COLOUR"));
             }
@@ -232,7 +233,7 @@ impl App {
                 self.ds_hotkeys_reset = false;
                 self.go(Phase::Shelf, Dir::Back);
             }
-            Action::GbaDown(Btn::X) if self.shelves[self.shelf_at].0.external() => {
+            Action::GbaDown(Btn::X) if self.shelves[self.shelf_at].0 == Platform::Nds => {
                 self.reset_ds_hotkeys();
             }
             _ => {}

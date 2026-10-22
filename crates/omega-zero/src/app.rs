@@ -379,6 +379,9 @@ pub struct App {
     pub(crate) network_faces: Option<omega_ui::network::NetworkFaces>,
     pub(crate) info_faces: Option<omega_ui::network::InfoFaces>,
     pub(crate) controls_panel: Option<Lone>,
+    /// The selected cart's file name over the shelf, baked: the stem it was baked from, it, and
+    /// when, for its scroll.
+    pub(crate) shelf_name: Option<(String, Lone, Millis)>,
     pub(crate) keyboard_faces: Option<KeyboardFaces>,
     pub(crate) link_faces: Option<LinkFaces>,
     pub(crate) bluetooth: Bluetooth,
@@ -437,6 +440,7 @@ impl App {
             network_faces: None,
             info_faces: None,
             controls_panel: None,
+            shelf_name: None,
             keyboard_faces: None,
             link_faces: None,
             bluetooth: Bluetooth::new(bluetooth_jobs()),

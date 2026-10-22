@@ -96,6 +96,7 @@ mod rumble;
 mod screen;
 mod settings;
 mod sfx;
+mod shelf_name;
 mod single;
 mod ssh;
 mod ssh_password;

@@ -110,6 +110,8 @@ tasks:
       - sh card/test-wifi.sh
       - sh card/test-bluetooth.sh
       - sh card/test-handoff.sh
+      - sh card/test-ports.sh
+      - sh card/test-lid.sh
 
   screens:
     desc: >-
@@ -546,6 +548,43 @@ tasks:
       - rm -rf vendor/dsperate vendor/dsperate.meta vendor/dsperate-lib vendor/DSperate-src.tar.gz vendor/DSperate-src.sha
       - task: core:dsperate
 
+  vendor:portmaster:
+    desc: >-
+      Stage what System/ports.sh runs PortMaster and its ports with, from SPRUCE (a spruceOS
+      checkout, ../spruceOS by default): spruceOS's PortMaster bundle with its Python, the static
+      7-Zip from inside it that lays the bundle out on the card, a static bash (BaseOS has none),
+      the mali SDL2 set PortMaster draws through and the vendor SDL2 keyboard-driven ports want
+    status:
+      - test -f vendor/portmaster/portmaster.7z
+      - test -f vendor/portmaster/bin/7zzs
+      - test -f vendor/portmaster/bin/bash
+      - test -f vendor/portmaster/lib/libSDL2-2.0.so.0
+      - test -f vendor/portmaster/lib/libSDL2_ttf-2.0.so.0
+      - test -f vendor/portmaster/sdl2/libSDL2-2.0.so.0
+      - cmp -s vendor/portmaster/portmaster.7z "{{.SPRUCE}}/App/PortMaster/portmaster.7z"
+    cmds:
+      - |
+        set -euo pipefail
+        spruce="{{.SPRUCE}}"
+        test -f "$spruce/App/PortMaster/portmaster.7z" \
+          || { echo "no PortMaster bundle in $spruce, set SPRUCE to a spruceOS checkout" >&2; exit 1; }
+        command -v 7z > /dev/null || { echo "7z (p7zip or 7-Zip) is needed to read the bundle" >&2; exit 1; }
+        rm -rf vendor/portmaster
+        mkdir -p vendor/portmaster/bin vendor/portmaster/lib vendor/portmaster/sdl2
+        cp "$spruce/App/PortMaster/portmaster.7z" vendor/portmaster/
+        7z e -so vendor/portmaster/portmaster.7z portmaster/PortMaster/7zzs.aarch64 > vendor/portmaster/bin/7zzs
+        cp "$spruce/spruce/smartpro/bin/bash" vendor/portmaster/bin/bash
+        cp "$spruce"/App/PyUI/dll-mali/* vendor/portmaster/lib/
+        # the add-ons come only by their link names; sdl2imgshow and ports ask by soname
+        for lib in SDL2_gfx-1.0 SDL2_image-2.0 SDL2_mixer-2.0 SDL2_ttf-2.0; do
+          cp "vendor/portmaster/lib/lib$lib.so" "vendor/portmaster/lib/lib$lib.so.0"
+        done
+        cp "$spruce/spruce/h700/lib64/sdl2/libSDL2-2.0.so.0" vendor/portmaster/sdl2/
+        file vendor/portmaster/bin/7zzs | grep -q 'aarch64.*statically linked'
+        file vendor/portmaster/bin/bash | grep -q 'aarch64.*statically linked'
+        file vendor/portmaster/lib/libSDL2-2.0.so.0 | grep -q aarch64
+      - 'echo "staged vendor/portmaster from {{.SPRUCE}}"'
+
   cores:device:
     desc: Build every core the device bundle ships, mGBA, gpSP, Snes9x, Supafaust, pcsx_rearmed, Gambatte and DSperate
     deps: [core:device, core:gpsp, core:snes9x, core:supafaust, core:pcsx, core:gambatte, core:dsperate]
@@ -603,7 +642,7 @@ tasks:
 
   dist:device:
     desc: Build the SD2 tree for an H700 device, OUT defaults to ./dist-device
-    deps: [cores:device, build:device]
+    deps: [cores:device, build:device, vendor:portmaster]
     vars:
       OUT: '{{.OUT | default "dist-device"}}'
     cmds:
@@ -619,6 +658,18 @@ tasks:
         mkdir -p {{.OUT}}/System/dsperate/lib
         cp vendor/dsperate {{.OUT}}/System/dsperate/dsperate
         cp vendor/dsperate-lib/* {{.OUT}}/System/dsperate/lib/
+      - |
+        set -eu
+        # PortMaster, laid out on the card from its bundle by System/ports.sh the first time
+        mkdir -p {{.OUT}}/System/ports/bin {{.OUT}}/System/ports/lib {{.OUT}}/System/ports/sdl2
+        cp vendor/portmaster/portmaster.7z {{.OUT}}/System/ports/
+        cp vendor/portmaster/bin/* {{.OUT}}/System/ports/bin/
+        cp vendor/portmaster/lib/* {{.OUT}}/System/ports/lib/
+        cp vendor/portmaster/sdl2/* {{.OUT}}/System/ports/sdl2/
+        # PortMaster on the Ports shelf, which ports.sh runs PortMaster for by its name
+        mkdir -p {{.OUT}}/Games/PORTS
+        printf '#!/bin/bash\n# PortMaster: Emellie Slot runs it by this name (System/ports.sh)\n' \
+          > {{.OUT}}/Games/PORTS/PortMaster.sh
       - |
         set -eu
         for lib in {{.DEVICE_CORES}}; do

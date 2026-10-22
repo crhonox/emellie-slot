@@ -9,16 +9,19 @@ pub enum Platform {
     Snes,
     Ps1,
     Nds,
+    /// Ports from PortMaster: their scripts, run by `System/ports.sh`.
+    Ports,
 }
 
 impl Platform {
-    pub const ALL: [Platform; 6] = [
+    pub const ALL: [Platform; 7] = [
         Platform::Gba,
         Platform::Gb,
         Platform::Gbc,
         Platform::Snes,
         Platform::Ps1,
         Platform::Nds,
+        Platform::Ports,
     ];
 
     pub fn name(self) -> &'static str {
@@ -29,6 +32,7 @@ impl Platform {
             Platform::Snes => "Super Nintendo",
             Platform::Ps1 => "PlayStation",
             Platform::Nds => "Nintendo DS",
+            Platform::Ports => "Ports",
         }
     }
 
@@ -40,6 +44,7 @@ impl Platform {
             Platform::Snes => "SNES",
             Platform::Ps1 => "PS1",
             Platform::Nds => "NDS",
+            Platform::Ports => "PORTS",
         }
     }
 
@@ -50,6 +55,7 @@ impl Platform {
             Platform::Snes => &["sfc", "smc"],
             Platform::Ps1 => &["cue", "chd", "pbp", "m3u"],
             Platform::Nds => &["nds"],
+            Platform::Ports => &["sh"],
         }
     }
 
@@ -61,6 +67,8 @@ impl Platform {
             Platform::Ps1 => (320, 240),
             // both screens, stacked
             Platform::Nds => (256, 384),
+            // each port draws to the whole panel itself
+            Platform::Ports => (640, 480),
         }
     }
 
@@ -82,13 +90,13 @@ impl Platform {
 
     /// Whether L2/R2 belong to the game rather than to rewind and fast-forward.
     pub fn game_owns_l2_r2(self) -> bool {
-        matches!(self, Platform::Ps1 | Platform::Nds)
+        matches!(self, Platform::Ps1 | Platform::Nds | Platform::Ports)
     }
 
     /// Whether its games run in an emulator of their own, which omega-zero hands the
     /// handheld over to and is started again after, rather than in a libretro core.
     pub fn external(self) -> bool {
-        self == Platform::Nds
+        matches!(self, Platform::Nds | Platform::Ports)
     }
 
     pub fn accepts(self, path: &Path) -> bool {

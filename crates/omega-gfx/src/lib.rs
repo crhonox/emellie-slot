@@ -6,6 +6,9 @@ mod gl;
 mod grade;
 #[cfg(target_os = "macos")]
 mod headless;
+#[cfg(not(target_os = "macos"))]
+#[path = "headless_egl.rs"]
+mod headless;
 #[cfg(feature = "host")]
 mod host;
 mod lcd3x;
@@ -20,7 +23,6 @@ pub use draw::{spun_x, Draw, MeshId, MeshVertex, TexId, FOCAL};
 pub use fbdev::{egl_error, panel_mode, panel_size, FbdevSurface};
 pub use fbo::{Bezel, Compositor, BACKDROP};
 pub use grade::{blue_light_gain, BLUE_LIGHT_MAX};
-#[cfg(target_os = "macos")]
 pub use headless::HeadlessSurface;
 #[cfg(feature = "host")]
 pub use host::{host_rotation, HostSurface};

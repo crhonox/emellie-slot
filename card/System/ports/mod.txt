@@ -1,0 +1,50 @@
+#!/bin/bash
+#
+# SPDX-License-Identifier: MIT
+#
+# Emellie Slot's word to every port, sourced after control.txt as mod_<CFW_NAME>.txt; ports.sh
+# writes it into the PortMaster folder at each launch, @SD@ the card. After spruceOS's
+# mod_spruce.txt and its Anbernic XX part (spruce/portmaster/mod.txt).
+
+CUR_TTY="/dev/null"
+GODOT2_OPTS="-r ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT} -f"
+GODOT_OPTS="--resolution ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT} -f"
+
+# No dialog pipe while a port runs; just print
+pm_message() {
+    echo "$1" > "$CUR_TTY"
+}
+
+# gptokeyb sees the pad only through the mali SDL2, the one build that classifies it
+GPTOKEYB2="$ESUDO env LD_LIBRARY_PATH=@SD@/System/ports/lib:$LD_LIBRARY_PATH LD_PRELOAD=$controlfolder/libinterpose.${DEVICE_ARCH}.so $controlfolder/gptokeyb2 $ESUDOKILL"
+GPTOKEYB="$ESUDO env LD_LIBRARY_PATH=@SD@/System/ports/lib:$LD_LIBRARY_PATH $controlfolder/gptokeyb $ESUDOKILL"
+
+# A port played with gptokeyb's keystrokes (gptokeyb -c) wants the vendor SDL2, which reads the
+# keyboard gptokeyb makes; one played with the pad wants the mali SDL2 first, as ports.sh puts
+# it. Before the port sources its runtime, which bakes LD_LIBRARY_PATH in (love.txt).
+if grep -qE '\$GPTOKEYB2?[^&|;]*[[:space:]]-c[[:space:]]' "$0" 2>/dev/null; then
+    export LD_LIBRARY_PATH="@SD@/System/ports/sdl2:$LD_LIBRARY_PATH"
+fi
+
+# Points SDL at gptokeyb's keyboard once it appears, after closing PortMaster's dialog
+pm_platform_helper() {
+    if [ -e "$PM_PIPE" ]; then
+        PortMasterDialogExit
+    fi
+    [ -n "$SDL_EVDEV_DEVICES" ] && return 0
+    i=0
+    while [ "$i" -lt 30 ]; do
+        for d in /sys/class/input/event*; do
+            [ -r "$d/device/name" ] || continue
+            case "$(cat "$d/device/name" 2>/dev/null)" in
+            "Fake Keyboard Mouse" | "Fake Keyboard")
+                export SDL_EVDEV_DEVICES="/dev/input/$(basename "$d")"
+                return 0
+                ;;
+            esac
+        done
+        i=$((i + 1))
+        sleep 0.1
+    done
+    return 0
+}

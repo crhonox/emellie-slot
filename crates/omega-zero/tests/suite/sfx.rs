@@ -154,6 +154,10 @@ fn a_clip_plays_with_no_core_running() {
     let d = tmp_root_with_carts(&["Emerald"]);
     let mut s = Session::boot(d.path().to_path_buf());
     assert!(!s.has_core());
+    if s.audio_ring().sample_rate() == 0 {
+        eprintln!("no audio device on this host, skipping");
+        return;
+    }
     s.play_sfx(Sfx::Insert);
     assert!(s.audio_queued() > 0, "the clip went nowhere");
 }
@@ -228,7 +232,8 @@ fn the_game_waits_for_the_cart_to_finish_landing() {
     );
 }
 
-fn sfx_peak(setup: impl Fn(&mut Session)) -> u16 {
+/// None when this host has no audio device to open, so the session has no ring to mix into.
+fn sfx_peak(setup: impl Fn(&mut Session)) -> Option<u16> {
     let d = tmp_root_with_carts(&["Emerald"]);
     omega_store::write_app_state(
         d.path(),
@@ -239,22 +244,30 @@ fn sfx_peak(setup: impl Fn(&mut Session)) -> u16 {
     )
     .unwrap();
     let mut s = Session::boot(d.path().to_path_buf());
+    if s.audio_ring().sample_rate() == 0 {
+        return None;
+    }
     setup(&mut s);
     s.play_sfx(Sfx::Insert);
     let ring = s.audio_ring();
     let mut out = vec![0i16; ring.queued_frames() * 2];
     ring.fill(&mut out);
-    out.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0)
+    Some(out.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0))
 }
 
 #[test]
 fn a_cart_sound_is_played_at_the_volume_that_is_set() {
-    let loud = sfx_peak(|_| {});
-    let quiet = sfx_peak(|s| {
-        for _ in 0..8 {
-            s.app_mut().apply(omega_input::Action::VolumeDown);
-        }
-    });
+    let (Some(loud), Some(quiet)) = (
+        sfx_peak(|_| {}),
+        sfx_peak(|s| {
+            for _ in 0..8 {
+                s.app_mut().apply(omega_input::Action::VolumeDown);
+            }
+        }),
+    ) else {
+        eprintln!("no audio device on this host, skipping");
+        return;
+    };
     assert!(loud > 0, "the clip was silent at the volume it booted with");
     assert!(
         quiet * 2 < loud,
@@ -264,7 +277,10 @@ fn a_cart_sound_is_played_at_the_volume_that_is_set() {
 
 #[test]
 fn a_cart_sound_is_silent_when_muted() {
-    let muted = sfx_peak(|s| s.app_mut().apply(omega_input::Action::MuteToggle));
+    let Some(muted) = sfx_peak(|s| s.app_mut().apply(omega_input::Action::MuteToggle)) else {
+        eprintln!("no audio device on this host, skipping");
+        return;
+    };
     assert_eq!(muted, 0, "the cart was heard through a mute");
 }
 

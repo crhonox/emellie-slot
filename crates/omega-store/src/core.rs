@@ -15,10 +15,12 @@ pub enum Core {
     PcsxRearmed,
     Dsperate,
     Gambatte,
+    /// What runs ports: PortMaster's scripts, handed over to `System/ports.sh`.
+    PortMaster,
 }
 
 impl Core {
-    pub const ALL: [Core; 7] = [
+    pub const ALL: [Core; 8] = [
         Core::Mgba,
         Core::Gpsp,
         Core::Snes9x,
@@ -26,6 +28,7 @@ impl Core {
         Core::PcsxRearmed,
         Core::Dsperate,
         Core::Gambatte,
+        Core::PortMaster,
     ];
 
     pub fn as_str(&self) -> &'static str {
@@ -37,6 +40,7 @@ impl Core {
             Core::PcsxRearmed => "pcsx_rearmed",
             Core::Dsperate => "dsperate",
             Core::Gambatte => "gambatte",
+            Core::PortMaster => "portmaster",
         }
     }
 
@@ -51,7 +55,7 @@ impl Core {
     /// Whether it is an emulator of its own that the handheld is handed over to, not a
     /// libretro core omega-zero loads.
     pub fn external(self) -> bool {
-        self == Core::Dsperate
+        matches!(self, Core::Dsperate | Core::PortMaster)
     }
 
     pub fn index(self) -> usize {
@@ -69,6 +73,7 @@ impl Core {
             Core::PcsxRearmed => "PCSX",
             Core::Dsperate => "DSpr",
             Core::Gambatte => "Gamb",
+            Core::PortMaster => "Port",
         }
     }
 
@@ -82,6 +87,7 @@ impl Core {
             Core::PcsxRearmed => "PCSX-ReARMed",
             Core::Dsperate => "DSperate",
             Core::Gambatte => "Gambatte",
+            Core::PortMaster => "PortMaster",
         }
     }
 
@@ -94,6 +100,7 @@ impl Core {
             "pcsx_rearmed" => Some(Core::PcsxRearmed),
             "dsperate" => Some(Core::Dsperate),
             "gambatte" => Some(Core::Gambatte),
+            "portmaster" => Some(Core::PortMaster),
             _ => None,
         }
     }
@@ -112,6 +119,7 @@ impl Core {
             Platform::Snes => &[Core::Snes9x, Core::Supafaust],
             Platform::Ps1 => &[Core::PcsxRearmed],
             Platform::Nds => &[Core::Dsperate],
+            Platform::Ports => &[Core::PortMaster],
         }
     }
 

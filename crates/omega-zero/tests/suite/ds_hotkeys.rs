@@ -69,3 +69,28 @@ fn a_card_with_no_settings_yet_has_nothing_to_reset() {
     std::fs::write(d.path().join("System/dsperate/nds.ini"), SHIPPED).unwrap();
     assert_eq!(reset(d.path()).unwrap(), 0);
 }
+
+#[test]
+fn x_on_the_ds_controls_resets_the_card_s_hotkeys() {
+    use omega_input::{Action, Btn};
+    use omega_zero::app::Phase;
+    let d = crate::common::tmp_root_with_carts(&[]);
+    let root = d.path();
+    for stem in ["Platinum", "Zelda"] {
+        std::fs::write(root.join(format!("Games/NDS/{stem}.nds")), [0u8; 0x200]).unwrap();
+    }
+    std::fs::create_dir_all(root.join("System/dsperate")).unwrap();
+    std::fs::create_dir_all(root.join("Config/dsperate")).unwrap();
+    std::fs::write(root.join("System/dsperate/nds.ini"), SHIPPED).unwrap();
+    std::fs::write(
+        root.join("Config/dsperate/nds-nostick.ini"),
+        "[padhotkeys]\npause = none\n",
+    )
+    .unwrap();
+    let mut a = crate::common::boot(root);
+    a.apply(Action::SelectTap);
+    assert!(matches!(a.phase(), Phase::Controls), "{:?}", a.phase());
+    a.apply(Action::GbaDown(Btn::X));
+    let got = std::fs::read_to_string(root.join("Config/dsperate/nds-nostick.ini")).unwrap();
+    assert!(got.contains("pause = mod"), "{got}");
+}

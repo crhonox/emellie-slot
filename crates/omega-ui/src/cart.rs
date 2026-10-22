@@ -91,7 +91,7 @@ pub(crate) struct Board {
 
 pub fn gb_shell_of(cart: &Cart) -> Option<GbShell> {
     match cart.platform {
-        Platform::Gba | Platform::Snes | Platform::Ps1 | Platform::Nds => None,
+        Platform::Gba | Platform::Snes | Platform::Ps1 | Platform::Nds | Platform::Ports => None,
         Platform::Gb | Platform::Gbc => Some(match cart.shell.map(|c| c.outline) {
             Some(Outline::Notched) => GbShell::Notched,
             Some(Outline::Rounded) => GbShell::Rounded,
@@ -103,11 +103,11 @@ pub fn gb_shell_of(cart: &Cart) -> Option<GbShell> {
     }
 }
 
-/// The model `cart` stands on the shelf as.
+/// The model `cart` stands on the shelf as. A port is a game card, as a DS game is.
 pub fn model_of(cart: &Cart) -> CartModel {
     match cart.platform {
         Platform::Gba => CartModel::Gba,
-        Platform::Nds => CartModel::Nds,
+        Platform::Nds | Platform::Ports => CartModel::Nds,
         Platform::Gb | Platform::Gbc => {
             CartModel::Gb(gb_shell_of(cart).unwrap_or(GbShell::Notched))
         }
@@ -179,7 +179,7 @@ const GB_SEATED_H: u32 = 259;
 pub fn seated_box(platform: Platform) -> (u32, u32) {
     match platform {
         Platform::Gba => (SEATED_W, SEATED_H),
-        Platform::Nds => {
+        Platform::Nds | Platform::Ports => {
             let (_, (w, h)) = crate::spin::outline(CartModel::Nds);
             (w.round() as u32, h.round() as u32)
         }
@@ -199,7 +199,7 @@ pub fn seated_box(platform: Platform) -> (u32, u32) {
 pub fn cart_box(platform: Platform) -> (u32, u32) {
     model_box(match platform {
         Platform::Gba => CartModel::Gba,
-        Platform::Nds => CartModel::Nds,
+        Platform::Nds | Platform::Ports => CartModel::Nds,
         Platform::Gb | Platform::Gbc => CartModel::Gb(GbShell::Notched),
         Platform::Snes => CartModel::Snes(SnesShell::Famicom),
         Platform::Ps1 => CartModel::Disc,
@@ -239,7 +239,7 @@ pub fn face_labels(platform: Platform) -> Vec<(u32, u32)> {
         .into_iter()
         .filter(|model| match model {
             CartModel::Gba => platform == Platform::Gba,
-            CartModel::Nds => platform == Platform::Nds,
+            CartModel::Nds => matches!(platform, Platform::Nds | Platform::Ports),
             CartModel::Gb(_) => matches!(platform, Platform::Gb | Platform::Gbc),
             CartModel::Snes(_) => platform == Platform::Snes,
             CartModel::Disc => platform == Platform::Ps1,

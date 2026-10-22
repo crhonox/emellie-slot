@@ -1,5 +1,3 @@
-#![cfg(target_os = "macos")]
-
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use omega_gfx::{Compositor, HeadlessSurface};

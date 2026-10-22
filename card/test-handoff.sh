@@ -15,7 +15,7 @@ fail() {
 setup() {
 	rm -rf "$TMP/card" "$TMP/run"
 	mkdir -p "$TMP/card/System/dsperate" "$TMP/card/Games/NDS" "$TMP/run"
-	cp "$HERE/System/launch_frontend.sh" "$HERE/System/nds.sh" "$TMP/card/System/"
+	cp "$HERE/System/launch_frontend.sh" "$HERE/System/nds.sh" "$HERE/System/pad.sh" "$TMP/card/System/"
 	cp "$HERE/System/dsperate/"*.ini "$TMP/card/System/dsperate/"
 	printf '#!/bin/sh\nexit 0\n' > "$TMP/card/System/led.sh"
 	: > "$TMP/card/Games/NDS/Game (USA).nds"
@@ -70,6 +70,22 @@ launch || fail "launch_frontend.sh failed over a clean handoff"
 [ "$(tr '\n' ' ' < "$TMP/omega.log")" = "returned=0 returned=1 " ] \
 	|| fail "omega-zero did not start again returned: [$(cat "$TMP/omega.log")]"
 [ ! -f "$TMP/run/omega-handoff" ] || fail "the handoff was left behind"
+
+# --- a port: ports.sh runs it, then omega-zero starts again
+setup
+omega
+printf '#!/bin/sh\necho "$@" >> "$TMP/ports.log"\nexit 0\n' > "$TMP/card/System/ports.sh"
+printf '#!/bin/sh\necho "$@" >> "$TMP/nds.log"\nexit 0\n' > "$TMP/card/System/nds.sh"
+printf '%s\n' "platform=PORTS\nrom=$TMP/card/Games/PORTS/Cave Story.sh\n" \
+	"platform=NDS\nrom=$TMP/card/Games/NDS/Game (USA).nds\n" > "$TMP/handoffs"
+rm -f "$TMP/omega.log" "$TMP/ports.log" "$TMP/nds.log"
+launch || fail "launch_frontend.sh failed over a port"
+[ "$(cat "$TMP/ports.log")" = "$TMP/card/Games/PORTS/Cave Story.sh" ] \
+	|| fail "ports.sh was not run with the port: [$(cat "$TMP/ports.log" 2>/dev/null)]"
+[ "$(cat "$TMP/nds.log")" = "$TMP/card/Games/NDS/Game (USA).nds" ] \
+	|| fail "a DS game after the port did not reach nds.sh alone: [$(cat "$TMP/nds.log" 2>/dev/null)]"
+[ "$(tr '\n' ' ' < "$TMP/omega.log")" = "returned=0 returned=1 returned=1 " ] \
+	|| fail "omega-zero did not start again after the port: [$(cat "$TMP/omega.log")]"
 
 # --- a system nothing runs: omega-zero just starts again
 setup
@@ -145,14 +161,17 @@ TMP="$TMP" CPUDIR="$TMP/cpu" OMEGA_ROOT="$TMP/card" AGS_LOADER=sh AGS_CPUFREQ="$
 grep -q "^args=$rom --fullscreen --config $TMP/card/Config/dsperate/nds-nostick.ini --no-autoload " "$TMP/dsperate.log" \
 	|| fail "a clean start still resumed: [$(grep args= "$TMP/dsperate.log")]"
 
-# the player's settings are theirs once seeded
-echo "# mine" >> "$TMP/card/Config/dsperate/nds-nostick.ini"
+# the player's settings are theirs once seeded, but for the hotkeys, which are the card's
+sed -i 's/^pause = mod+start$/pause = none/' "$TMP/card/Config/dsperate/nds-nostick.ini"
+printf '[net]\nmac_suffix = 1\n' >> "$TMP/card/Config/dsperate/nds-nostick.ini"
 TMP="$TMP" CPUDIR="$TMP/cpu" OMEGA_ROOT="$TMP/card" AGS_LOADER=sh AGS_CPUFREQ="$TMP/cpu" \
 	AGS_BASEOS_RELEASE="$TMP/release" sh "$TMP/card/System/nds.sh" "$rom" || true
-grep -qx '# mine' "$TMP/card/Config/dsperate/nds-nostick.ini" || fail "the seeded settings were written over"
+grep -qx 'mac_suffix = 1' "$TMP/card/Config/dsperate/nds-nostick.ini" || fail "the seeded settings were written over"
+grep -qx 'pause = mod+start' "$TMP/card/Config/dsperate/nds-nostick.ini" || fail "a hotkey bound in DSperate's menu stayed"
+[ "$(grep -c '^\[padhotkeys\]' "$TMP/card/Config/dsperate/nds-nostick.ini")" = 1 ] || fail "the hotkeys were put in twice"
 
-grep -qx 'stylus_dpad = +lefttrigger' "$TMP/card/Config/dsperate/nds-nostick.ini" \
-	|| fail "the RG35XX SP's stylus is not on L2 and the d-pad"
+grep -qx 'stylus_dpad = none' "$TMP/card/Config/dsperate/nds-nostick.ini" \
+	|| fail "the RG35XX SP's L2 moves the stylus as well as swapping the screens"
 grep -q '@PAD@' "$TMP/card/Config/dsperate/nds-nostick.ini" && fail "the pad's stylus was left unwritten"
 
 # the RG CubeXX: two sticks, the right one the pen, its own settings beside the SP's
@@ -169,7 +188,7 @@ grep -q 'rightx:a2,righty:a3,rightstick:b15' "$TMP/dsperate.log" \
 grep -qx 'stylus_axis = right' "$cube" || fail "the CubeXX's pen is not on the right stick"
 grep -qx 'stick_dpad = left' "$cube" || fail "the CubeXX's left stick is not a d-pad"
 grep -qx "saves = $TMP/card/Saves/NDS" "$cube" || fail "the CubeXX keeps its saves elsewhere"
-grep -qx '# mine' "$TMP/card/Config/dsperate/nds-nostick.ini" || fail "the SP's settings were touched"
+grep -qx 'mac_suffix = 1' "$TMP/card/Config/dsperate/nds-nostick.ini" || fail "the SP's settings were touched"
 grep -qx 'rotate=' "$TMP/dsperate.log" || fail "the CubeXX's square panel was turned"
 
 # one stick: the RG40XX V

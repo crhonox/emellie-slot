@@ -155,10 +155,14 @@ impl Want {
 
 /// What a sync looks up of `carts`: each cart with no label, and each disc of a PlayStation
 /// game that has none of its own, the first disc also when its game has none. Without a
-/// `root` a disc counts as labelled when its game is.
+/// `root` a disc counts as labelled when its game is. Ports are not ScreenScraper's: their
+/// labels are the player's own, in Labels/PORTS.
 pub fn wants<'a>(root: Option<&Path>, carts: impl IntoIterator<Item = &'a Cart>) -> Vec<Want> {
     let mut out = Vec::new();
     for cart in carts {
+        if cart.platform == Platform::Ports {
+            continue;
+        }
         if cart.platform != Platform::Ps1 {
             if cart.label.is_none() {
                 out.push(Want::cart(cart));
@@ -205,6 +209,8 @@ pub fn system_id(platform: Platform) -> u32 {
         Platform::Snes => 4,
         Platform::Ps1 => 57,
         Platform::Nds => 15,
+        // never looked up, see wants
+        Platform::Ports => 0,
     }
 }
 
@@ -316,6 +322,7 @@ pub fn label_regions(want: &Want) -> Vec<&'static str> {
         Platform::Gba | Platform::Gb | Platform::Gbc | Platform::Nds => {
             return regions(&want.stem, &want.code)
         }
+        Platform::Ports => return out,
         Platform::Snes => {
             let region = omega_store::snes::region(&want.rom, &want.stem);
             out.extend(region.and_then(region_code));

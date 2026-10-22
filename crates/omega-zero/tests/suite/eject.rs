@@ -83,6 +83,11 @@ fn an_unchanged_battery_save_is_not_rewritten() {
     std::fs::write(d.path().join("Saves/GBA/Emerald.sav"), b"savdata").unwrap();
     let saves = d.path().join("Saves/GBA");
     set_mode(&saves, 0o555);
+    if std::fs::write(saves.join(".probe"), b"").is_ok() {
+        set_mode(&saves, 0o755);
+        eprintln!("a read-only directory is still writable here (root?), skipping");
+        return;
+    }
     let unchanged = eject(
         d.path(),
         Platform::Gba,

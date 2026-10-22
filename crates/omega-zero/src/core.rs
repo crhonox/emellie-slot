@@ -90,6 +90,7 @@ fn stand_in(core: Core) -> MockCore {
         Core::Snes9x | Core::Supafaust => MockCore::sized(256, 224),
         Core::PcsxRearmed => MockCore::sized(320, 240),
         Core::Dsperate => MockCore::sized(256, 384),
+        Core::PortMaster => MockCore::sized(640, 480),
     }
 }
 
@@ -189,7 +190,9 @@ pub fn colour_option(which: Core, on: bool) -> Option<(&'static str, &'static st
             "gambatte_gbc_color_correction",
             if on { "GBC only" } else { "disabled" },
         )),
-        Core::Snes9x | Core::Supafaust | Core::PcsxRearmed | Core::Dsperate => None,
+        Core::Snes9x | Core::Supafaust | Core::PcsxRearmed | Core::Dsperate | Core::PortMaster => {
+            None
+        }
     }
 }
 
@@ -281,7 +284,7 @@ pub fn core_options(
             put("gambatte_gb_colorization", "internal");
             put("gambatte_gb_internal_palette", "Special 4 (TI-83 Legacy)");
         }
-        Core::Dsperate => {}
+        Core::Dsperate | Core::PortMaster => {}
     }
     if let Some((key, value)) = colour_option(which, colour) {
         put(key, value);

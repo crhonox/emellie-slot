@@ -14,7 +14,7 @@ const CGB_FLAG: usize = 0x143;
 
 /// The console a game of `platform` counts as, `rom` its first bytes at least: a Game Boy cart
 /// that knows the Color is a Color game, wherever it is shelved. None for the DS, whose
-/// emulator keeps its own achievements.
+/// emulator keeps its own achievements, nor for ports.
 pub fn console_for(platform: Platform, rom: &[u8]) -> Option<u32> {
     match platform {
         Platform::Gba => Some(GBA),
@@ -24,7 +24,7 @@ pub fn console_for(platform: Platform, rom: &[u8]) -> Option<u32> {
         }),
         Platform::Snes => Some(SNES),
         Platform::Ps1 => Some(PS1),
-        Platform::Nds => None,
+        Platform::Nds | Platform::Ports => None,
     }
 }
 

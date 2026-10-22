@@ -278,8 +278,6 @@ impl Gestures {
             Btn::Down => (2, Action::BrightnessDown),
             Btn::Left => (4, Action::BlueLightDown),
             Btn::Right => (8, Action::BlueLightUp),
-            Btn::L1 => (16, Action::LoadState),
-            Btn::R1 => (32, Action::SaveState),
             Btn::Y if self.keys.colour => (64, Action::ColourCorrectionToggle),
             Btn::L2 if self.keys.game_l2_r2 && self.keys.rewind => (L2_CHORD, Action::RewindStart),
             Btn::R2 if self.keys.game_l2_r2 => (R2_CHORD, Action::FfStart),

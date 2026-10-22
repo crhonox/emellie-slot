@@ -122,7 +122,8 @@ fn the_whole_pass_from_boot_to_resume() {
         "a level adjustment paused the game"
     );
 
-    p.chord(Btn::R1);
+    // no button saves a state any more; the save states' own panel does
+    p.session.app_mut().apply(omega_input::Action::SaveState);
     let saved = p.ring("Emerald").list().expect("list the ring");
     assert_eq!(saved.len(), 1);
     assert!(

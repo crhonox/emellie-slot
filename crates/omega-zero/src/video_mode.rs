@@ -223,7 +223,7 @@ pub fn screen_on_frame(
         };
     }
     match platform {
-        Platform::Gba | Platform::Snes | Platform::Ps1 | Platform::Nds => {
+        Platform::Gba | Platform::Snes | Platform::Ps1 | Platform::Nds | Platform::Ports => {
             let h = (cw * SRC_H as f32 / SRC_W as f32).round();
             let view = GameView {
                 rect: [0.0, 0.0, cw, h],

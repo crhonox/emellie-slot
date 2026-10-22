@@ -22,7 +22,7 @@ pub const GB_SHELF_SCALE: f32 = 0.8;
 pub fn shelf_scale(platform: Platform) -> f32 {
     match platform {
         Platform::Gba => 1.0,
-        Platform::Nds => nds::SHELF_SCALE,
+        Platform::Nds | Platform::Ports => nds::SHELF_SCALE,
         Platform::Gb | Platform::Gbc => GB_SHELF_SCALE,
         Platform::Snes => snes::SHELF_SCALE,
         Platform::Ps1 => disc::SHELF_SCALE,

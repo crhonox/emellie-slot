@@ -41,6 +41,7 @@ mod sync_network;
 mod sync_opening;
 mod sync_power;
 mod sync_settings;
+mod sync_shelf_name;
 mod sync_start_notice;
 mod sync_switcher;
 mod sync_top_bar;
@@ -64,6 +65,7 @@ use sync_network::{sync_network, NetworkTexes};
 use sync_opening::{sync_opening, TerminalRows};
 use sync_power::{sync_power, PowerPanels};
 use sync_settings::{sync_settings, SettingsTexes};
+use sync_shelf_name::sync_shelf_name;
 use sync_start_notice::sync_start_notice;
 use sync_switcher::{sync_switcher, Switcher};
 use sync_top_bar::{sync_top_bar, TopBarTexes};
@@ -112,6 +114,7 @@ pub struct Frontend {
     labels: Baked<(ListView, u8)>,
     cheevos: Baked<(ListView, u8)>,
     controls: Baked<(crate::screens::controls::ControlsView, u8)>,
+    shelf_name: Baked<(String, u8)>,
     background: Baked<(ListView, u8)>,
     /// The POWER menu's panel and the one shown after its choice.
     power: PowerPanels,
@@ -203,6 +206,7 @@ impl Frontend {
             labels: Baked::default(),
             cheevos: Baked::default(),
             controls: Baked::default(),
+            shelf_name: Baked::default(),
             background: Baked::default(),
             power: PowerPanels::default(),
             backdrop: BackdropTex::default(),
@@ -357,6 +361,7 @@ impl Frontend {
         sync_keyboard(self.session.app_mut(), compositor, &mut self.keyboard);
         sync_info(self.session.app_mut(), compositor, &mut self.info);
         sync_controls(self.session.app_mut(), compositor, &mut self.controls);
+        sync_shelf_name(self.session.app_mut(), compositor, &mut self.shelf_name);
         sync_labels(self.session.app_mut(), compositor, &mut self.labels);
         sync_cheevos(self.session.app_mut(), compositor, &mut self.cheevos);
         sync_background(

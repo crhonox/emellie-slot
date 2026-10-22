@@ -1,26 +1,45 @@
+diff --git a/configs/default.ini b/configs/default.ini
+--- a/configs/default.ini
++++ b/configs/default.ini
+@@ -362,13 +362,14 @@
+ # slot_prev = mod+dpleft
+ # volume_up = none
+ # volume_down = none
+-# layout_next = mod+back
++# layout_next = mod+dpup
+ # layout_prev = mod+x
+ # screen_swap = mod+y
+ # pip_corner_next = none
+ # screenshot = none
+ # mic = leftstick
+ # fps = none
++# stylus_toggle = mod+back      # the d-pad moves the pen until pressed again (the pause menu keeps it)
+ 
+ [cheevos]
+ # RetroAchievements, Casual mode (formerly Softcore). Hardcore is NOT supported!
 diff --git a/src/frontend/sdl/input.cpp b/src/frontend/sdl/input.cpp
 --- a/src/frontend/sdl/input.cpp
 +++ b/src/frontend/sdl/input.cpp
-@@ -27,12 +27,15 @@
+@@ -27,12 +27,15 @@ const char* const kPadDefaults[B::BTN_COUNT] = {"b", "a", "back", "start", "dpri
  
  const char* const kActionNames[static_cast<int>(Action::Count)] = {
    "quit", "pause", "fast_forward", "fast_forward_toggle", "save_state", "load_state", "slot_next", "slot_prev",
 -  "volume_up", "volume_down", "mute", "layout_next", "layout_prev", "screen_swap", "pip_corner_next", "fullscreen", "screenshot", "lid", "mic", "fps"};
 +  "volume_up", "volume_down", "mute", "layout_next", "layout_prev", "screen_swap", "pip_corner_next", "fullscreen", "screenshot", "lid", "mic", "fps",
-+  "brightness_up", "brightness_down"};
++  "brightness_up", "brightness_down", "stylus_toggle"};
  const char* const kKeyHotDefaults[static_cast<int>(Action::Count)] = {
 -  "Escape", "p", "Tab", "none", "F5", "F7", "F3", "F2", "=", "-", "0", "F4", "F10", "F6", "F8", "f", "F9", "l", "m", "none"};
 +  "Escape", "p", "Tab", "none", "F5", "F7", "F3", "F2", "=", "-", "0", "F4", "F10", "F6", "F8", "f", "F9", "l", "m", "none",
-+  "none", "none"};
++  "none", "none", "none"};
  const char* const kPadHotDefaults[static_cast<int>(Action::Count)] = {
    "mod+start+back", "mod+start", "mod++righttrigger", "none", "mod+rightshoulder", "mod+leftshoulder", "mod+dpright", "mod+dpleft",
 -  "none", "none", "none", "mod+back", "mod+x", "mod+y", "none", "none", "none", "none", "leftstick", "none"};
-+  "none", "none", "none", "mod+back", "mod+x", "mod+y", "none", "none", "none", "none", "leftstick", "none",
-+  "none", "none"};
++  "none", "none", "none", "mod+dpup", "mod+x", "mod+y", "none", "none", "none", "none", "leftstick", "none",
++  "none", "none", "mod+back"};
  
  // Controls that are neither a DS button nor a hotkey: hotkey modifier and
  // the pad-driven pen. Kept as one copy readable from both configure() and
-@@ -236,6 +239,7 @@
+@@ -236,6 +239,7 @@ void Input::configure(const Config& cfg) {
        std::fprintf(stderr, "config: pad.stick_dpad and pad.stick_face are both the %s stick; it will work both the d-pad and X/B/Y/A\n", sf.c_str());
    }
    deadzone_ = cfg.num("pad.stick_deadzone", 12000);
@@ -28,7 +47,37 @@ diff --git a/src/frontend/sdl/input.cpp b/src/frontend/sdl/input.cpp
    {
      const std::string ff = cfg.str("pad.face_fix", "auto");
      if (ff != "auto" && ff != "off") std::fprintf(stderr, "config: pad.face_fix \"%s\" is not auto | off\n", ff.c_str());
-@@ -547,7 +551,7 @@
+@@ -448,10 +452,20 @@ void Input::touch_at(int wx, int wy, Display& display) {
+ 
+ void Input::fire(Action a, bool down) {
+   if (a == Action::Quit && down) { quit_ = true; return; }
++  if (a == Action::StylusToggle) { if (down) toggle_stylus(); return; }
+   if (is_hold(a)) return;   // the caller tracks held state
+   if (down) actions_.push_back(a);
+ }
+ 
++// stylus_toggle: the d-pad moves the pen, or goes back to the game. Directions
++// held across the switch are let go on both sides.
++void Input::toggle_stylus() {
++  stylus_toggled_ = !stylus_toggled_;
++  stylus_dpad_ = 0;
++  buttons_ &= ~((1u << B::BTN_UP) | (1u << B::BTN_DOWN) | (1u << B::BTN_LEFT) | (1u << B::BTN_RIGHT));
++  stylus_idle_ = 0;   // show the pen where it is
++}
++
+ // Keyboard: hotkeys first (with the modifier when bound), then DS buttons.
+ bool Input::key_down(SDL_Keycode k, bool down) {
+   if (key_mod_.kind == Bind::Key && key_mod_.code == k) {
+@@ -538,7 +552,7 @@ bool Input::pad_down(const Bind& b, bool down) {
+     stick_prev_ = stick_;
+     return true;
+   }
+-  if (stylus_chord_down_) {
++  if (pen_dpad()) {
+     for (const B d : {B::BTN_UP, B::BTN_DOWN, B::BTN_LEFT, B::BTN_RIGHT})
+       if (same(pad_map_[d])) {
+         if (down) stylus_dpad_ |= 1u << d; else stylus_dpad_ &= ~(1u << d);
+@@ -547,7 +561,7 @@ bool Input::pad_down(const Bind& b, bool down) {
        }
    }
    if (same(pad_mod_)) {
@@ -37,20 +86,48 @@ diff --git a/src/frontend/sdl/input.cpp b/src/frontend/sdl/input.cpp
      else {
        pad_mod_down_ = false;
        // Released alone: the "mod" hotkey if there is one, else its button for one frame.
+@@ -612,7 +626,7 @@ void Input::axis(Uint8 which, Sint16 value) {
+     return s != stylus_axis_ && (s == StylusAxis::Left ? (left_x || left_y) : s == StylusAxis::Right ? (right_x || right_y) : false);
+   };
+   if (on_stick(stick_dpad_)) { if (x_axis) dstick_x_ = value; else dstick_y_ = value; }
+-  if (on_stick(stick_dpad_) && !stylus_chord_down_) stick_as_buttons(stick_, value, x_axis ? B::BTN_LEFT : B::BTN_UP, x_axis ? B::BTN_RIGHT : B::BTN_DOWN);
++  if (on_stick(stick_dpad_) && !pen_dpad()) stick_as_buttons(stick_, value, x_axis ? B::BTN_LEFT : B::BTN_UP, x_axis ? B::BTN_RIGHT : B::BTN_DOWN);
+   if (on_stick(stick_face_)) stick_as_buttons(face_stick_, value, x_axis ? B::BTN_Y : B::BTN_X, x_axis ? B::BTN_A : B::BTN_B);
+   const Uint8 px = pen_left ? SDL_CONTROLLER_AXIS_LEFTX : SDL_CONTROLLER_AXIS_RIGHTX, py = pen_left ? SDL_CONTROLLER_AXIS_LEFTY : SDL_CONTROLLER_AXIS_RIGHTY;
+   if (stylus_axis_ != StylusAxis::None && (which == px || which == py)) {
+@@ -646,14 +660,16 @@ void Input::stick_as_buttons(u32& held, Sint16 value, B neg, B pos) {
+   stick_prev_ = stick_;
+ }
+ 
+-bool Input::stylus_visible_binding() const { return stylus_axis_ != StylusAxis::None || stylus_chord_.kind != Bind::None; }
++bool Input::stylus_visible_binding() const {
++  return stylus_axis_ != StylusAxis::None || stylus_chord_.kind != Bind::None || stylus_toggled_;
++}
+ 
+ void Input::update_stylus() {
+   if (!stylus_visible_binding()) return;
+   auto axis = [&](int v) { return (v > deadzone_ || v < -deadzone_) ? static_cast<double>(v) / 32767.0 : 0.0; };
+   const double ddx = ((stylus_dpad_ >> B::BTN_RIGHT) & 1) - static_cast<double>((stylus_dpad_ >> B::BTN_LEFT) & 1);
+   const double ddy = ((stylus_dpad_ >> B::BTN_DOWN) & 1) - static_cast<double>((stylus_dpad_ >> B::BTN_UP) & 1);
+-  const double sdx = stylus_chord_down_ ? axis(dstick_x_) : 0.0, sdy = stylus_chord_down_ ? axis(dstick_y_) : 0.0;
++  const double sdx = pen_dpad() ? axis(dstick_x_) : 0.0, sdy = pen_dpad() ? axis(dstick_y_) : 0.0;
+   const double dx = (axis(stylus_x_) + ddx + sdx) * stylus_speed_, dy = (axis(stylus_y_) + ddy + sdy) * stylus_speed_;
+   if (dx != 0 || dy != 0 || stylus_down_) stylus_idle_ = 0; else if (stylus_idle_ < (1 << 30)) ++stylus_idle_;
+   stylus_fx_ += dx;
 diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
 --- a/src/frontend/sdl/input.h
 +++ b/src/frontend/sdl/input.h
-@@ -17,7 +17,8 @@
+@@ -17,7 +17,8 @@ class Config;
  // Things a hotkey can do. The frontend drains them once a frame.
  enum class Action : u8 {
    Quit, Pause, FastForward, FastForwardToggle, SaveState, LoadState, SlotNext, SlotPrev,
 -  VolumeUp, VolumeDown, Mute, LayoutNext, LayoutPrev, ScreenSwap, PipCornerNext, Fullscreen, Screenshot, Lid, Mic, FpsToggle, Count
 +  VolumeUp, VolumeDown, Mute, LayoutNext, LayoutPrev, ScreenSwap, PipCornerNext, Fullscreen, Screenshot, Lid, Mic, FpsToggle,
-+  BrightnessUp, BrightnessDown, Count
++  BrightnessUp, BrightnessDown, StylusToggle, Count
  };
  const char* action_name(Action a);
  
-@@ -45,6 +46,11 @@
+@@ -45,6 +46,11 @@ public:
    // State for the coming frame. A press+release both arrived since the last
    // frame still counts as held this frame; the release lands on the next one.
    input::Frame frame() {
@@ -62,7 +139,7 @@ diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
      const input::Frame f{static_cast<u16>(buttons_ | pressed_ | stick_ | face_stick_), static_cast<u8>(touch_x_), static_cast<u8>(touch_y_), touching_ || touched_ || stylus_down_ != 0};
      pressed_ = 0; stick_pressed_ = 0; touched_ = false;
      menu_fb_pressed_ = 0;   // menu fallback presses die with their frame
-@@ -63,6 +69,8 @@
+@@ -63,9 +69,12 @@ public:
    }
    // What is held right now, for the menu's key repeat (unlike the edges above).
    u32 menu_held() const { return buttons_ | stick_ | menu_fb_held_; }
@@ -70,8 +147,30 @@ diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
 +  bool pad_held(int b) const { return b >= 0 && b < 32 && ((held_ >> b) & 1); }
    // While the menu is open only Pause and Quit hotkeys fire, so a hotkey that
    // shares a control with a DS button can't hide that button from the menu.
-   void set_menu_open(bool on) { menu_open_ = on; if (!on) menu_faces_ = 0; }
-@@ -209,6 +217,8 @@
+-  void set_menu_open(bool on) { menu_open_ = on; if (!on) menu_faces_ = 0; }
++  // The pause menu keeps the d-pad even while stylus_toggle has it moving the pen.
++  void set_menu_open(bool on) { menu_open_ = on; if (!on) menu_faces_ = 0; else if (stylus_toggled_ && !stylus_chord_down_) stylus_dpad_ = 0; }
+   // Pad face buttons pressed while the menu is open, by SDL position and
+   // regardless of bindings: bit n = SDL_CONTROLLER_BUTTON n (south, east,
+   // west, north). Controls-page actions that must not move when rebound.
+@@ -84,7 +93,7 @@ public:
+   // the d-pad while the pad.stylus_dpad chord is held.
+   void update_stylus();
+   bool stylus_visible_binding() const;   // some pad control drives the pen
+-  bool stylus_visible() const { return (stylus_axis_ != StylusAxis::None || stylus_chord_.kind != Bind::None) && pad_ != nullptr && stylus_idle_ < stylus_hide_; }   // hidden after stylus_hide idle frames
++  bool stylus_visible() const { return stylus_visible_binding() && pad_ != nullptr && stylus_idle_ < stylus_hide_; }   // hidden after stylus_hide idle frames
+   int  stylus_x() const { return static_cast<int>(stylus_fx_); }
+   int  stylus_y() const { return static_cast<int>(stylus_fy_); }
+   int  stylus_size() const { return stylus_size_; }
+@@ -168,6 +177,7 @@ private:
+   bool pad_control_free(int sdl_button) const;   // nothing bound to it, so the menu fallback has it
+   bool key_control_free(SDL_Keycode k) const;
+   void fire(Action a, bool down);
++  void toggle_stylus();
+   bool key_down(SDL_Keycode k, bool down);
+   bool pad_down(const Bind& b, bool down);   // a button or axis edge; true if consumed
+   void axis(Uint8 which, Sint16 value);
+@@ -209,6 +219,8 @@ private:
    Bind pad_hot_[static_cast<int>(Action::Count)][HOT_SLOTS];
    Bind key_mod_, pad_mod_;
    bool key_mod_down_ = false, key_mod_used_ = false, pad_mod_down_ = false, pad_mod_used_ = false;
@@ -80,6 +179,16 @@ diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
    int  key_mod_alone_ = -1, pad_mod_alone_ = -1;   // the action bound to "mod" alone, or -1
    int  pad_mod_button_ = -1;   // the DS button the pad modifier would otherwise be
    bool axis_state_[SDL_CONTROLLER_AXIS_MAX][2] = {};   // per axis: - and + past the threshold
+@@ -225,6 +237,9 @@ private:
+   u8   stylus_down_ = 0;            // which of them is held, a bit per slot
+   Bind stylus_chord_;          // while held, the d-pad moves the pen instead of the game
+   bool stylus_chord_down_ = false;
++  bool stylus_toggled_ = false;  // padhotkeys.stylus_toggle: the d-pad moves the pen until pressed again
++  // Whether the d-pad moves the pen now: the chord held, or toggled on with the menu shut.
++  bool pen_dpad() const { return stylus_chord_down_ || (stylus_toggled_ && !menu_open_); }
+   u32  stylus_dpad_ = 0;       // d-pad directions held under the chord (bit per DS button)
+   u32  held_ = 0;              // SDL pad buttons currently down (bit per button)
+   int  deadzone_ = 12000;
 diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
 --- a/src/frontend/sdl/main.cpp
 +++ b/src/frontend/sdl/main.cpp
@@ -93,7 +202,7 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
  #include <algorithm>
  #include "mic_alsa.h"
  
-@@ -83,6 +86,44 @@
+@@ -83,6 +86,44 @@ namespace {
  // Gates startup chatter and hotkey echoes; errors, refusals and disk-touching
  // confirmations are never gated. DS_VERBOSE=1 enables.
  bool verbose() { static const bool v = std::getenv("DS_VERBOSE") != nullptr; return v; }
@@ -138,7 +247,15 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
  #define VLOG(...) do { if (verbose()) std::fprintf(stderr, __VA_ARGS__); } while (0)
  
  
-@@ -1103,6 +1144,13 @@
+@@ -1031,6 +1072,7 @@ static int run(int argc, char** argv) {
+   for (int i = 1; i < argc && !rom_word; ++i) if (looks_like_rom(argv[i])) rom_word = argv[i];
+   // Command line is one more settings layer, applied after the files.
+   ds::sdl::Config cli;
++  std::vector<std::string> cli_set;   // the keys --set named, applied over the files with the rest
+   for (int i = 1; i < argc; ++i) {
+     auto arg = [&](const char* name) { return !std::strcmp(argv[i], name) && i + 1 < argc; };
+     auto flag = [&](const char* name) { return !std::strcmp(argv[i], name); };
+@@ -1103,6 +1145,13 @@ static int run(int argc, char** argv) {
      else if (flag("--no-gpu-present")) cli.set("video.gpu_present", "false");
      else if (flag("--no-audio")) cli.set("audio.enabled", "false");
      else if (arg("--volume")) cli.set("audio.volume", argv[++i]);
@@ -146,13 +263,22 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
 +    else if (arg("--set")) {
 +      const std::string kv = argv[++i];
 +      const size_t eq = kv.find('=');
-+      if (eq != std::string::npos && eq > 0) cli.set(kv.substr(0, eq), kv.substr(eq + 1));
++      if (eq != std::string::npos && eq > 0) { cli.set(kv.substr(0, eq), kv.substr(eq + 1)); cli_set.push_back(kv.substr(0, eq)); }
 +      else std::fprintf(stderr, "--set %s: not section.key=value\n", kv.c_str());
 +    }
      else if (arg("--audio-buffer")) cli.set("audio.buffer_size", argv[++i]);
      else if (arg("--speed")) cli.set("emu.speed", argv[++i]);
      else if (arg("--limiter")) cli.set("emu.limiter", argv[++i]);
-@@ -3207,11 +3255,27 @@
+@@ -1157,7 +1206,7 @@ static int run(int argc, char** argv) {
+   }
+   auto apply_cli = [&] { for (const char* k : {"paths.bios9", "paths.bios7", "paths.firmware", "paths.saves", "paths.states", "video.scale", "video.dual_window", "video.layout", "video.screen", "video.pip_alpha", "video.screen_gap", "video.dominant_ratio", "video.dominant_threshold", "video.integer_scale",
+                                               "video.fullscreen", "video.linear", "video.lcd_grid", "video.chunky", "video.chunky_threshold", "video.chunky_cell", "video.seam", "video.sink", "video.disp", "video.fbdev", "video.gpu_present", "video.vsync", "audio.enabled", "audio.volume",
+-                                              "audio.mic", "emu.jit", "emu.timing", "emu.speed", "emu.limiter", "emu.pacing", "audio.buffer_size", "audio.latency_frames", "emu.frameskip", "emu.frameskip_mode", "emu.frameskip_capture", "video.aa", "video.gpu3d", "cart.preload", "emu.autosave_png", "emu.autoload", "cheevos.enabled", "cheevos.token_file", "cheevos.username"}) if (cli.has(k)) cfg.set(k, cli.str(k)); };
++                                              "audio.mic", "emu.jit", "emu.timing", "emu.speed", "emu.limiter", "emu.pacing", "audio.buffer_size", "audio.latency_frames", "emu.frameskip", "emu.frameskip_mode", "emu.frameskip_capture", "video.aa", "video.gpu3d", "cart.preload", "emu.autosave_png", "emu.autoload", "cheevos.enabled", "cheevos.token_file", "cheevos.username"}) if (cli.has(k)) cfg.set(k, cli.str(k)); for (const std::string& k : cli_set) cfg.set(k, cli.str(k)); };
+   apply_cli();
+   const std::string bios9 = cfg.str("paths.bios9"), bios7 = cfg.str("paths.bios7");
+   const std::string dsi_fw = cfg.str("paths.dsi_firmware");
+@@ -3207,11 +3256,27 @@ sdl_ready:
    // for the ones started lazily.
    ds::place_current_thread(ds::ThreadRole::Emu);
    ds::place_foreign_threads();
@@ -180,7 +306,7 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
      for (ds::sdl::Action a : input.take_actions()) {
        using A = ds::sdl::Action;
        switch (a) {
-@@ -3230,6 +3294,13 @@
+@@ -3230,6 +3295,13 @@ sdl_ready:
        case A::VolumeUp: audio.set_volume(audio.volume() + 10); audio.set_muted(false); VLOG("volume %d%%\n", audio.volume()); break;
        case A::VolumeDown: audio.set_volume(audio.volume() - 10); VLOG("volume %d%%\n", audio.volume()); break;
        case A::Mute: audio.set_muted(!audio.muted()); VLOG("%s\n", audio.muted() ? "muted" : "unmuted"); break;
@@ -194,3 +320,67 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
        // Anything moving the screens while paused must recomposite the menu.
        case A::Fullscreen: display.toggle_fullscreen(); if (dual_window) display2.toggle_fullscreen(); menu_dirty = true; break;
        case A::LayoutNext: case A::LayoutPrev: {
+diff --git a/tests/input_test.cpp b/tests/input_test.cpp
+--- a/tests/input_test.cpp
++++ b/tests/input_test.cpp
+@@ -295,7 +295,7 @@ void test_modifier_alone_is_a_hotkey() {
+     T::pad(in, SDL_CONTROLLER_BUTTON_GUIDE, false);
+     CHECK(in.quit() && in.take_actions().empty());          // the chord, and no pause on the modifier's release
+     T::pad(in, SDL_CONTROLLER_BUTTON_GUIDE, true);
+-    T::tap_pad(in, static_cast<SB>(SDL_CONTROLLER_BUTTON_DPAD_UP));
++    T::tap_pad(in, static_cast<SB>(SDL_CONTROLLER_BUTTON_DPAD_DOWN));
+     T::pad(in, SDL_CONTROLLER_BUTTON_GUIDE, false);
+     CHECK(in.take_actions().empty()); }                     // a DS button counts as a press too
+   { Rig r; Input& in = r.set("hotkeys.modifier", "Left Ctrl").set("hotkeys.pause", "mod").go();
+@@ -531,6 +531,43 @@ void test_stick_dpad_moves_the_pen_under_the_chord() {
+   in.update_stylus(); CHECK(in.stylus_x() == x1);
+ }
+ 
++// padhotkeys.stylus_toggle (MENU+SELECT by default): the d-pad moves the pen
++// until pressed again, for a pad with no stick and no free shoulder to hold.
++// The pause menu keeps the d-pad while it is on.
++void test_stylus_toggle_gives_the_dpad_to_the_pen() {
++  using SB = SDL_GameControllerButton;
++  constexpr SB kRight = SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
++  constexpr u32 kDpadRight = 1u << B::BTN_RIGHT;
++  const auto toggle = [](Input& in) {
++    T::pad(in, SDL_CONTROLLER_BUTTON_GUIDE, true);
++    T::tap_pad(in, SDL_CONTROLLER_BUTTON_BACK);
++    T::pad(in, SDL_CONTROLLER_BUTTON_GUIDE, false);
++  };
++  Rig r; r.set("padhotkeys.modifier", "guide").set("padhotkeys.pause", "mod").set("padhotkeys.layout_next", "mod+dpup");
++  r.set("pad.stylus_axis", "none").set("pad.stick_dpad", "none"); Input& in = r.go();
++  CHECK(!in.stylus_visible_binding());
++  toggle(in);
++  CHECK(in.take_actions().empty());                                        // no pause, no select for the game
++  CHECK(in.stylus_visible_binding() && (in.frame().buttons & (1u << B::BTN_SELECT)) == 0);
++  const int x0 = in.stylus_x();
++  CHECK(T::pad(in, kRight, true));
++  CHECK((in.frame().buttons & kDpadRight) == 0);
++  for (int i = 0; i < 8; ++i) in.update_stylus();
++  CHECK(in.stylus_x() > x0);
++  CHECK(T::pad(in, kRight, false));
++  in.set_menu_open(true);                                                  // the menu has the d-pad
++  CHECK(T::pad(in, kRight, true));
++  CHECK((in.menu_held() & kDpadRight) != 0);
++  const int x1 = in.stylus_x();
++  in.update_stylus(); CHECK(in.stylus_x() == x1);
++  CHECK(T::pad(in, kRight, false));
++  in.set_menu_open(false);
++  toggle(in);                                                              // and back to the game
++  CHECK(T::pad(in, kRight, true));
++  CHECK((in.frame().buttons & kDpadRight) == kDpadRight);
++  in.update_stylus(); CHECK(in.stylus_x() == x1);
++}
++
+ // pad.axis_<name>: a pad whose left stick SDL reports rotated (X on lefty,
+ // Y on leftx backwards) is put right by naming the physical axis per
+ // remapped one; everything downstream sees the corrected stick.
+@@ -588,6 +625,7 @@ int main() {
+   ds::sdl::test_stick_face_buttons();
+   ds::sdl::test_stick_dpad_names_a_stick();
+   ds::sdl::test_stick_dpad_moves_the_pen_under_the_chord();
++  ds::sdl::test_stylus_toggle_gives_the_dpad_to_the_pen();
+   ds::sdl::test_axis_remap();
+   std::printf("input tests passed\n");
+   return 0;

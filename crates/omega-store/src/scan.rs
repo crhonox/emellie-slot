@@ -79,6 +79,7 @@ pub fn scan(root: &Path) -> Result<Vec<Cart>, StoreError> {
                     crate::nds::title(&rom).unwrap_or_default(),
                     crate::nds::code(&rom).unwrap_or_default(),
                 ),
+                Platform::Ports => (String::new(), String::new()),
             };
             carts.push(Cart {
                 platform,

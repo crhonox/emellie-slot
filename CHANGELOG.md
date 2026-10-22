@@ -8,6 +8,15 @@ omega-zero is now **Emellie Slot**, a personal fork of it.
   `Config/emellie-slot.state`; a card's `Config/omega-zero.state` is taken on at the first boot,
   so nothing set is lost. About, the start notice, the boot logo, ScreenScraper's software name
   and RetroAchievements' user agent say Emellie Slot.
+- Shutting the lid puts the handheld to sleep for every system, DS games and ports included, as
+  spruceOS does on the Anbernic XX line: `System/lid.sh` reads the hall sensor and suspends the
+  kernel, CPU and panel asleep. Opened, the game goes on where it was; left shut 15 minutes
+  (`LID_OFF_S`), the RTC wakes the handheld, the game in play leaves with its save, and the
+  handheld switches off.
+- Over the selected cart on every shelf stands its file name, without the extension, so two
+  games wearing the same label (a game and a romhack of it) can be told apart.
+- SELECT+L1 and SELECT+R1 no longer load and save a state; MENU twice still opens the save
+  states.
 - No opening at boot: the shelf comes straight up after the boot logo. A game that took the
   frontend down is still named over the shelf at the next boot.
 - The boot logo is EMELLIE SLOT in Pixel Code, for each panel.
@@ -28,11 +37,12 @@ The DS joins the shelf: its games run in DSperate, which omega-zero hands the ha
   `nds-1stick.ini` or `nds-2stick.ini`, so one card played in an RG35XX SP and an RG CubeXX
   keeps the settings of each; battery saves go to `Saves/NDS` and states to `States/NDS` for
   both, its own resume included.
-- In a DS game, MENU opens DSperate's pause menu and MENU+START goes back to the shelf. With no
-  sticks (RG35XX SP), held L2 moves the stylus with the d-pad and R2 touches; with two (RG
-  CubeXX), the left stick is a d-pad, the right one moves the stylus, and R2 or R3 touches.
-  MENU+▲▼ changes the layout of the two screens, MENU+L2 swaps them, MENU+R2 fast-forwards, and
-  MENU+L1 / MENU+R1 load and save a state. SELECT on the DS shelf shows all of it, for the
+- In a DS game, MENU+START opens DSperate's pause menu, and MENU held or MENU+SELECT goes back
+  to the shelf. With no sticks (RG35XX SP), MENU+Y gives the d-pad to the stylus until pressed
+  again and R2 touches; with two (RG CubeXX), the left stick is a d-pad, the right one moves the
+  stylus, and R2 or R3 touches. L2 swaps the two screens, MENU+R1 fast-forwards, MENU+B is the
+  microphone and MENU+X closes the lid. These hotkeys are put back at every start, so one bound
+  in DSperate's own menu lasts that game. SELECT on the DS shelf shows all of it, for the
   handheld it is on.
 - The DS shelf stands DS game cards, drawn from a picture of a real one: the game's label
   fills the well under the NINTENDO DS band, a label from ScreenScraper of the whole sticker
