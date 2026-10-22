@@ -95,6 +95,7 @@ impl ControlsView {
                 ("MENU+X", "LID"),
                 ("VOL+ VOL-", "VOLUME"),
                 ("SELECT+▲▼", "BRIGHTNESS"),
+                ("SELECT+R1", "SCREENSHOT"),
             ]);
         } else if platform.game_owns_l2_r2() {
             game.extend([
@@ -118,6 +119,7 @@ impl ControlsView {
             if platform.colour_correction() {
                 game.push(("SELECT+Y", "COLOUR"));
             }
+            game.push(("SELECT+R1", "SCREENSHOT"));
             if platform.owns_shoulders() {
                 game.push(("L1 R1", "PICTURE SIZE"));
             }

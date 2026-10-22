@@ -39,6 +39,7 @@ pub mod progress;
 pub mod resample;
 pub mod rewind;
 pub mod root;
+pub mod scope;
 pub mod screens;
 pub mod session;
 pub mod spawn;

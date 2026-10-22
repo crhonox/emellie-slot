@@ -68,6 +68,16 @@ impl Cheevos {
         transport: impl FnOnce(&str) -> Box<dyn Transport>,
         offline: Option<Offline>,
     ) -> &'static Cheevos {
+        Self::start_shared(host, transport, offline.map(std::sync::Arc::new))
+    }
+
+    /// As `start_with`, the answers kept by an `offline` its owner holds as well, to cache
+    /// games ahead of time with.
+    pub fn start_shared(
+        host: Option<&str>,
+        transport: impl FnOnce(&str) -> Box<dyn Transport>,
+        offline: Option<std::sync::Arc<Offline>>,
+    ) -> &'static Cheevos {
         let client = unsafe { ffi::rc_client_create(crate::memory::read_memory, server_call) };
         assert!(!client.is_null(), "rc_client_create failed");
         unsafe {
@@ -80,7 +90,6 @@ impl Cheevos {
             }
         }
         let transport: std::sync::Arc<dyn Transport> = transport(&user_agent(client)).into();
-        let offline = offline.map(std::sync::Arc::new);
         let (tx, rx) = channel::<Job>();
         let this: &'static Cheevos = Box::leak(Box::new(Cheevos {
             client,

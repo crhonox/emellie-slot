@@ -7,9 +7,9 @@ use omega_store::ps1::disc_label;
 use omega_store::{Cart, Platform};
 use omega_zero::json::Json;
 use omega_zero::label_sync::{
-    crc32, fetch_width, game_url, label_regions, lookups, media_url, pick_label, pick_media,
-    read_reply, regions, sync, title, wants, Account, Found, Http, LabelNews, Lookup, Media, Quota,
-    Reply, Sync, SyncFail, Tally, Want, Who,
+    crc32, fetch_width, game_url, label_regions, lookups, matched, media_url, pick_label,
+    pick_media, read_reply, regions, same_title, sync, title, wants, Account, Found, Http,
+    LabelNews, Lookup, Matched, Media, Quota, Reply, Sync, SyncFail, Tally, Want, Who, LOG_FILE,
 };
 
 #[test]
@@ -138,7 +138,7 @@ const GAME: &str = r#"{"header": {"success": "true"}, "response": {
 #[test]
 fn a_reply_names_the_game_its_media_and_the_lookups_left_today() {
     let (reply, quota) = read_reply(200, GAME.as_bytes());
-    let Reply::Game(Found { medias, disc }) = reply else {
+    let Reply::Game(Found { medias, disc, .. }) = reply else {
         panic!("{reply:?}");
     };
     assert_eq!(medias.len(), 4);
@@ -963,5 +963,135 @@ fn a_disc_no_way_of_asking_finds_is_not_on_screenscraper() {
             unknown: 1,
             ..Tally::default()
         }))
+    );
+}
+
+#[test]
+fn a_reply_names_the_game_and_the_rom_it_matched() {
+    let body = r#"{"response": {"jeu": {"id": "3767",
+        "noms": [{"region": "us", "text": "Metroid Fusion"}, {"region": "jp", "text": "Metroid Fusion"},
+                 {"region": "eu", "text": "Metroid 4"}],
+        "rom": {"romcrc": "6c2a6a5b", "romserial": "AGB-AMTE-USA"}, "medias": []}}}"#;
+    let found = found(body);
+    assert_eq!(found.id, "3767");
+    assert_eq!(found.names, ["Metroid Fusion", "Metroid 4"]);
+    assert_eq!(found.crc.as_deref(), Some("6c2a6a5b"));
+    assert_eq!(found.serial.as_deref(), Some("AGB-AMTE-USA"));
+}
+
+#[test]
+fn names_of_one_game_are_told_from_another_games() {
+    for (a, b) in [
+        (
+            "Legend of Zelda, The - The Minish Cap (USA)",
+            "The Legend of Zelda : The Minish Cap",
+        ),
+        ("Final Fantasy VII (USA) (Disc 1)", "Final Fantasy 7"),
+        ("Pokemon - Diamond Version (USA)", "Pokémon Diamond"),
+        ("0123 - Mario Kart DS (USA)", "Mario Kart DS"),
+        (
+            "Castlevania - Aria of Sorrow",
+            "Castlevania: Aria of Sorrow",
+        ),
+        ("Tetris (World)", "TETRIS"),
+        (
+            "Super Mario Advance 02",
+            "Super Mario Advance 2: Super Mario World",
+        ),
+    ] {
+        assert!(same_title(a, b), "{a} / {b}");
+    }
+    for (a, b) in [
+        ("Super Mario Advance (USA)", "Super Mario Bros."),
+        ("Super Mario Advance 2 (USA)", "Super Mario Advance 3"),
+        ("Final Fantasy VI", "Final Fantasy V"),
+        ("Tetris", "Tetris Attack"),
+        ("Golden Sun", "Mario Golf"),
+        ("", "Mario Golf"),
+    ] {
+        assert!(!same_title(a, b), "{a} / {b}");
+    }
+}
+
+#[test]
+fn a_game_is_trusted_by_its_roms_crc_or_serial_else_by_its_name() {
+    let root = tempfile::tempdir().unwrap();
+    let want = want(root.path(), "Mother 3 (Japan) [T-En]");
+    let rom = lookups(&want).remove(0);
+    let crc = format!("{:08x}", rom.crc.unwrap());
+    let game = |names: &[&str], crc: Option<&str>, serial: Option<&str>| Found {
+        names: names.iter().map(|n| n.to_string()).collect(),
+        crc: crc.map(str::to_string),
+        serial: serial.map(str::to_string),
+        ..Found::default()
+    };
+    assert_eq!(
+        matched(&game(&["Mazer"], Some(&crc), None), &want, &rom),
+        Some(Matched::Crc)
+    );
+    assert_eq!(
+        matched(&game(&["Mother 3"], None, None), &want, &rom),
+        Some(Matched::Name)
+    );
+    assert_eq!(
+        matched(&game(&[], None, None), &want, &rom),
+        Some(Matched::Unnamed)
+    );
+    assert_eq!(
+        matched(&game(&["Mother 1+2"], Some("0"), None), &want, &rom),
+        None
+    );
+
+    let disc = Lookup {
+        serial: Some("SCUS-94163".into()),
+        crc: None,
+        ..rom.clone()
+    };
+    let other = game(&["Some Other Game"], None, Some("SCUS_941.63"));
+    assert_eq!(matched(&other, &want, &disc), Some(Matched::Serial));
+    assert_eq!(matched(&other, &want, &rom), None);
+}
+
+#[test]
+fn a_game_guessed_from_another_carts_name_is_not_saved_and_each_cart_is_logged() {
+    let root = tempfile::tempdir().unwrap();
+    let wants = [
+        want(root.path(), "Mother 3 (Japan) [T-En]"),
+        want(root.path(), "Metroid Fusion (USA)"),
+        want(root.path(), "Nobody (USA)"),
+    ];
+    let guess = r#"{"response": {"jeu": {"id": "9", "noms": [{"text": "Mother 1+2"}],
+        "medias": [{"type": "support-texture", "region": "jp", "url": "https://ss/m12"}]}}}"#;
+    let mut server = Server::new(vec![
+        ok(guess),
+        ok(GAME),
+        Some((200, png(4, 2))),
+        Some((404, Vec::new())),
+    ]);
+    let (news, _) = run(root.path(), &wants, &mut server);
+    assert!(!root
+        .path()
+        .join("Labels/GBA/Mother 3 (Japan) [T-En].png")
+        .exists());
+    assert_eq!(server.asked.len(), 4, "the guess's scan was never fetched");
+    assert_eq!(
+        news.last(),
+        Some(&LabelNews::Finished(Tally {
+            saved: 1,
+            bare: 0,
+            unknown: 2
+        }))
+    );
+    let log = std::fs::read_to_string(root.path().join(LOG_FILE)).unwrap();
+    let lines: Vec<&str> = log.lines().collect();
+    assert_eq!(
+        lines,
+        [
+            "-- sync of 3 carts",
+            "GBA   Mother 3 (Japan) [T-En].gba -> rejected #9 \"Mother 1+2\", not this game",
+            "GBA   Metroid Fusion (USA).gba -> saved #3767 \"?\" by unchecked",
+            "GBA   Nobody (USA).gba -> not on ScreenScraper",
+            "-- done: 1 saved, 0 with no scan, 2 not found",
+        ]
     );
 }

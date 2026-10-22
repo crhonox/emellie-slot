@@ -36,7 +36,7 @@ target="$(sed -n 's/^BASEOS_TARGET=//p' "$RELEASE" 2>/dev/null | tr -d '"' | tr 
 layout="$(pad_layout "$target")"
 CONFIG="$CONFIG_DIR/nds-$layout.ini"
 
-mkdir -p "$CONFIG_DIR" "$SD/Saves/NDS" "$SD/States/NDS" "$SD/BIOS/nds" "$SD/Screenshots"
+mkdir -p "$CONFIG_DIR" "$SD/Saves/NDS" "$SD/States/NDS" "$SD/BIOS/nds" "$SD/Screenshots/NDS"
 # The settings are seeded once for each kind of pad from the copy beside the emulator, the
 # card's paths and the pad's stylus written in; from then on they are the player's, DSperate's
 # own menu saving to them. One card keeps a set for each handheld it is played in.
@@ -101,10 +101,12 @@ export DS_BRIGHTNESS="sh $SYS/brightness.sh"
 export DS_POWER_OFF="$RUN/omega-power-off"
 export DS_POWER_HOLD_MS=2000
 
-# MENU held a second quits, over whatever the player's settings say
+# MENU held a second quits, over whatever the player's settings say; screenshots go beside the
+# other systems', in Screenshots/NDS, whatever settings seeded before said
 cd "$DIR" || exit 2
 $LOADER "$DIR/dsperate" "$rom" --fullscreen --config "$CONFIG" $resume \
-	--volume "$volume" --set padhotkeys.quit_hold_ms=1000
+	--volume "$volume" --set padhotkeys.quit_hold_ms=1000 \
+	--set "paths.screenshots=$SD/Screenshots/NDS"
 status=$?
 
 # the level DSperate was left at, unmuted unless it is none, back in the frontend's state

@@ -516,6 +516,15 @@ fn select_and_y_toggles_colour_correction_and_costs_the_game_nothing() {
 }
 
 #[test]
+fn select_and_r1_takes_a_screenshot_and_costs_the_game_nothing() {
+    let mut g = Gestures::new();
+    assert!(g.feed(Down(Select), 0).is_empty());
+    assert_eq!(g.feed(Down(R1), 10), vec![Screenshot]);
+    assert!(g.feed(Up(R1), 40).is_empty());
+    assert!(g.feed(Up(Select), 200).is_empty());
+}
+
+#[test]
 fn y_on_its_own_is_untouched_by_the_colour_chord() {
     let mut g = Gestures::new();
     assert_eq!(g.feed(Down(Y), 0), vec![GbaDown(Y)]);

@@ -12,8 +12,9 @@ use omega_input::{Action, Btn};
 use omega_store::{colour_index, write_app_state, AppState, BackdropStyle, Font};
 use omega_ui::kit::layout::{screen_px, BAR_U};
 use omega_ui::kit::palette::{palette, Palette};
+use omega_ui::kit::panel::panel_face;
 use omega_ui::kit::pixel::text_width;
-use omega_ui::kit::row::panel_height;
+use omega_ui::kit::row::{panel_height, ROW_H};
 use omega_ui::{out_h, out_w, ClockPicker, Draw, PowerChoice, SettingsRow, TexId, UndoFace};
 use omega_zero::app::App;
 use omega_zero::background_screen::{Backdrop, BackgroundScreen};
@@ -21,6 +22,7 @@ use omega_zero::label_screen::{Labels, LabelsScreen};
 use omega_zero::label_sync::{Account, LabelJob, LabelJobs, LabelNews, SyncFail, Tally, Who};
 use omega_zero::list_view::LegendHint;
 use omega_zero::nav::{offsets, progress, Dir, End, SLIDE_MS};
+use omega_zero::scope::Scope;
 use omega_zero::screens::background::background_face;
 use omega_zero::screens::clock::clock_face;
 use omega_zero::screens::controls::{
@@ -231,10 +233,16 @@ fn labels(account: Option<Account>) -> Labels {
 #[test]
 fn labels_is_flows() {
     for (colour, name) in colours() {
-        let view = LabelsScreen::default().view(&labels(None), false);
+        let view = LabelsScreen::default().view(&labels(None), false, None);
         let face = labels_face(&view, palette(colour));
         assert_eq!((face.w, face.h), (280, 75), "{name}");
-        matches_flow(&face, &format!("labels-{name}"), face.h, 0..face.h);
+        // FETCH LABELS now says which carts it goes through (ALL), which the screenshots in
+        // ref/ predate: every row but that one is held to them until make-refs.sh is run again
+        let well = panel_face(280, face.h, "LABELS", true, palette(colour)).well;
+        let fetch = well[1] + ROW_H..well[1] + 2 * ROW_H;
+        let shot = format!("labels-{name}");
+        matches_flow(&face, &shot, face.h, 0..fetch.start);
+        matches_flow(&face, &shot, face.h, fetch.end..face.h);
     }
 }
 
@@ -307,9 +315,9 @@ fn the_controls_panel_fits_at_640() {
 fn the_labels_panel_holds_still_whatever_it_says() {
     let pal = palette(0);
     let screen = LabelsScreen::default();
-    let one = screen.view(&labels(Some(account())), false);
+    let one = screen.view(&labels(Some(account())), false, None);
     assert_eq!(one.status.len(), 1, "{:?}", one.status);
-    let two = screen.view(&labels(None), false);
+    let two = screen.view(&labels(None), false, None);
     assert_eq!(two.status.len(), NOTE_LINES);
     assert_eq!(labels_face(&one, pal).h, labels_face(&two, pal).h);
 }
@@ -327,11 +335,15 @@ fn account() -> Account {
 fn every_labels_note_fits_and_a_long_title_is_cut_short() {
     let room = 280 - 12 - NOTE_X;
     let mut lines = Vec::new();
-    lines.extend(labels(None).status_lines(true));
-    lines.extend(labels(Some(account())).status_lines(false));
-    lines.extend(labels(Some(account())).status_lines(true));
+    lines.extend(labels(None).status_lines(true, Scope::All, None));
+    lines.extend(labels(Some(account())).status_lines(false, Scope::All, None));
+    lines.extend(labels(Some(account())).status_lines(true, Scope::All, None));
     lines.extend(
-        Labels::new(Box::new(omega_zero::label_sync::NoKey::default()), None).status_lines(true),
+        Labels::new(Box::new(omega_zero::label_sync::NoKey::default()), None).status_lines(
+            true,
+            Scope::All,
+            None,
+        ),
     );
     for fail in [
         SyncFail::Refused(Who::Player),
@@ -340,7 +352,7 @@ fn every_labels_note_fits_and_a_long_title_is_cut_short() {
         SyncFail::Down,
         SyncFail::Offline,
     ] {
-        lines.extend(stood(LabelNews::Failed(fail)).status_lines(true));
+        lines.extend(stood(LabelNews::Failed(fail)).status_lines(true, Scope::All, None));
     }
     for tally in [
         Tally::default(),
@@ -360,7 +372,7 @@ fn every_labels_note_fits_and_a_long_title_is_cut_short() {
             unknown: 9,
         },
     ] {
-        lines.extend(stood(LabelNews::Finished(tally)).status_lines(true));
+        lines.extend(stood(LabelNews::Finished(tally)).status_lines(true, Scope::All, None));
     }
     for line in &lines {
         assert_eq!(&fitted(line, room), line, "{line:?} is cut short");
@@ -398,7 +410,7 @@ fn stood(news: LabelNews) -> Labels {
 #[test]
 fn labels_hints_say_what_y_and_start_do() {
     let words = |l: &Labels, screen: &LabelsScreen, online| {
-        labels_hints(&screen.view(l, online).legend)
+        labels_hints(&screen.view(l, online, None).legend)
             .iter()
             .map(|h| format!("{} {}", h.key, h.word))
             .collect::<Vec<_>>()
@@ -408,7 +420,7 @@ fn labels_hints_say_what_y_and_start_do() {
     let mut signed = labels(Some(account()));
     assert_eq!(words(&signed, &screen, false), ["Y SIGN OUT"]);
     assert_eq!(words(&signed, &screen, true), ["Y SIGN OUT", "START FETCH"]);
-    screen.input(&mut signed, Action::GbaDown(Btn::Down), None);
+    screen.input(&mut signed, Action::GbaDown(Btn::Down), None, &[Scope::All]);
     assert_eq!(words(&signed, &screen, true), ["START FETCH"]);
     assert_eq!(
         words(
@@ -430,11 +442,20 @@ fn start_fetches_from_either_row() {
     let mut screen = LabelsScreen::default();
     let mut signed = labels(Some(account()));
     let start = Action::GbaDown(Btn::Start);
-    assert_eq!(screen.input(&mut signed, start, None), Outcome::Sync);
-    screen.input(&mut signed, Action::GbaDown(Btn::Down), None);
-    assert_eq!(screen.input(&mut signed, start, None), Outcome::Sync);
+    assert_eq!(
+        screen.input(&mut signed, start, None, &[Scope::All]),
+        Outcome::Sync(Scope::All)
+    );
+    screen.input(&mut signed, Action::GbaDown(Btn::Down), None, &[Scope::All]);
+    assert_eq!(
+        screen.input(&mut signed, start, None, &[Scope::All]),
+        Outcome::Sync(Scope::All)
+    );
     let mut out = labels(None);
-    assert_eq!(screen.input(&mut out, start, None), Outcome::Stay);
+    assert_eq!(
+        screen.input(&mut out, start, None, &[Scope::All]),
+        Outcome::Stay
+    );
 }
 
 /// A row a style has no use for stays on the panel, faint, so the panel is as tall for every

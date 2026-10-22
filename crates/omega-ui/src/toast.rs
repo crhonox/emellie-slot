@@ -20,6 +20,8 @@ pub enum Toast {
     OneDisc,
     /// The DISC screen swapped disc `n`, counting from 1, into the drive.
     Disc(u8),
+    /// SELECT + R1 kept the picture in Screenshots/.
+    Screenshot,
 }
 
 /// What the toast says once disc `n` is in, for every disc a PlayStation game can have.
@@ -37,7 +39,7 @@ const DISC_IN: [&str; 9] = [
 
 impl Toast {
     /// Every toast there is, a disc's once, as disc 1.
-    pub const ALL: [Toast; 11] = [
+    pub const ALL: [Toast; 12] = [
         Toast::StateSaved,
         Toast::StateLoaded,
         Toast::NeedsGpsp,
@@ -49,6 +51,7 @@ impl Toast {
         Toast::ColourOff,
         Toast::OneDisc,
         Toast::Disc(1),
+        Toast::Screenshot,
     ];
 
     /// Its place in `ALL`: every disc's toast is the one place.
@@ -65,6 +68,7 @@ impl Toast {
             Toast::ColourOff => 8,
             Toast::OneDisc => 9,
             Toast::Disc(_) => 10,
+            Toast::Screenshot => 11,
         }
     }
 
@@ -79,6 +83,7 @@ impl Toast {
             | Toast::BiosMismatch => "LINK",
             Toast::ColourOn | Toast::ColourOff => "COLOUR",
             Toast::OneDisc | Toast::Disc(_) => "DISC",
+            Toast::Screenshot => "SCREENSHOT",
         }
     }
 
@@ -95,6 +100,7 @@ impl Toast {
             Toast::ColourOn => "Correction on",
             Toast::ColourOff => "Correction off",
             Toast::OneDisc => "Only one disc",
+            Toast::Screenshot => "Screenshot saved",
             Toast::Disc(n) => DISC_IN
                 .get(usize::from(n).wrapping_sub(1))
                 .copied()

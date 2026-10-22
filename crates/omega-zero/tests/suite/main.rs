@@ -93,6 +93,7 @@ mod resample;
 mod resume;
 mod rewind;
 mod rumble;
+mod scope;
 mod screen;
 mod settings;
 mod sfx;

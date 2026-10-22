@@ -1,5 +1,6 @@
 //! The Labels screen, opened from Settings: the player's ScreenScraper account, and a sync
-//! that fetches the real labels of the carts that have none.
+//! that fetches the real labels of the carts that have none: every cart's, one shelf's, or
+//! the picked cart's again, as left and right choose on Fetch Labels.
 
 use std::path::Path;
 
@@ -11,6 +12,7 @@ use crate::label_sync::{
     Account, LabelJob, LabelJobs, LabelNews, Quota, SyncFail, Tally, Want, Who,
 };
 use crate::list_view::{LegendHint, ListView, RowLabel, RowValue, ViewRow};
+use crate::scope::{self, Scope};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SyncState {
@@ -114,8 +116,9 @@ impl Labels {
         std::mem::take(&mut self.fresh)
     }
 
-    /// The lines under the list. `online` is whether Wi-Fi has a network joined.
-    pub fn status_lines(&self, online: bool) -> Vec<String> {
+    /// The lines under the list. `online` is whether Wi-Fi has a network joined, `scope` the
+    /// carts a fetch would go through and `picked` the title of the cart picked on the shelf.
+    pub fn status_lines(&self, online: bool, scope: Scope, picked: Option<&str>) -> Vec<String> {
         if !self.jobs.present() || self.state == SyncState::Failed(SyncFail::NoKey) {
             return said(
                 "This build has no ScreenScraper key.",
@@ -148,7 +151,14 @@ impl Labels {
             .quota
             .map(|q| format!("{} lookups left today.", q.left))
             .unwrap_or_default();
-        said("Fetches real labels for carts with none.", &left)
+        let what = match (scope, picked) {
+            (Scope::Folder(p), _) => {
+                format!("Fetches labels for {} carts with none.", p.dir_name())
+            }
+            (Scope::Game, Some(title)) => format!("Fetches the label of {title} again."),
+            _ => "Fetches real labels for carts with none.".to_string(),
+        };
+        said(&what, &left)
     }
 }
 
@@ -243,6 +253,8 @@ impl AccountTyping {
 pub struct LabelsScreen {
     pub sel: Sel,
     pub typing: Option<AccountTyping>,
+    /// The carts Fetch Labels goes through.
+    pub scope: Scope,
 }
 
 impl Default for LabelsScreen {
@@ -250,6 +262,7 @@ impl Default for LabelsScreen {
         LabelsScreen {
             sel: Sel::Account,
             typing: None,
+            scope: Scope::All,
         }
     }
 }
@@ -258,22 +271,30 @@ impl Default for LabelsScreen {
 pub enum Outcome {
     Stay,
     Close,
-    /// Start a sync: the screen does not know the carts, its owner does.
-    Sync,
+    /// Start a sync of the carts in the scope: the screen does not know the carts, its owner
+    /// does.
+    Sync(Scope),
 }
 
 /// What A on Fetch Labels and START do: stop the fetch going, or ask for one once signed in.
-fn fetch(labels: &mut Labels) -> Outcome {
+fn fetch(labels: &mut Labels, scope: Scope) -> Outcome {
     if labels.working() {
         labels.stop();
     } else if labels.account().is_some() {
-        return Outcome::Sync;
+        return Outcome::Sync(scope);
     }
     Outcome::Stay
 }
 
 impl LabelsScreen {
-    pub fn input(&mut self, labels: &mut Labels, action: Action, root: Option<&Path>) -> Outcome {
+    /// Acts on `action`, `scopes` being the choices Fetch Labels steps through.
+    pub fn input(
+        &mut self,
+        labels: &mut Labels,
+        action: Action,
+        root: Option<&Path>,
+        scopes: &[Scope],
+    ) -> Outcome {
         if self.typing.is_some() {
             self.type_input(labels, action, root);
             return Outcome::Stay;
@@ -300,9 +321,19 @@ impl LabelsScreen {
             Action::GbaDown(Btn::Y) if self.sel == Sel::Account && !labels.working() => {
                 labels.sign_out(root)
             }
+            Action::GbaDown(Btn::Left | Btn::Right)
+                if self.sel == Sel::Sync && !labels.working() =>
+            {
+                let by = if action == Action::GbaDown(Btn::Left) {
+                    -1
+                } else {
+                    1
+                };
+                self.scope = scope::step(scopes, self.scope, by);
+            }
             // A on Fetch Labels, or START on either row, starts a fetch or stops the one going
-            Action::GbaDown(Btn::A) if self.sel == Sel::Sync => return fetch(labels),
-            Action::GbaDown(Btn::Start) => return fetch(labels),
+            Action::GbaDown(Btn::A) if self.sel == Sel::Sync => return fetch(labels, self.scope),
+            Action::GbaDown(Btn::Start) => return fetch(labels, self.scope),
             _ => {}
         }
         Outcome::Stay
@@ -360,13 +391,14 @@ impl LabelsScreen {
         }
     }
 
-    pub fn view(&self, labels: &Labels, online: bool) -> ListView {
+    /// The list, `picked` being the title of the cart picked on the shelf.
+    pub fn view(&self, labels: &Labels, online: bool, picked: Option<&str>) -> ListView {
         let account = labels.account().map(|a| a.user.clone());
         let progress = match labels.state() {
             SyncState::Working { done, total, .. } => {
-                Some(RowValue::Name(format!("{} / {total}", done + 1)))
+                RowValue::Name(format!("{} / {total}", done + 1))
             }
-            _ => None,
+            _ => RowValue::Choice(self.scope.name()),
         };
         let rows = vec![
             ViewRow {
@@ -379,11 +411,14 @@ impl LabelsScreen {
             },
             ViewRow {
                 label: RowLabel::Setting("Fetch Labels"),
-                value: progress,
+                value: Some(progress),
                 dim: false,
             },
         ];
         let mut legend = vec![LegendHint::Back];
+        if self.sel == Sel::Sync && !labels.working() {
+            legend.push(LegendHint::Change);
+        }
         if self.sel == Sel::Account && !labels.working() {
             legend.push(LegendHint::SignIn);
             if labels.account().is_some() {
@@ -402,7 +437,7 @@ impl LabelsScreen {
                 Sel::Account => 0,
                 Sel::Sync => 1,
             }),
-            status: labels.status_lines(online),
+            status: labels.status_lines(online, self.scope, picked),
             legend,
         }
     }

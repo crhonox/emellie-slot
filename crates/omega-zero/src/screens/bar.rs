@@ -261,7 +261,7 @@ impl App {
             Phase::Network(screen) => self.network_hints(screen),
             Phase::Bluetooth(screen) => self.bluetooth_hints(screen),
             Phase::Labels(screen) if screen.typing.is_none() => {
-                labels_hints(&screen.view(&self.labels, self.online()).legend)
+                labels_hints(&screen.view(&self.labels, self.online(), None).legend)
             }
             Phase::Cheevos(screen) if screen.typing.is_none() => {
                 crate::screens::cheevos::cheevos_hints(
@@ -270,6 +270,8 @@ impl App {
                             &self.cheevos_account,
                             &crate::cheevos::status(),
                             self.online(),
+                            &crate::cheevos::caching(),
+                            None,
                         )
                         .legend,
                 )

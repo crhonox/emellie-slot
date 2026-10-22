@@ -132,6 +132,7 @@ fn controls_says_what_the_shelf_and_a_gba_game_do_with_each_button() {
             ("SELECT+▲▼", "BRIGHTNESS"),
             ("SELECT+◀▶", "BLUE LIGHT"),
             ("SELECT+Y", "COLOUR"),
+            ("SELECT+R1", "SCREENSHOT"),
             ("VOL+ VOL-", "MUTE"),
             ("HOLD POWER", "POWER MENU"),
         ]
@@ -171,6 +172,7 @@ fn a_snes_game_fast_forwards_but_neither_rewinds_links_nor_corrects_colour() {
             ("HOLD MENU", "EJECT"),
             ("SELECT+▲▼", "BRIGHTNESS"),
             ("SELECT+◀▶", "BLUE LIGHT"),
+            ("SELECT+R1", "SCREENSHOT"),
             ("VOL+ VOL-", "MUTE"),
             ("HOLD POWER", "POWER MENU"),
         ]
@@ -191,6 +193,7 @@ fn a_playstation_game_fast_forwards_on_select_r2_and_swaps_discs() {
             ("SELECT+MENU", "DISC"),
             ("SELECT+▲▼", "BRIGHTNESS"),
             ("SELECT+◀▶", "BLUE LIGHT"),
+            ("SELECT+R1", "SCREENSHOT"),
             ("VOL+ VOL-", "MUTE"),
             ("HOLD POWER", "POWER MENU"),
         ]

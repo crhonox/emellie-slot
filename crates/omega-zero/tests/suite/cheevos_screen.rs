@@ -3,9 +3,10 @@ use omega_cheevos::{Credentials, Secret};
 use omega_input::{Action, Btn};
 use omega_zero::cheevos::Status;
 use omega_zero::cheevos_screen::{status_lines, CheevosScreen, Outcome, Sel, Step};
+use omega_zero::scope::Scope;
 
 fn press(s: &mut CheevosScreen, a: &Account, root: &std::path::Path, btn: Btn) -> Outcome {
-    s.input(a, Action::GbaDown(btn), Some(root))
+    s.input(a, Action::GbaDown(btn), Some(root), &[Scope::All], false)
 }
 
 /// Types `text` on the keyboard as a player would not, straight into its line, then STARTs.
@@ -57,6 +58,7 @@ fn y_signs_out_but_keeps_the_name() {
     let mut s = CheevosScreen {
         sel: Sel::Account,
         typing: None,
+        scope: Scope::All,
     };
     assert_eq!(
         press(&mut s, &account(d.path()), d.path(), Btn::Y),
@@ -75,6 +77,7 @@ fn b_backs_out_of_the_keyboard_then_the_screen() {
     let mut s = CheevosScreen {
         sel: Sel::Account,
         typing: None,
+        scope: Scope::All,
     };
     press(&mut s, &a, d.path(), Btn::A);
     assert_eq!(press(&mut s, &a, d.path(), Btn::B), Outcome::Stay);

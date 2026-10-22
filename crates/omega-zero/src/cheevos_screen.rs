@@ -1,5 +1,7 @@
-//! The Achievements screen, opened from Settings: RetroAchievements on or off, and the
-//! player's account, typed on the keyboard as the Labels screen's ScreenScraper one is.
+//! The Achievements screen, opened from Settings: RetroAchievements on or off, the player's
+//! account, typed on the keyboard as the Labels screen's ScreenScraper one is, and Offline
+//! Cache, which keeps on the card what every game, one shelf's or the picked game would fetch
+//! from RetroAchievements, so it can be played offline with its achievements.
 
 use std::path::Path;
 
@@ -7,13 +9,15 @@ use omega_cheevos::config::{self, Account};
 use omega_input::{Action, Btn};
 use omega_ui::Keyboard;
 
-use crate::cheevos::Status;
+use crate::cheevos::{CacheFail, Caching, Status};
 use crate::list_view::{LegendHint, ListView, RowLabel, RowValue, ViewRow};
+use crate::scope::{self, Scope};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Sel {
     Enabled,
     Account,
+    Cache,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,6 +47,8 @@ impl AccountTyping {
 pub struct CheevosScreen {
     pub sel: Sel,
     pub typing: Option<AccountTyping>,
+    /// The games Offline Cache goes through.
+    pub scope: Scope,
 }
 
 impl Default for CheevosScreen {
@@ -50,6 +56,7 @@ impl Default for CheevosScreen {
         CheevosScreen {
             sel: Sel::Enabled,
             typing: None,
+            scope: Scope::All,
         }
     }
 }
@@ -60,6 +67,9 @@ pub enum Outcome {
     Close,
     /// The account or the switch changed on the card: the sign-in starts over.
     Changed,
+    /// Cache the games in the scope: the screen does not know them, its owner does.
+    Cache(Scope),
+    StopCache,
 }
 
 fn said(first: &str, second: &str) -> Vec<String> {
@@ -103,9 +113,60 @@ pub fn status_lines(account: &Account, status: &Status, online: bool) -> Vec<Str
     }
 }
 
+/// The lines under the list while Offline Cache is picked or going: how the caching stands, or
+/// what it would do. `picked` is the title of the game picked on the shelf.
+pub fn cache_lines(caching: &Caching, scope: Scope, picked: Option<&str>) -> Vec<String> {
+    let plural =
+        |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    match caching {
+        Caching::Working { done, total, title } => said(
+            &format!("Caching {} of {total}: {title}", done + 1),
+            "Achievements kept for offline play.",
+        ),
+        Caching::Done(t) if t.cached == 0 && t.unknown == 0 => said("No games to cache.", ""),
+        Caching::Done(t) => said(
+            &format!("Done: {} cached.", plural(t.cached, "game", "games")),
+            &match t.unknown {
+                0 => String::new(),
+                n => format!(
+                    "{} not on RetroAchievements.",
+                    plural(n, "game is", "games are")
+                ),
+            },
+        ),
+        Caching::Failed(CacheFail::SignedOut) => {
+            said("Sign in first, with Wi-Fi on,", "to cache achievements.")
+        }
+        Caching::Failed(CacheFail::Offline) => said(
+            "Could not reach RetroAchievements.",
+            "Check the Wi-Fi and try again.",
+        ),
+        Caching::Failed(CacheFail::Refused) => said(
+            "RetroAchievements refused the account.",
+            "Press A on Account to sign in again.",
+        ),
+        Caching::Idle => said(
+            &match (scope, picked) {
+                (Scope::Folder(p), _) => format!("Keeps {} achievements on the card", p.dir_name()),
+                (Scope::Game, Some(title)) => format!("Keeps {title}'s achievements"),
+                _ => "Keeps every game's achievements".to_string(),
+            },
+            "to play offline. A starts, A again stops.",
+        ),
+    }
+}
+
 impl CheevosScreen {
-    /// Acts on `action`, `account` the card's as it stands, written back through `root`.
-    pub fn input(&mut self, account: &Account, action: Action, root: Option<&Path>) -> Outcome {
+    /// Acts on `action`, `account` the card's as it stands, written back through `root`;
+    /// `scopes` are the choices Offline Cache steps through, `caching` whether it is going.
+    pub fn input(
+        &mut self,
+        account: &Account,
+        action: Action,
+        root: Option<&Path>,
+        scopes: &[Scope],
+        caching: bool,
+    ) -> Outcome {
         if self.typing.is_some() {
             return self.type_input(action, root);
         }
@@ -124,12 +185,37 @@ impl CheevosScreen {
         };
         match action {
             Action::GbaDown(Btn::B) | Action::QuickMenu => Outcome::Close,
-            Action::GbaDown(Btn::Up | Btn::Down) => {
+            Action::GbaDown(Btn::Up) => {
                 self.sel = match self.sel {
-                    Sel::Enabled => Sel::Account,
+                    Sel::Enabled => Sel::Cache,
                     Sel::Account => Sel::Enabled,
+                    Sel::Cache => Sel::Account,
                 };
                 Outcome::Stay
+            }
+            Action::GbaDown(Btn::Down) => {
+                self.sel = match self.sel {
+                    Sel::Enabled => Sel::Account,
+                    Sel::Account => Sel::Cache,
+                    Sel::Cache => Sel::Enabled,
+                };
+                Outcome::Stay
+            }
+            Action::GbaDown(Btn::Left | Btn::Right) if self.sel == Sel::Cache && !caching => {
+                let by = if action == Action::GbaDown(Btn::Left) {
+                    -1
+                } else {
+                    1
+                };
+                self.scope = scope::step(scopes, self.scope, by);
+                Outcome::Stay
+            }
+            Action::GbaDown(Btn::A | Btn::Start) if self.sel == Sel::Cache => {
+                if caching {
+                    Outcome::StopCache
+                } else {
+                    Outcome::Cache(self.scope)
+                }
             }
             Action::GbaDown(Btn::Left | Btn::Right | Btn::A) if self.sel == Sel::Enabled => {
                 saved(config::set_enabled(root, !account.enabled))
@@ -208,7 +294,22 @@ impl CheevosScreen {
         }
     }
 
-    pub fn view(&self, account: &Account, status: &Status, online: bool) -> ListView {
+    /// The list; `caching` is how Offline Cache stands and `picked` the title of the game
+    /// picked on the shelf.
+    pub fn view(
+        &self,
+        account: &Account,
+        status: &Status,
+        online: bool,
+        caching: &Caching,
+        picked: Option<&str>,
+    ) -> ListView {
+        let cache = match caching {
+            Caching::Working { done, total, .. } => {
+                RowValue::Name(format!("{} / {total}", done + 1))
+            }
+            _ => RowValue::Choice(self.scope.name()),
+        };
         let rows = vec![
             ViewRow {
                 label: RowLabel::Setting("RetroAchievements"),
@@ -224,6 +325,11 @@ impl CheevosScreen {
                 }),
                 dim: false,
             },
+            ViewRow {
+                label: RowLabel::Setting("Offline Cache"),
+                value: Some(cache),
+                dim: false,
+            },
         ];
         let mut legend = vec![LegendHint::Back];
         match self.sel {
@@ -234,14 +340,24 @@ impl CheevosScreen {
                     legend.push(LegendHint::SignOut);
                 }
             }
+            Sel::Cache if matches!(caching, Caching::Working { .. }) => {
+                legend.push(LegendHint::Stop)
+            }
+            Sel::Cache => legend.push(LegendHint::Change),
         }
+        let going = matches!(caching, Caching::Working { .. });
         ListView {
             rows,
             lit: Some(match self.sel {
                 Sel::Enabled => 0,
                 Sel::Account => 1,
+                Sel::Cache => 2,
             }),
-            status: status_lines(account, status, online),
+            status: if self.sel == Sel::Cache || going {
+                cache_lines(caching, self.scope, picked)
+            } else {
+                status_lines(account, status, online)
+            },
             legend,
         }
     }

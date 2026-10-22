@@ -7,6 +7,7 @@
 //! typed on the keyboard screen.
 
 use omega_input::Action;
+use omega_store::Platform;
 use omega_ui::kit::bar::Hint;
 use omega_ui::kit::palette::Palette;
 use omega_ui::kit::panel::panel_face;
@@ -67,11 +68,12 @@ pub fn labels_hints(legend: &[LegendHint]) -> Vec<Hint<'static>> {
 impl App {
     pub(crate) fn labels_input(&mut self, action: Action) {
         let root = self.root.clone();
+        let scopes = self.scope_choices(|p| p != Platform::Ports);
         let Phase::Labels(screen) = &mut self.phase else {
             return;
         };
         let before = screen.clone();
-        let outcome = screen.input(&mut self.labels, action, root.as_deref());
+        let outcome = screen.input(&mut self.labels, action, root.as_deref(), &scopes);
         // the keyboard slides in over the list and away again; from the user name to the
         // password it stays where it is
         match (before.typing.is_some(), screen.typing.is_some()) {
@@ -86,11 +88,11 @@ impl App {
                 },
                 Dir::Back,
             ),
-            LabelsOutcome::Sync if self.online() => {
-                let wants = self.label_wants();
+            LabelsOutcome::Sync(scope) if self.online() => {
+                let wants = self.label_wants(scope);
                 self.labels.start(wants);
             }
-            LabelsOutcome::Sync | LabelsOutcome::Stay => {}
+            LabelsOutcome::Sync(_) | LabelsOutcome::Stay => {}
         }
     }
 
@@ -98,7 +100,10 @@ impl App {
     pub fn labels_view(&self) -> Option<ListView> {
         match &self.phase {
             Phase::Labels(screen) if screen.typing.is_none() => {
-                Some(screen.view(&self.labels, self.online()))
+                let picked = self
+                    .picked_cart()
+                    .map(|c| crate::label_sync::title(&c.stem));
+                Some(screen.view(&self.labels, self.online(), picked.as_deref()))
             }
             _ => None,
         }

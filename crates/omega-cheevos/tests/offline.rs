@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 
 use omega_cheevos::offline::param;
 use omega_cheevos::{
-    game, memory, Cheevos, Credentials, Login, Notice, Offline, Request, Response, Secret,
-    Transport,
+    dorequest_url, game, memory, Cached, Cheevos, Credentials, Login, Notice, Offline, Request,
+    Response, Secret, Transport,
 };
 use omega_retro::MemoryDescriptor;
 
@@ -18,6 +18,7 @@ const SESSION: &str =
     r#"{"Success":true,"HardcoreUnlocks":[],"Unlocks":[],"ServerNow":1700000000}"#;
 const AWARD: &str = r#"{"Success":true,"Score":15,"SoftcoreScore":10,"AchievementID":5501,"AchievementsRemaining":0}"#;
 const OK: &str = r#"{"Success":true}"#;
+const UNLOCKS: &str = r#"{"Success":true,"UserUnlocks":[5501],"GameID":1234,"HardcoreMode":false}"#;
 const PNG: &[u8] = b"\x89PNG badge";
 
 #[derive(Clone, Default)]
@@ -51,6 +52,10 @@ impl Transport for Fake {
             Some("achievementsets") => SETS,
             Some("startsession") => SESSION,
             Some("awardachievement") => AWARD,
+            Some("unlocks") if param(post, "h").as_deref() == Some("0") => UNLOCKS,
+            Some("unlocks") => {
+                r#"{"Success":true,"UserUnlocks":[],"GameID":1234,"HardcoreMode":true}"#
+            }
             _ => OK,
         };
         Response {
@@ -232,4 +237,89 @@ fn a_game_played_online_once_plays_offline_and_its_unlocks_are_sent_later() {
         "{last}"
     );
     assert_eq!(c.flush().sent, 0);
+}
+
+#[test]
+fn a_game_cached_ahead_plays_offline_with_the_accounts_unlocks_and_no_session_started() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = Fake::default();
+    fake.online.store(true, Ordering::Release);
+
+    // online: signed in once, then the game cached without ever being played
+    let c = start(&fake, dir.path());
+    assert!(matches!(
+        login(c, Secret::Password("hunter2".into())),
+        Login::Ok { .. }
+    ));
+    let online = fake.online.clone();
+    let offline = Offline::at(dir.path().to_path_buf(), move || {
+        online.load(Ordering::Acquire)
+    });
+    let url = dorequest_url(None);
+    assert_eq!(
+        offline.prefetch(&fake, &url, "Player", "ApiToken", HASH),
+        Cached::Game {
+            title: "Sample Game".into(),
+            achievements: 1
+        }
+    );
+    assert!(dir.path().join("badges/00234.png").exists());
+    assert!(
+        fake.sent_with("r=startsession").is_empty(),
+        "a session was started"
+    );
+    let asked = fake.sent_with("r=achievementsets");
+    assert_eq!(param(&asked[0], "m").as_deref(), Some(HASH));
+    assert_eq!(param(&asked[0], "t").as_deref(), Some("ApiToken"));
+
+    // offline: the token signs in from the card and the game shows what was earned before
+    fake.online.store(false, Ordering::Release);
+    let c = start(&fake, dir.path());
+    assert!(matches!(
+        login(c, Secret::Token("ApiToken".into())),
+        Login::Ok { .. }
+    ));
+    let mut ram = vec![0u8; 0x8000];
+    memory::refresh(
+        &iwram(&mut ram),
+        omega_retro::CoreMemory::default(),
+        game::GBA,
+    );
+    c.load_game(HASH);
+    let loaded = pump_until(c, |n| matches!(n, Notice::GameLoaded { .. }));
+    assert!(
+        matches!(
+            loaded,
+            Notice::GameLoaded {
+                unlocked: 1,
+                total: 1,
+                ..
+            }
+        ),
+        "{loaded:?}"
+    );
+    c.unload_game();
+    memory::clear();
+
+    // and with no network, caching says so
+    assert_eq!(
+        offline.prefetch(&fake, &url, "Player", "ApiToken", HASH),
+        Cached::Unreachable
+    );
+}
+
+#[test]
+fn the_api_address_is_the_cards_host_or_retroachievements() {
+    assert_eq!(
+        dorequest_url(None),
+        "https://retroachievements.org/dorequest.php"
+    );
+    assert_eq!(
+        dorequest_url(Some("localhost:8080")),
+        "http://localhost:8080/dorequest.php"
+    );
+    assert_eq!(
+        dorequest_url(Some("https://ra.example")),
+        "https://ra.example/dorequest.php"
+    );
 }

@@ -158,38 +158,46 @@ impl Want {
 /// `root` a disc counts as labelled when its game is. Ports are not ScreenScraper's: their
 /// labels are the player's own, in Labels/PORTS.
 pub fn wants<'a>(root: Option<&Path>, carts: impl IntoIterator<Item = &'a Cart>) -> Vec<Want> {
+    carts
+        .into_iter()
+        .flat_map(|cart| cart_wants(root, cart, false))
+        .collect()
+}
+
+/// What a sync looks up of `cart`: as [`wants`] does, or with `again`, the cart and every disc
+/// whether labelled or not, for a label fetched for one game to replace the one it has.
+pub fn cart_wants(root: Option<&Path>, cart: &Cart, again: bool) -> Vec<Want> {
+    if cart.platform == Platform::Ports {
+        return Vec::new();
+    }
+    if cart.platform != Platform::Ps1 {
+        return if again || cart.label.is_none() {
+            vec![Want::cart(cart)]
+        } else {
+            Vec::new()
+        };
+    }
+    let discs = ps1::discs(&cart.rom);
     let mut out = Vec::new();
-    for cart in carts {
-        if cart.platform == Platform::Ports {
+    for (i, disc) in discs.iter().enumerate() {
+        let own = match root {
+            Some(root) => ps1::disc_label(root, disc).is_file(),
+            None => cart.label.is_some(),
+        };
+        if !again && own && (i > 0 || cart.label.is_some()) {
             continue;
         }
-        if cart.platform != Platform::Ps1 {
-            if cart.label.is_none() {
-                out.push(Want::cart(cart));
-            }
-            continue;
-        }
-        let discs = ps1::discs(&cart.rom);
-        for (i, disc) in discs.iter().enumerate() {
-            let own = match root {
-                Some(root) => ps1::disc_label(root, disc).is_file(),
-                None => cart.label.is_some(),
-            };
-            if own && (i > 0 || cart.label.is_some()) {
-                continue;
-            }
-            out.push(Want {
-                rom: disc.clone(),
-                code: if i == 0 {
-                    cart.code.clone()
-                } else {
-                    String::new()
-                },
-                disc: i,
-                discs: discs.len(),
-                ..Want::cart(cart)
-            });
-        }
+        out.push(Want {
+            rom: disc.clone(),
+            code: if i == 0 {
+                cart.code.clone()
+            } else {
+                String::new()
+            },
+            disc: i,
+            discs: discs.len(),
+            ..Want::cart(cart)
+        });
     }
     out
 }
@@ -558,11 +566,19 @@ pub struct Media {
 }
 
 /// What ScreenScraper knows of a game it found.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Found {
     pub medias: Vec<Media>,
     /// Which disc of its game the file asked about is, from 1, when the reply says.
     pub disc: Option<u64>,
+    /// ScreenScraper's number for the game.
+    pub id: String,
+    /// The game's names, one per region it was sold in.
+    pub names: Vec<String>,
+    /// The CRC and serial of the ROM it matched, when it matched one: a ROM it does not know
+    /// is matched to a game by its file's name, which is a guess.
+    pub crc: Option<String>,
+    pub serial: Option<String>,
 }
 
 /// Whose credentials ScreenScraper turned away.
@@ -654,12 +670,40 @@ pub fn read_reply(status: u16, body: &[u8]) -> (Reply, Option<Quota>) {
             })
         })
         .collect();
-    let disc = game
-        .get("rom")
+    let rom = game.get("rom");
+    let disc = rom
         .and_then(|r| r.get("romnumsupport"))
         .and_then(Json::count)
         .filter(|n| *n >= 1);
-    (Reply::Game(Found { medias, disc }), quota)
+    let rom_text = |key: &str| {
+        rom.and_then(|r| r.get(key))
+            .and_then(Json::text)
+            .filter(|t| !t.is_empty())
+            .map(str::to_string)
+    };
+    let mut names: Vec<String> = game
+        .get("noms")
+        .map(Json::list)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|n| n.get("text").and_then(Json::text))
+        .chain(game.get("nom").and_then(Json::text))
+        .map(str::to_string)
+        .collect();
+    names.dedup();
+    let found = Found {
+        medias,
+        disc,
+        id: game
+            .get("id")
+            .and_then(Json::text)
+            .unwrap_or_default()
+            .to_string(),
+        names,
+        crc: rom_text("romcrc"),
+        serial: rom_text("romserial"),
+    };
+    (Reply::Game(found), quota)
 }
 
 /// The scan of the cart's own label, from the first of `regions` that has one, else from
@@ -706,6 +750,205 @@ pub fn pick_media<'a>(found: &'a Found, want: &Want) -> Option<&'a Media> {
     label_kinds(want.platform)
         .iter()
         .find_map(|kind| pick(&found.medias, |m| m.kind == *kind && own_disc(m), &regions))
+}
+
+/// Why a game ScreenScraper found is taken to be the cart asked about.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Matched {
+    /// The ROM it matched has the cart's CRC.
+    Crc,
+    /// The ROM it matched has the disc's or the cart's serial.
+    Serial,
+    /// Its name is the cart's, near enough.
+    Name,
+    /// The reply names no game to check it by.
+    Unnamed,
+}
+
+impl Matched {
+    fn said(self) -> &'static str {
+        match self {
+            Matched::Crc => "crc",
+            Matched::Serial => "serial",
+            Matched::Name => "name",
+            Matched::Unnamed => "unchecked",
+        }
+    }
+}
+
+/// Whether `found`, the reply to `rom`, is `want`'s game: by the CRC or serial of the ROM it
+/// matched, else by its name, ScreenScraper matching an unknown ROM to whatever game its file's
+/// name is nearest. Nothing when it is some other game.
+pub fn matched(found: &Found, want: &Want, rom: &Lookup) -> Option<Matched> {
+    let crc_said = rom.crc.map(|c| format!("{c:08X}"));
+    if crc_said.is_some_and(|c| {
+        found
+            .crc
+            .as_ref()
+            .is_some_and(|f| f.eq_ignore_ascii_case(&c))
+    }) {
+        return Some(Matched::Crc);
+    }
+    let alnum = |s: &str| -> String {
+        s.chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|c| c.to_ascii_uppercase())
+            .collect()
+    };
+    let serial = rom.serial.as_deref().map(alnum).filter(|s| !s.is_empty());
+    if let (Some(ours), Some(theirs)) = (serial, found.serial.as_deref().map(alnum)) {
+        if theirs.contains(&ours) {
+            return Some(Matched::Serial);
+        }
+    }
+    if found.names.is_empty() {
+        return Some(Matched::Unnamed);
+    }
+    let ours = title(&want.stem);
+    found
+        .names
+        .iter()
+        .any(|name| same_title(&ours, name))
+        .then_some(Matched::Name)
+}
+
+/// Whether two names are one game's: the same numbers in them, and the words of one all in the
+/// other (two words or more) or most of their words shared. Tags, accents, case, punctuation,
+/// articles and a leading release number (`1234 - `) do not count, and roman numerals are
+/// numbers.
+pub fn same_title(a: &str, b: &str) -> bool {
+    let (a, b) = (title_words(a), title_words(b));
+    if a.is_empty() || b.is_empty() {
+        return false;
+    }
+    let numbers = |w: &[String]| -> Vec<String> {
+        let mut n: Vec<String> = w
+            .iter()
+            .filter(|w| w.chars().all(|c| c.is_ascii_digit()))
+            .cloned()
+            .collect();
+        n.sort();
+        n.dedup();
+        n
+    };
+    if numbers(&a) != numbers(&b) {
+        return false;
+    }
+    let shared = a.iter().filter(|w| b.contains(w)).count();
+    let (small, large) = if a.len() <= b.len() {
+        (&a, &b)
+    } else {
+        (&b, &a)
+    };
+    let all = a.len() + b.len() - shared;
+    (small.len() >= 2 && small.iter().all(|w| large.contains(w))) || shared * 2 > all
+}
+
+fn title_words(name: &str) -> Vec<String> {
+    let mut plain = String::new();
+    let mut depth = 0usize;
+    for c in name.chars() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            _ if depth > 0 => {}
+            _ => plain.extend(fold(c).to_lowercase()),
+        }
+    }
+    // a release number in front, as a DS collection names its files
+    let plain = match plain.split_once(" - ") {
+        Some((n, rest)) if !n.trim().is_empty() && n.trim().chars().all(|c| c.is_ascii_digit()) => {
+            rest.to_string()
+        }
+        _ => plain,
+    };
+    let mut words: Vec<String> = Vec::new();
+    for word in plain.split(|c: char| !c.is_alphanumeric()) {
+        let word = match word {
+            "" | "the" | "a" | "an" | "of" | "and" | "le" | "la" | "les" | "el" | "der" | "die"
+            | "das" => continue,
+            "ii" => "2".to_string(),
+            "iii" => "3".to_string(),
+            "iv" => "4".to_string(),
+            "v" => "5".to_string(),
+            "vi" => "6".to_string(),
+            "vii" => "7".to_string(),
+            "viii" => "8".to_string(),
+            "ix" => "9".to_string(),
+            "x" => "10".to_string(),
+            w if w.chars().all(|c| c.is_ascii_digit()) => {
+                let n = w.trim_start_matches('0');
+                if n.is_empty() { "0" } else { n }.to_string()
+            }
+            w => w.to_string(),
+        };
+        if !words.contains(&word) {
+            words.push(word);
+        }
+    }
+    words
+}
+
+/// A letter without its accent, for the accented letters titles use.
+fn fold(c: char) -> char {
+    match c {
+        'á' | 'à' | 'â' | 'ä' | 'ã' | 'å' | 'Á' | 'À' | 'Â' | 'Ä' | 'Ã' | 'Å' => 'a',
+        'é' | 'è' | 'ê' | 'ë' | 'É' | 'È' | 'Ê' | 'Ë' => 'e',
+        'í' | 'ì' | 'î' | 'ï' | 'Í' | 'Ì' | 'Î' | 'Ï' => 'i',
+        'ó' | 'ò' | 'ô' | 'ö' | 'õ' | 'Ó' | 'Ò' | 'Ô' | 'Ö' | 'Õ' => 'o',
+        'ú' | 'ù' | 'û' | 'ü' | 'Ú' | 'Ù' | 'Û' | 'Ü' => 'u',
+        'ñ' | 'Ñ' => 'n',
+        'ç' | 'Ç' => 'c',
+        '&' => ' ',
+        c => c,
+    }
+}
+
+/// Where a sync writes what it found for each cart, newest at the end.
+pub const LOG_FILE: &str = "Config/labels.log";
+/// The log is moved aside to `labels.log.1` once this big.
+const LOG_MAX: u64 = 256 * 1024;
+
+/// The sync's log, on the card: a line per cart, of what ScreenScraper answered and what was
+/// done with it. Writing it never stops a sync.
+struct Log(Option<std::fs::File>);
+
+impl Log {
+    fn open(root: &Path) -> Log {
+        let path = root.join(LOG_FILE);
+        if std::fs::metadata(&path).is_ok_and(|m| m.len() > LOG_MAX) {
+            let _ = std::fs::rename(&path, path.with_extension("log.1"));
+        }
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        Log(std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .ok())
+    }
+
+    fn line(&mut self, text: &str) {
+        if let Some(file) = &mut self.0 {
+            let _ = writeln!(file, "{text}");
+        }
+    }
+
+    fn cart(&mut self, want: &Want, what: &str) {
+        let system = format!("{:?}", want.platform).to_uppercase();
+        let file = want
+            .rom
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        self.line(&format!("{system:<5} {file} -> {what}"));
+    }
+}
+
+fn game_said(found: &Found) -> String {
+    let name = found.names.first().map(String::as_str).unwrap_or("?");
+    format!("#{} \"{name}\"", found.id)
 }
 
 /// How a sync went.
@@ -850,6 +1093,8 @@ pub fn sync(
         wants,
     } = *job;
     let mut tally = Tally::default();
+    let mut log = Log::open(root);
+    log.line(&format!("-- sync of {} carts", wants.len()));
     for (done, want) in wants.iter().enumerate() {
         if stop.load(Ordering::Relaxed) {
             break;
@@ -863,16 +1108,32 @@ pub fn sync(
         for rom in lookups(want) {
             let url = game_url(key, account, &rom);
             let Some(reply) = ask(http, &url, pause, news) else {
+                log.line("-- offline, sync stopped");
                 return news(LabelNews::Failed(SyncFail::Offline));
             };
             let unknown = reply == Reply::NotFound;
-            asked = Some(reply);
+            asked = Some((reply, rom));
             if !unknown {
                 break;
             }
         }
+        // a game found by a guess at the file's name that is not this cart's is no answer
+        let asked = match asked {
+            Some((Reply::Game(found), rom)) => match matched(&found, want, &rom) {
+                Some(by) => Some((Reply::Game(found), by)),
+                None => {
+                    log.cart(
+                        want,
+                        &format!("rejected {}, not this game", game_said(&found)),
+                    );
+                    tally.unknown += 1;
+                    continue;
+                }
+            },
+            other => other.map(|(reply, _)| (reply, Matched::Unnamed)),
+        };
         match asked {
-            Some(Reply::Game(found)) => {
+            Some((Reply::Game(found), by)) => {
                 let scan = pick_media(&found, want)
                     .and_then(|m| http.get(&media_url(&m.url, want.platform)))
                     .filter(|(status, body)| *status == 200 && is_png(body));
@@ -881,22 +1142,41 @@ pub fn sync(
                         .iter()
                         .all(|path| keep(path, &png).is_ok())
                 });
+                let game = format!("{} by {}", game_said(&found), by.said());
                 if kept {
+                    log.cart(want, &format!("saved {game}"));
                     tally.saved += 1;
                     news(LabelNews::Saved {
                         platform: want.platform,
                         stem: want.stem.clone(),
                     });
                 } else {
+                    log.cart(want, &format!("no label scan, {game}"));
                     tally.bare += 1;
                 }
             }
-            Some(Reply::NotFound | Reply::Other(_) | Reply::Busy) | None => tally.unknown += 1,
-            Some(Reply::Refused(who)) => return news(LabelNews::Failed(SyncFail::Refused(who))),
-            Some(Reply::Spent) => return news(LabelNews::Failed(SyncFail::Spent)),
-            Some(Reply::Down) => return news(LabelNews::Failed(SyncFail::Down)),
+            Some((Reply::NotFound | Reply::Other(_) | Reply::Busy, _)) | None => {
+                log.cart(want, "not on ScreenScraper");
+                tally.unknown += 1;
+            }
+            Some((Reply::Refused(who), _)) => {
+                log.line(&format!("-- login refused ({who:?}), sync stopped"));
+                return news(LabelNews::Failed(SyncFail::Refused(who)));
+            }
+            Some((Reply::Spent, _)) => {
+                log.line("-- today's lookups are spent, sync stopped");
+                return news(LabelNews::Failed(SyncFail::Spent));
+            }
+            Some((Reply::Down, _)) => {
+                log.line("-- ScreenScraper is down, sync stopped");
+                return news(LabelNews::Failed(SyncFail::Down));
+            }
         }
     }
+    log.line(&format!(
+        "-- done: {} saved, {} with no scan, {} not found",
+        tally.saved, tally.bare, tally.unknown
+    ));
     news(LabelNews::Finished(tally));
 }
 

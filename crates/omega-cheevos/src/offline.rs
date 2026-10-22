@@ -55,6 +55,28 @@ impl Unlock {
     }
 }
 
+/// What caching one game ahead of time did.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Cached {
+    /// Its achievements, the account's unlocks and the badges are on the card.
+    Game { title: String, achievements: usize },
+    /// RetroAchievements knows no game by its hash.
+    Unknown,
+    /// The server could not be reached.
+    Unreachable,
+    /// The server turned the account's token down.
+    Refused,
+}
+
+/// The server's address for the API, as rcheevos makes it of the card's `host`.
+pub fn dorequest_url(host: Option<&str>) -> String {
+    match host.map(str::trim).filter(|h| !h.is_empty()) {
+        None => "https://retroachievements.org/dorequest.php".into(),
+        Some(h) if h.contains("://") => format!("{h}/dorequest.php"),
+        Some(h) => format!("http://{h}/dorequest.php"),
+    }
+}
+
 /// What a round of sending the queue did.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Sent {
@@ -279,6 +301,95 @@ impl Offline {
         result
     }
 
+    /// Asks the server at `url` now, as `user` signed in with `token`, what a game with the
+    /// RetroAchievements `hash` would ask it once loaded, and keeps the answers and the badges
+    /// as playing it online would: its achievements, and the account's unlocks of them, kept as
+    /// the start of a session so offline they show as earned. No session is started, so the
+    /// account's recently played games are left alone.
+    pub fn prefetch(
+        &self,
+        inner: &dyn Transport,
+        url: &str,
+        user: &str,
+        token: &str,
+        hash: &str,
+    ) -> Cached {
+        let ask = |fields: &[(&str, &str)]| {
+            let mut post = format!("r={}&u={}&t={}", fields[0].1, encode(user), encode(token));
+            for (k, v) in &fields[1..] {
+                post += &format!("&{k}={}", encode(v));
+            }
+            inner.send(&Request {
+                url: url.to_string(),
+                post: Some(post),
+                content_type: Some(URLENCODED.into()),
+            })
+        };
+        let sets = ask(&[("r", "achievementsets"), ("m", hash)]);
+        if sets.status == RETRYABLE_CLIENT_ERROR || sets.status >= 500 {
+            return Cached::Unreachable;
+        }
+        if sets.status == 401 || sets.status == 403 {
+            return Cached::Refused;
+        }
+        if !ok(&sets) {
+            return Cached::Unknown;
+        }
+        let body = String::from_utf8_lossy(&sets.body).into_owned();
+        let game = field_num(&body, "GameId").filter(|&g| g > 0);
+        self.write(
+            &self
+                .dir
+                .join(format!("achievementsets-{}.json", safe(hash))),
+            &sets.body,
+        );
+        let Some(game) = game else {
+            return Cached::Unknown;
+        };
+        let game = game.to_string();
+        // the account's unlocks, softcore and hardcore; a server that will not say leaves the
+        // session to be started online, or offline with none
+        let mut unlocks = Vec::new();
+        for hardcore in ["0", "1"] {
+            let got = ask(&[("r", "unlocks"), ("g", &game), ("h", hardcore)]);
+            match got.status {
+                RETRYABLE_CLIENT_ERROR => return Cached::Unreachable,
+                401 | 403 => return Cached::Refused,
+                _ if ok(&got) => {
+                    unlocks.push(numbers(&String::from_utf8_lossy(&got.body), "UserUnlocks"))
+                }
+                _ => break,
+            }
+        }
+        if let [soft, hard] = &unlocks[..] {
+            let when = now();
+            let list = |ids: &[u32]| -> String {
+                ids.iter()
+                    .map(|id| format!(r#"{{"ID":{id},"When":{when}}}"#))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            };
+            let session = format!(
+                r#"{{"Success":true,"Unlocks":[{}],"HardcoreUnlocks":[{}],"ServerNow":{when}}}"#,
+                list(soft),
+                list(hard)
+            );
+            let key = format!("session-{}-{game}", safe(&user.to_lowercase()));
+            self.write(&self.dir.join(format!("{key}.json")), session.as_bytes());
+        }
+        for url in badge_urls(&body) {
+            if let Some(path) = self.badge_path(&url).filter(|p| !p.exists()) {
+                if let Some(png) = inner.fetch(&url) {
+                    self.write(&path, &png);
+                }
+            }
+        }
+        Cached::Game {
+            title: field_str(&body, "Title").unwrap_or_default(),
+            achievements: all_str(&body, "MemAddr").len(),
+        }
+    }
+
     fn pass(&self, inner: &Arc<dyn Transport>, request: &Request) -> Response {
         if self.online() {
             inner.send(request)
@@ -314,15 +425,7 @@ impl Offline {
     /// Fetches, one at a time and away from the server's thread, the badges of a game's
     /// achievements not on the card yet, so an unlock earned offline shows its own.
     fn fetch_badges(self: &Arc<Self>, inner: &Arc<dyn Transport>, body: &[u8]) {
-        let body = String::from_utf8_lossy(body);
-        let mut urls: Vec<String> = all_str(&body, "BadgeURL");
-        if urls.is_empty() {
-            urls = all_str(&body, "BadgeName")
-                .into_iter()
-                .map(|n| format!("https://media.retroachievements.org/Badge/{n}.png"))
-                .collect();
-        }
-        urls.extend(all_str(&body, "ImageIconUrl"));
+        let mut urls = badge_urls(&String::from_utf8_lossy(body));
         let mut fetching = self.fetching.lock().unwrap();
         urls.retain(|u| {
             self.badge_path(u).is_some_and(|p| !p.exists()) && fetching.insert(u.clone())
@@ -403,6 +506,46 @@ impl Offline {
         }
         self.queued.store(!queue.is_empty(), Ordering::Release);
     }
+}
+
+/// The badges of a game's achievements and its icon, as an achievement set answer names them.
+fn badge_urls(body: &str) -> Vec<String> {
+    let mut urls: Vec<String> = all_str(body, "BadgeURL");
+    if urls.is_empty() {
+        urls = all_str(body, "BadgeName")
+            .into_iter()
+            .map(|n| format!("https://media.retroachievements.org/Badge/{n}.png"))
+            .collect();
+    }
+    urls.extend(all_str(body, "ImageIconUrl"));
+    urls
+}
+
+/// A form value, percent-encoded.
+fn encode(v: &str) -> String {
+    v.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+/// The numbers in the array `"key": [..]` of `json`.
+fn numbers(json: &str, key: &str) -> Vec<u32> {
+    let Some(at) = value_at(json, key) else {
+        return Vec::new();
+    };
+    let Some(rest) = json[at..].strip_prefix('[') else {
+        return Vec::new();
+    };
+    let end = rest.find(']').unwrap_or(rest.len());
+    rest[..end]
+        .split(',')
+        .filter_map(|n| n.trim().parse().ok())
+        .collect()
 }
 
 fn login_key(user: &str) -> String {

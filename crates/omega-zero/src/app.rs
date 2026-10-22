@@ -39,6 +39,7 @@ use crate::link_start::{link_port, LinkFail, LinkProgress, LinkStarter, LinkStep
 use crate::nav::{even, offsets, Dir, End, Offsets, Slide, SLIDE_MS};
 use crate::opening::Opening;
 use crate::persist::{self, Snapshot};
+use crate::scope::Scope;
 use crate::screens::bar::BarFaces;
 use crate::screens::clock::clock_screen;
 use crate::screens::info::InfoScreen;
@@ -1271,6 +1272,7 @@ impl App {
                 Action::Polaroids => self.open_polaroids(),
                 Action::SaveState => self.save_state(),
                 Action::LoadState => self.load_newest(),
+                Action::Screenshot => self.screenshot(),
                 Action::RewindStart if !self.may_rewind() => self.refuse(),
                 Action::FfStart if !self.may_fast_forward() => self.refuse(),
                 _ => {}
@@ -1383,9 +1385,34 @@ impl App {
         self.wifi.status().joined()
     }
 
-    /// The carts with no label, and the PlayStation discs with none, for a sync to look up.
-    pub(crate) fn label_wants(&self) -> Vec<Want> {
-        crate::label_sync::wants(self.root.as_deref(), self.carts())
+    /// What a sync looks up in `scope`: the carts with no label, and the PlayStation discs with
+    /// none; the picked cart's label, and every one of its discs', again.
+    pub(crate) fn label_wants(&self, scope: Scope) -> Vec<Want> {
+        let root = self.root.as_deref();
+        match scope {
+            Scope::Game => self
+                .picked_cart()
+                .map(|c| crate::label_sync::cart_wants(root, c, true))
+                .unwrap_or_default(),
+            _ => crate::label_sync::wants(root, self.carts_in(scope)),
+        }
+    }
+
+    /// The cart picked on the shelf in view.
+    pub(crate) fn picked_cart(&self) -> Option<&Cart> {
+        self.shelf().carts.get(self.shelf().index)
+    }
+
+    /// The carts in `scope`.
+    pub(crate) fn carts_in(&self, scope: Scope) -> Vec<&Cart> {
+        let picked = self.picked_cart();
+        self.carts().filter(|c| scope.holds(c, picked)).collect()
+    }
+
+    /// The scopes a fetch or a caching can go through, for carts of the platforms `takes`.
+    pub(crate) fn scope_choices(&self, takes: impl Fn(Platform) -> bool) -> Vec<Scope> {
+        let shelves = self.shelves.iter().map(|(p, s)| (*p, s.carts.as_slice()));
+        crate::scope::choices(shelves, self.picked_cart(), takes)
     }
 
     /// Puts each label a sync saved on its cart, for the frontend to redraw the cart with.
@@ -3152,6 +3179,29 @@ impl App {
         self.hud.toast(Toast::StateSaved, self.now());
     }
 
+    /// Keeps the game's picture as it is now in Screenshots/<system>/<cart>_<date>.png, the
+    /// folder DSperate keeps the DS's in too.
+    fn screenshot(&mut self) {
+        let (Some(root), Some(snapshot), Some(cart)) =
+            (self.root.as_deref(), &self.snapshot, self.seated_cart())
+        else {
+            return;
+        };
+        let path = screenshot_path(root, cart.platform, &cart.stem, self.wall_secs());
+        let Some(png) = snapshot.thumb() else {
+            eprintln!("omega-zero: screenshot: the core gave up no picture");
+            return;
+        };
+        let saved = path
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|_| omega_store::atomic_write(&path, &png));
+        match saved {
+            Ok(()) => self.hud.toast(Toast::Screenshot, self.now()),
+            Err(e) => eprintln!("omega-zero: screenshot: {}: {e}", path.display()),
+        }
+    }
+
     /// What shows over the screen for a moment or while it lasts: the gauge, the toast and the
     /// badge in the corner.
     pub fn hud(&self) -> &Hud {
@@ -3241,6 +3291,21 @@ fn system_secs() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+/// Where a screenshot of the cart `stem` of `platform` taken at `now` (local seconds) goes:
+/// Screenshots/<system>/<stem>_<date>.png, a number after the date when one was already taken
+/// that second.
+pub fn screenshot_path(root: &Path, platform: Platform, stem: &str, now: i64) -> PathBuf {
+    let dir = root.join("Screenshots").join(platform.dir_name());
+    let stamp = format_stamp(now);
+    let mut path = dir.join(format!("{stem}_{stamp}.png"));
+    let mut n = 2;
+    while path.exists() {
+        path = dir.join(format!("{stem}_{stamp}_{n}.png"));
+        n += 1;
+    }
+    path
 }
 
 fn free_stamp(ring: &StateRing, now: i64) -> String {

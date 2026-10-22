@@ -90,6 +90,7 @@ fn the_banner_says_what_happened_and_never_what_is_on_screen() {
             Toast::ColourOff,
             Toast::OneDisc,
             Toast::Disc(1),
+            Toast::Screenshot,
         ],
         "a banner was added or dropped"
     );

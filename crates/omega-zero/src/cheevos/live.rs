@@ -6,7 +6,8 @@ use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use omega_cheevos::{
-    config, game, memory, Cheevos, Credentials, Http, Login, Notice, Offline, Secret,
+    config, dorequest_url, game, memory, Cached, Cheevos, Credentials, Http, Login, Notice,
+    Offline, Secret,
 };
 use omega_gfx::{Compositor, Draw, TexId};
 use omega_retro::RetroCore;
@@ -40,6 +41,11 @@ pub enum Status {
 struct Live {
     cheevos: &'static Cheevos,
     root: PathBuf,
+    /// The server's API address, for caching games ahead of time.
+    url: String,
+    offline: Arc<Offline>,
+    caching: Mutex<Caching>,
+    stop_caching: AtomicBool,
     faces: Mutex<Queue>,
     tickets: AtomicU64,
     current: AtomicU64,
@@ -53,6 +59,48 @@ struct Live {
 }
 
 static LIVE: OnceLock<Live> = OnceLock::new();
+
+/// How caching games for offline play stands, as Settings shows it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum Caching {
+    #[default]
+    Idle,
+    Working {
+        done: usize,
+        total: usize,
+        title: String,
+    },
+    Done(CacheTally),
+    Failed(CacheFail),
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CacheTally {
+    /// Games whose achievements are on the card now.
+    pub cached: usize,
+    /// Games RetroAchievements has no set for, or none of whose files could be hashed.
+    pub unknown: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CacheFail {
+    /// No account signed in with a token.
+    SignedOut,
+    Offline,
+    Refused,
+}
+
+/// A game to cache: its shelf, the files RetroAchievements hashes (each disc of a PlayStation
+/// game, which has a hash of its own), and the name shown while it is cached.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CacheGame {
+    pub platform: Platform,
+    pub files: Vec<PathBuf>,
+    pub title: String,
+}
+
+/// Where caching writes a line per game, beside the answers it keeps.
+pub const CACHE_LOG: &str = "Config/cheevos/cache.log";
 
 /// Whether Wi-Fi has a network joined, as the app saw it on its last frame.
 static ONLINE: AtomicBool = AtomicBool::new(false);
@@ -82,11 +130,20 @@ pub fn start(root: &Path) {
         return;
     }
     let host = omega_store::ini::value(root, omega_cheevos::CHEEVOS_FILE, "host");
-    let offline = Offline::new(root, online);
-    let cheevos = Cheevos::start_with(host.as_deref(), |ua| Box::new(Http::new(ua)), Some(offline));
+    // the client and the caching share what is kept on the card
+    let offline = Arc::new(Offline::new(root, online));
+    let cheevos = Cheevos::start_shared(
+        host.as_deref(),
+        |ua| Box::new(Http::new(ua)),
+        Some(offline.clone()),
+    );
     let live = Live {
         cheevos,
         root: root.to_path_buf(),
+        url: dorequest_url(host.as_deref()),
+        offline,
+        caching: Mutex::new(Caching::Idle),
+        stop_caching: AtomicBool::new(false),
         faces: Mutex::new(Queue::default()),
         tickets: AtomicU64::new(0),
         current: AtomicU64::new(0),
@@ -228,6 +285,153 @@ fn sign_in() {
                     }
                 }
             }
+        }
+    }
+}
+
+pub fn caching() -> Caching {
+    LIVE.get()
+        .map(|l| l.caching.lock().unwrap().clone())
+        .unwrap_or_default()
+}
+
+pub fn is_caching() -> bool {
+    matches!(caching(), Caching::Working { .. })
+}
+
+pub fn stop_caching() {
+    if let Some(live) = LIVE.get() {
+        live.stop_caching.store(true, Ordering::Release);
+    }
+}
+
+/// Keeps on the card, one game after another on a thread of its own, what playing each of
+/// `games` online would fetch, for them to be played offline with their achievements.
+pub fn cache_games(games: Vec<CacheGame>) {
+    let Some(live) = LIVE.get() else { return };
+    if is_caching() {
+        return;
+    }
+    let token = match Credentials::read(&live.root) {
+        Some(Credentials {
+            username,
+            secret: Secret::Token(token),
+            ..
+        }) if live.cheevos.logged_in() => Some((username, token)),
+        _ => None,
+    };
+    let Some((user, token)) = token else {
+        *live.caching.lock().unwrap() = Caching::Failed(CacheFail::SignedOut);
+        return;
+    };
+    if !online() {
+        *live.caching.lock().unwrap() = Caching::Failed(CacheFail::Offline);
+        return;
+    }
+    if games.is_empty() {
+        *live.caching.lock().unwrap() = Caching::Done(CacheTally::default());
+        return;
+    }
+    live.stop_caching.store(false, Ordering::Release);
+    *live.caching.lock().unwrap() = Caching::Working {
+        done: 0,
+        total: games.len(),
+        title: games[0].title.clone(),
+    };
+    spawn("omega-cheevos-cache", move || {
+        let state = cache(live, &games, &user, &token);
+        *live.caching.lock().unwrap() = state;
+    });
+}
+
+fn cache(live: &Live, games: &[CacheGame], user: &str, token: &str) -> Caching {
+    let mut log = CacheLog::open(&live.root);
+    log.line(&format!("-- caching {} games", games.len()));
+    let mut tally = CacheTally::default();
+    let transport = live.cheevos.transport();
+    for (done, game) in games.iter().enumerate() {
+        if live.stop_caching.load(Ordering::Acquire) {
+            log.line("-- stopped");
+            break;
+        }
+        *live.caching.lock().unwrap() = Caching::Working {
+            done,
+            total: games.len(),
+            title: game.title.clone(),
+        };
+        let system = game.platform.dir_name();
+        let mut known = false;
+        for file in &game.files {
+            let name = file
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let Some((_, hash)) = game::identify(game.platform, file) else {
+                log.line(&format!("{system:<5} {name} -> no hash"));
+                continue;
+            };
+            match live
+                .offline
+                .prefetch(transport, &live.url, user, token, &hash)
+            {
+                Cached::Game {
+                    title,
+                    achievements,
+                } => {
+                    known = true;
+                    log.line(&format!(
+                        "{system:<5} {name} -> cached \"{title}\", {achievements} achievements"
+                    ));
+                }
+                Cached::Unknown => {
+                    log.line(&format!("{system:<5} {name} -> unknown to RA ({hash})"))
+                }
+                Cached::Unreachable => {
+                    log.line("-- offline, stopped");
+                    return Caching::Failed(CacheFail::Offline);
+                }
+                Cached::Refused => {
+                    log.line("-- token refused, stopped");
+                    return Caching::Failed(CacheFail::Refused);
+                }
+            }
+        }
+        if known {
+            tally.cached += 1;
+        } else {
+            tally.unknown += 1;
+        }
+    }
+    log.line(&format!(
+        "-- done: {} cached, {} unknown",
+        tally.cached, tally.unknown
+    ));
+    Caching::Done(tally)
+}
+
+/// The caching's log, on the card; writing it never stops the caching.
+struct CacheLog(Option<std::fs::File>);
+
+impl CacheLog {
+    fn open(root: &Path) -> CacheLog {
+        let path = root.join(CACHE_LOG);
+        if std::fs::metadata(&path).is_ok_and(|m| m.len() > 256 * 1024) {
+            let _ = std::fs::rename(&path, path.with_extension("log.1"));
+        }
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path);
+        CacheLog(file.ok())
+    }
+
+    fn line(&mut self, text: &str) {
+        use std::io::Write;
+        if let Some(file) = &mut self.0 {
+            let _ = writeln!(file, "{text}");
         }
     }
 }
