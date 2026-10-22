@@ -1,6 +1,6 @@
 #!/bin/sh
 # Steps the panel's light up or down while an emulator of its own has the handheld (DSperate,
-# from SELECT+VOL), in the frontend's steps: brightness= in its state file, 1 to 9 here (0, which
+# from SELECT+UP/DOWN), in the frontend's steps: brightness= in its state file, 1 to 9 here (0, which
 # the frontend allows, is a dark panel nobody could step back from), 9 the light's whole range.
 # The step is written back, so the frontend comes back at it.
 SD="${OMEGA_ROOT:-/mnt/sdcard}"

@@ -147,6 +147,16 @@ extern "C" {
     pub fn omega_game_fields(client: *mut rc_client_t, out: *mut OmegaGame) -> c_int;
     pub fn omega_user_token(client: *const rc_client_t) -> *const c_char;
     pub fn omega_user_name(client: *const rc_client_t) -> *const c_char;
+    pub fn omega_remaining(client: *const rc_client_t) -> c_int;
+    pub fn omega_award_post(
+        username: *const c_char,
+        token: *const c_char,
+        achievement_id: u32,
+        game_hash: *const c_char,
+        seconds: u32,
+        out: *mut c_char,
+        cap: usize,
+    ) -> usize;
 }
 
 pub unsafe fn text(p: *const c_char) -> String {

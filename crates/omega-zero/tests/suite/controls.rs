@@ -252,7 +252,7 @@ fn a_ds_game_is_worked_as_its_own_emulator_binds_it_on_each_pad() {
             ("L2", "SWAP SCREENS"),
             ("MENU+R1", "FAST FORWARD"),
             ("VOL+ VOL-", "VOLUME"),
-            ("SELECT+VOL", "BRIGHTNESS"),
+            ("SELECT+▲▼", "BRIGHTNESS"),
         ] {
             assert!(lines.contains(&line), "{pad:?} has no {line:?}");
         }

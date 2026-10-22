@@ -26,6 +26,10 @@ pub enum Notice {
     },
     Offline,
     Online,
+    /// Unlocks earned offline that the server has now been told of.
+    Sent {
+        count: usize,
+    },
     ServerError {
         message: String,
     },

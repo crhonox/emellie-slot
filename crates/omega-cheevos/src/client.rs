@@ -8,6 +8,7 @@ use std::time::Duration;
 use crate::config::{Credentials, Secret};
 use crate::ffi::{self, rc_client_t};
 use crate::notice::{self, Event, Game, Notice};
+use crate::offline::{Offline, Sent};
 use crate::transport::{Request, Transport};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,6 +28,7 @@ pub struct Cheevos {
     client: *mut rc_client_t,
     jobs: Mutex<Sender<Job>>,
     transport: std::sync::Arc<dyn Transport>,
+    offline: Option<std::sync::Arc<Offline>>,
     notices: Mutex<VecDeque<Notice>>,
     arrived: Condvar,
     generation: AtomicU64,
@@ -57,6 +59,15 @@ impl Cheevos {
         host: Option<&str>,
         transport: impl FnOnce(&str) -> Box<dyn Transport>,
     ) -> &'static Cheevos {
+        Self::start_with(host, transport, None)
+    }
+
+    /// As `start`, with the server's answers kept by `offline` to play on without it.
+    pub fn start_with(
+        host: Option<&str>,
+        transport: impl FnOnce(&str) -> Box<dyn Transport>,
+        offline: Option<Offline>,
+    ) -> &'static Cheevos {
         let client = unsafe { ffi::rc_client_create(crate::memory::read_memory, server_call) };
         assert!(!client.is_null(), "rc_client_create failed");
         unsafe {
@@ -69,11 +80,13 @@ impl Cheevos {
             }
         }
         let transport: std::sync::Arc<dyn Transport> = transport(&user_agent(client)).into();
+        let offline = offline.map(std::sync::Arc::new);
         let (tx, rx) = channel::<Job>();
         let this: &'static Cheevos = Box::leak(Box::new(Cheevos {
             client,
             jobs: Mutex::new(tx),
             transport: transport.clone(),
+            offline: offline.clone(),
             notices: Mutex::new(VecDeque::new()),
             arrived: Condvar::new(),
             generation: AtomicU64::new(0),
@@ -82,12 +95,19 @@ impl Cheevos {
             pending: Mutex::new(None),
         }));
         unsafe { ffi::rc_client_set_userdata(client, this as *const Cheevos as *mut c_void) };
+        let remaining = move || {
+            let n = unsafe { ffi::omega_remaining(this.client) };
+            u32::try_from(n).ok()
+        };
         std::thread::Builder::new()
             .name("omega-cheevos-http".into())
             .stack_size(crate::THREAD_STACK)
             .spawn(move || {
                 for job in rx {
-                    let mut response = transport.send(&job.request);
+                    let mut response = match &offline {
+                        Some(o) => o.send(&transport, &job.request, &remaining),
+                        None => transport.send(&job.request),
+                    };
                     let len = response.body.len();
                     response.body.push(0);
                     unsafe {
@@ -107,6 +127,35 @@ impl Cheevos {
 
     pub fn transport(&self) -> &dyn Transport {
         &*self.transport
+    }
+
+    /// A badge, from the card when it was kept there.
+    pub fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+        match &self.offline {
+            Some(o) => o.fetch(&*self.transport, url),
+            None => self.transport.fetch(url),
+        }
+    }
+
+    /// Whether `credentials` can sign in with no network: a token the server took before.
+    pub fn signs_in_offline(&self, credentials: &Credentials) -> bool {
+        match (&self.offline, &credentials.secret) {
+            (Some(o), Secret::Token(token)) => o.knows(&credentials.username, token),
+            _ => false,
+        }
+    }
+
+    /// Whether unlocks earned offline are waiting to be sent.
+    pub fn queued(&self) -> bool {
+        self.offline.as_ref().is_some_and(|o| o.queued())
+    }
+
+    /// Sends the unlocks earned offline, on this thread.
+    pub fn flush(&self) -> Sent {
+        match &self.offline {
+            Some(o) => o.flush(&*self.transport),
+            None => Sent::default(),
+        }
     }
 
     pub fn login(&self, credentials: &Credentials, done: impl FnOnce(Login) + Send + 'static) {

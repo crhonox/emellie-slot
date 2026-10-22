@@ -6,11 +6,13 @@ pub mod config;
 pub mod game;
 pub mod memory;
 pub mod notice;
+pub mod offline;
 pub mod transport;
 
 pub use client::{Cheevos, Login};
 pub use config::{Credentials, Secret, CHEEVOS_FILE};
 pub use notice::Notice;
+pub use offline::{Offline, Sent};
 pub use transport::{Http, Request, Response, Transport};
 
 /// The stack each RetroAchievements thread is given, room for a TLS handshake and a disc's

@@ -2,8 +2,9 @@
 # Runs a DS game in DSperate, which launch_frontend.sh hands the handheld over to once omega-zero
 # has left. DSperate draws straight to fb0 through the mali-fbdev SDL2 beside it in dsperate/lib
 # (BaseOS's own SDL2 cannot reach the panel), keeps its own battery saves, states and resume,
-# and comes back here when MENU held, or MENU+SELECT, quits it. VOL+/VOL- are its volume, SELECT
-# with them the panel's light, which brightness.sh keeps in the frontend's steps.
+# and comes back here when MENU held, or MENU+SELECT, quits it. VOL+/VOL- are its volume, kept
+# in the frontend's state; SELECT with up or down the panel's light, which brightness.sh keeps in
+# the frontend's steps.
 SD="${OMEGA_ROOT:-/mnt/sdcard}"
 SYS="$SD/System"
 DIR="${AGS_DSPERATE_DIR:-$SYS/dsperate}"
@@ -12,6 +13,7 @@ CPU="${AGS_CPUFREQ:-/sys/devices/system/cpu/cpu0/cpufreq}"
 LOADER="${AGS_LOADER:-/lib/ld-linux-aarch64.so.1}"
 CONFIG_DIR="$SD/Config/dsperate"
 RUN="${AGS_RUN:-/run}"
+GPIO="${AGS_GPIO:-/sys/kernel/debug/gpio}"
 
 rom="$1"
 # held A on the shelf: started afresh, DSperate's own resume left where it is
@@ -74,11 +76,22 @@ export SDL_GAMECONTROLLERCONFIG="$(pad_map_positional "$layout")"
 governor="$(cat "$CPU/scaling_governor" 2>/dev/null)"
 echo performance > "$CPU/scaling_governor" 2>/dev/null
 
-# The frontend's volume, the speaker's, as DSperate's own to start from: it steps it by itself
+# The frontend's volume, the headphones' with them plugged in, the speaker's otherwise, as
+# DSperate's own to start from: it steps it by itself, in the frontend's steps and on its curve,
+# and the level it is left at goes back into the state, so the frontend comes back at it
 state="$SD/Config/emellie-slot.state"
-volume="$(sed -n 's/^volume=//p' "$state" 2>/dev/null)"
+vkey=volume mkey=muted
+phones="$(sed -n '/|Headphone detection/{s/.*)//p;q;}' "$GPIO" 2>/dev/null | awk '{print $2}')"
+if [ "$phones" = hi ] && grep -q '^volume_hp=' "$state" 2>/dev/null; then
+	vkey=volume_hp mkey=muted_hp
+fi
+volume="$(sed -n "s/^$vkey=//p" "$state" 2>/dev/null)"
 case "$volume" in '' | *[!0-9]*) volume=60 ;; esac
-[ "$(sed -n 's/^muted=//p' "$state" 2>/dev/null)" = true ] && volume=0
+case "$(sed -n "s/^$mkey=//p" "$state" 2>/dev/null)" in 1 | true) volume=0 ;; esac
+volume_out="$RUN/omega-ds-volume"
+rm -f "$volume_out"
+export DS_VOLUME_OUT="$volume_out"
+export DS_VOLUME_STEP=5
 # VOL+/VOL- come from an input node of their own, which SDL opens no controller for: DSperate
 # reads them itself (cores/dsperate/emellie-hotkeys.patch), and SELECT with them runs this
 export DS_VOLUME_KEYS=1
@@ -93,6 +106,19 @@ cd "$DIR" || exit 2
 $LOADER "$DIR/dsperate" "$rom" --fullscreen --config "$CONFIG" $resume \
 	--volume "$volume" --set padhotkeys.quit_hold_ms=1000
 status=$?
+
+# the level DSperate was left at, unmuted unless it is none, back in the frontend's state
+left="$(cat "$volume_out" 2>/dev/null)"
+rm -f "$volume_out"
+case "$left" in '' | *[!0-9]*) left= ;; esac
+if [ -n "$left" ] && [ "$left" != "$volume" ] && [ -f "$state" ]; then
+	awk -v vk="$vkey" -v mk="$mkey" -v level="$left" '
+		$0 ~ "^" vk "=" { print vk "=" level; v = 1; next }
+		$0 ~ "^" mk "=" { print mk "=0"; m = 1; next }
+		{ print }
+		END { if (!v) print vk "=" level; if (!m) print mk "=0" }
+	' "$state" > "$state.tmp" && mv -f "$state.tmp" "$state"
+fi
 
 [ -n "$governor" ] && echo "$governor" > "$CPU/scaling_governor" 2>/dev/null
 exit "$status"

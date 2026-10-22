@@ -5,7 +5,9 @@ use std::sync::mpsc::channel;
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use omega_cheevos::{config, game, memory, Cheevos, Credentials, Http, Login, Notice, Secret};
+use omega_cheevos::{
+    config, game, memory, Cheevos, Credentials, Http, Login, Notice, Offline, Secret,
+};
 use omega_gfx::{Compositor, Draw, TexId};
 use omega_retro::RetroCore;
 use omega_store::Platform;
@@ -15,6 +17,7 @@ use super::overlay::{self, Face, Queue};
 
 const LOGIN_BACKOFF: [u64; 4] = [15, 30, 60, 300];
 const LOAD_RETRY: Duration = Duration::from_secs(5);
+const SEND_RETRY: [u64; 4] = [5, 30, 60, 300];
 const IDLE_AFTER: Duration = Duration::from_millis(250);
 const IDLE_EVERY: Duration = Duration::from_secs(1);
 
@@ -79,7 +82,8 @@ pub fn start(root: &Path) {
         return;
     }
     let host = omega_store::ini::value(root, omega_cheevos::CHEEVOS_FILE, "host");
-    let cheevos = Cheevos::start(host.as_deref(), |ua| Box::new(Http::new(ua)));
+    let offline = Offline::new(root, online);
+    let cheevos = Cheevos::start_with(host.as_deref(), |ua| Box::new(Http::new(ua)), Some(offline));
     let live = Live {
         cheevos,
         root: root.to_path_buf(),
@@ -98,6 +102,7 @@ pub fn start(root: &Path) {
     account_changed(root);
     spawn("omega-cheevos-login", sign_in);
     spawn("omega-cheevos-load", retry_loads);
+    spawn("omega-cheevos-send", send_queued);
     spawn("omega-cheevos-face", draw_faces);
 }
 
@@ -166,7 +171,9 @@ fn sign_in() {
         let current = || live.wanted.lock().unwrap().1 == round;
         let mut failures = 0;
         while current() {
-            while !online() && current() {
+            // a token the server took before signs in from the card, unlocks kept to send later
+            let offline = live.cheevos.signs_in_offline(&credentials);
+            while !online() && !offline && current() {
                 std::thread::sleep(Duration::from_secs(1));
             }
             if !current() {
@@ -189,7 +196,11 @@ fn sign_in() {
                         }
                     }
                     set_status(live, round, Status::SignedIn(user.clone()));
-                    live.cheevos.push(Notice::LoggedIn { user });
+                    live.cheevos.push(if online() {
+                        Notice::LoggedIn { user }
+                    } else {
+                        Notice::Offline
+                    });
                     break;
                 }
                 Ok(Login::Rejected {
@@ -224,10 +235,38 @@ fn sign_in() {
 fn retry_loads() {
     let Some(live) = LIVE.get() else { return };
     loop {
-        if live.cheevos.logged_in() && live.cheevos.wants_load() {
+        if online() && live.cheevos.logged_in() && live.cheevos.wants_load() {
             live.cheevos.retry_load();
         }
         std::thread::sleep(LOAD_RETRY);
+    }
+}
+
+/// Sends the unlocks earned offline once Wi-Fi is back, waiting longer each time the server
+/// can't be reached.
+fn send_queued() {
+    let Some(live) = LIVE.get() else { return };
+    let mut failures = 0;
+    loop {
+        let wait = if failures == 0 {
+            LOAD_RETRY.as_secs()
+        } else {
+            SEND_RETRY[failures.min(SEND_RETRY.len() - 1)]
+        };
+        std::thread::sleep(Duration::from_secs(wait));
+        if !(online() && live.cheevos.logged_in() && live.cheevos.queued()) {
+            failures = 0;
+            continue;
+        }
+        let sent = live.cheevos.flush();
+        if sent.sent > 0 {
+            eprintln!(
+                "omega-zero: cheevos: sent {} unlocks earned offline",
+                sent.sent
+            );
+            live.cheevos.push(Notice::Sent { count: sent.sent });
+        }
+        failures = if sent.left > 0 { failures + 1 } else { 0 };
     }
 }
 
@@ -239,7 +278,7 @@ fn draw_faces() {
         };
         let badge = notice
             .badge_url()
-            .and_then(|url| live.cheevos.transport().fetch(url))
+            .and_then(|url| live.cheevos.fetch(url))
             .and_then(|png| omega_cheevos::badge::decode(&png));
         let face = overlay::compose(&notice, badge.as_deref());
         live.faces.lock().unwrap().push(face);
@@ -281,15 +320,6 @@ pub fn loaded(platform: Platform, rom: &Path, resumed: bool) -> Guard {
         return Guard { ticket: None };
     };
     if game::console_for(platform, &[]).is_none() {
-        return Guard { ticket: None };
-    }
-    // without a network joined nothing is looked up: the game starts with no hash read off
-    // the card beside it
-    if !online() {
-        eprintln!(
-            "omega-zero: cheevos: offline, not checking {}",
-            rom.display()
-        );
         return Guard { ticket: None };
     }
     let ticket = live.tickets.fetch_add(1, Ordering::AcqRel) + 1;

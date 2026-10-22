@@ -94,7 +94,7 @@ impl ControlsView {
                 ("MENU+B", "MIC"),
                 ("MENU+X", "LID"),
                 ("VOL+ VOL-", "VOLUME"),
-                ("SELECT+VOL", "BRIGHTNESS"),
+                ("SELECT+▲▼", "BRIGHTNESS"),
             ]);
         } else if platform.game_owns_l2_r2() {
             game.extend([

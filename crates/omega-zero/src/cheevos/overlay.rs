@@ -114,6 +114,14 @@ pub fn lines(notice: &Notice) -> (String, String) {
             "RetroAchievements back online".into(),
             "Pending unlocks sent".into(),
         ),
+        Notice::Sent { count: 1 } => (
+            "RetroAchievements".into(),
+            "1 unlock earned offline sent".into(),
+        ),
+        Notice::Sent { count } => (
+            "RetroAchievements".into(),
+            format!("{count} unlocks earned offline sent"),
+        ),
         Notice::ServerError { message } => ("RetroAchievements error".into(), message.clone()),
     }
 }

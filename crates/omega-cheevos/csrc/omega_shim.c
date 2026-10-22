@@ -1,6 +1,8 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "rc_api_runtime.h"
 #include "rc_client.h"
 #include "rc_hash.h"
 #include "rc_libretro.h"
@@ -139,4 +141,43 @@ void omega_hash_init_cdreader(void) {
     rc_hash_init_default_cdreader();
     done = 1;
   }
+}
+
+/* How many of the loaded game's achievements are still locked, or -1 with no game loaded. */
+int omega_remaining(const rc_client_t* client) {
+  rc_client_user_game_summary_t summary;
+  const rc_client_game_t* game = rc_client_get_game_info(client);
+  if (!game || !game->id)
+    return -1;
+  rc_client_get_user_game_summary(client, &summary);
+  return summary.num_unlocked_achievements >= summary.num_core_achievements
+             ? 0
+             : (int)(summary.num_core_achievements - summary.num_unlocked_achievements);
+}
+
+/* The post data of a softcore unlock earned `seconds` ago, signed for that delay as rc_client
+ * signs a retried one; 0 when `out` is too small or the request can't be built. */
+size_t omega_award_post(const char* username, const char* token, uint32_t achievement_id, const char* game_hash,
+                        uint32_t seconds, char* out, size_t cap) {
+  rc_api_award_achievement_request_t params;
+  rc_api_request_t request;
+  size_t len = 0;
+  memset(&params, 0, sizeof(params));
+  params.username = username;
+  params.api_token = token;
+  params.achievement_id = achievement_id;
+  params.hardcore = 0;
+  params.game_hash = game_hash;
+  params.seconds_since_unlock = seconds;
+  if (rc_api_init_award_achievement_request(&request, &params) != RC_OK)
+    return 0;
+  if (request.post_data) {
+    len = strlen(request.post_data);
+    if (len < cap)
+      memcpy(out, request.post_data, len + 1);
+    else
+      len = 0;
+  }
+  rc_api_destroy_request(&request);
+  return len;
 }

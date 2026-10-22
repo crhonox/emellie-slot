@@ -143,6 +143,7 @@ cat > "$TMP/card/System/dsperate/dsperate" <<-'SH'
 		echo "rotate=${DS_ROTATE:-}"
 		echo "volkeys=${DS_VOLUME_KEYS:-}"
 		echo "poweroff=${DS_POWER_OFF:-} ${DS_POWER_HOLD_MS:-}"
+		echo "steps=${DS_VOLUME_STEP:-}"
 	} > "$TMP/dsperate.log"
 	exit 3
 SH
@@ -228,6 +229,39 @@ printf 'BASEOS_TARGET="rg28xx"\n' > "$TMP/release"
 TMP="$TMP" CPUDIR="$TMP/cpu" OMEGA_ROOT="$TMP/card" AGS_LOADER=sh AGS_CPUFREQ="$TMP/cpu" \
 	AGS_BASEOS_RELEASE="$TMP/release" sh "$TMP/card/System/nds.sh" "$rom" || true
 grep -qx 'rotate=270' "$TMP/dsperate.log" || fail "the RG28XX's panel was not turned"
+
+# SELECT with up or down is the light, VOL+/VOL- the volume, in the frontend's steps
+grep -qx 'brightness_up = dpup+back' "$cube" && grep -qx 'brightness_down = dpdown+back' "$cube" \
+	|| fail "SELECT with up or down is not the panel's light"
+grep -qx 'steps=5' "$TMP/dsperate.log" || fail "DSperate does not step the volume as the frontend does"
+
+# the volume: the headphones' with them in, and the level DSperate is left at kept in the state
+cat > "$TMP/card/System/dsperate/dsperate" <<-'SH'
+	#!/bin/sh
+	echo "args=$*" > "$TMP/dsperate.log"
+	[ -n "${LEAVE_AT:-}" ] && echo "$LEAVE_AT" > "$DS_VOLUME_OUT"
+	exit 0
+SH
+state="$TMP/card/Config/emellie-slot.state"
+printf 'brightness=5\nvolume=40\nvolume_hp=20\nmuted=0\nmuted_hp=1\nwifi=1\n' > "$state"
+printf ' 41 ) |Headphone detection  ) in  lo\n' > "$TMP/gpio"
+nds() {
+	TMP="$TMP" CPUDIR="$TMP/cpu" OMEGA_ROOT="$TMP/card" AGS_LOADER=sh AGS_CPUFREQ="$TMP/cpu" AGS_RUN="$TMP/run" \
+		AGS_GPIO="$TMP/gpio" AGS_BASEOS_RELEASE="$TMP/release" sh "$TMP/card/System/nds.sh" "$rom" || true
+}
+nds
+grep -q -- " --volume 40 " "$TMP/dsperate.log" || fail "DSperate did not start at the speaker's volume"
+cp "$state" "$TMP/state.before"
+cmp -s "$state" "$TMP/state.before" || fail "the state was touched with the volume left alone"
+LEAVE_AT=55 nds
+grep -qx 'volume=55' "$state" || fail "the volume DSperate was left at was not kept: [$(cat "$state")]"
+grep -qx 'wifi=1' "$state" && grep -qx 'volume_hp=20' "$state" || fail "the rest of the state was not kept"
+[ ! -f "$TMP/run/omega-ds-volume" ] || fail "DSperate's volume file was left behind"
+printf ' 41 ) |Headphone detection  ) in  hi\n' > "$TMP/gpio"
+LEAVE_AT=30 nds
+grep -q -- " --volume 0 " "$TMP/dsperate.log" || fail "muted headphones did not start DSperate silent"
+grep -qx 'volume_hp=30' "$state" && grep -qx 'muted_hp=0' "$state" && grep -qx 'volume=55' "$state" \
+	|| fail "the headphones' volume was not kept as theirs: [$(cat "$state")]"
 
 # a game that is not there runs nothing
 rm -f "$TMP/dsperate.log"

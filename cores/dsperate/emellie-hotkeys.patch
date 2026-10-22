@@ -17,6 +17,19 @@ diff --git a/configs/default.ini b/configs/default.ini
  
  [cheevos]
  # RetroAchievements, Casual mode (formerly Softcore). Hardcore is NOT supported!
+diff --git a/src/frontend/sdl/audio.cpp b/src/frontend/sdl/audio.cpp
+--- a/src/frontend/sdl/audio.cpp
++++ b/src/frontend/sdl/audio.cpp
+@@ -141,7 +141,8 @@ void Audio::push(NDS& nds, bool drop) {
+     s16* out = out_.data();
+     if (muted_) std::memset(out, 0, m * 4);
+     else if (volume_ != 100) {
+-      const int g = volume_ * 256 / 100;
++      // squared, as omega-zero's own gain, so a level sounds the same in both
++      const int g = volume_ * volume_ * 256 / 10000;
+       for (size_t i = 0; i < m * 2; ++i) out[i] = static_cast<s16>((out[i] * g) >> 8);
+     }
+     SDL_QueueAudio(dev_, out, static_cast<u32>(m * 4));
 diff --git a/src/frontend/sdl/input.cpp b/src/frontend/sdl/input.cpp
 --- a/src/frontend/sdl/input.cpp
 +++ b/src/frontend/sdl/input.cpp
@@ -291,7 +304,7 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
    apply_cli();
    const std::string bios9 = cfg.str("paths.bios9"), bios7 = cfg.str("paths.bios7");
    const std::string dsi_fw = cfg.str("paths.dsi_firmware");
-@@ -3207,11 +3269,38 @@ sdl_ready:
+@@ -3207,11 +3269,33 @@ sdl_ready:
    // for the ones started lazily.
    ds::place_current_thread(ds::ThreadRole::Emu);
    ds::place_foreign_threads();
@@ -302,12 +315,14 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
 +  const char* power_off_flag = std::getenv("DS_POWER_OFF");
 +  const char* power_hold_env = std::getenv("DS_POWER_HOLD_MS");
 +  const u32 power_hold_ms = power_hold_env && *power_hold_env ? static_cast<u32>(std::strtoul(power_hold_env, nullptr, 10)) : 2000;
++  const char* volume_step_env = std::getenv("DS_VOLUME_STEP");
++  const int volume_step = volume_step_env && *volume_step_env ? std::clamp(std::atoi(volume_step_env), 1, 100) : 10;
    while (!input.quit() && !g_signalled && (frame_limit == 0 || frames < static_cast<u64>(frame_limit))) {
      if (frames == 120) ds::place_foreign_threads();
      SDL_Event e;
      input.set_menu_open(menu.open());
      while (SDL_PollEvent(&e)) input.handle(e, display, dual_window ? &display2 : nullptr);
-+    // VOL steps the volume; with SELECT (SDL's back) held, the panel's light
++    // VOL steps the volume, DS_VOLUME_STEP at a time (SELECT with up or down is the panel's light)
 +    int vol_steps = volume_keys.take();
 +    if (power_off_flag && *power_off_flag && volume_keys.power_held(power_hold_ms)) {
 +      if (std::FILE* f = std::fopen(power_off_flag, "w")) std::fclose(f);
@@ -316,21 +331,14 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
 +    }
 +    for (int steps = vol_steps; steps != 0; steps += steps > 0 ? -1 : 1) {
 +      const bool up = steps > 0;
-+      if (input.pad_held(SDL_CONTROLLER_BUTTON_BACK)) {
-+        if (const char* cmd = std::getenv("DS_BRIGHTNESS"); cmd && *cmd) {
-+          const std::string run = std::string(cmd) + (up ? " up" : " down") + " >/dev/null 2>&1 &";
-+          if (std::system(run.c_str()) != 0) VLOG("brightness: %s failed\n", cmd);
-+        }
-+      } else {
-+        audio.set_volume(audio.volume() + (up ? 10 : -10));
-+        if (up) audio.set_muted(false);
-+        VLOG("volume %d%%\n", audio.volume());
-+      }
++      audio.set_volume(audio.volume() + (up ? volume_step : -volume_step));
++      if (up) audio.set_muted(false);
++      VLOG("volume %d%%\n", audio.volume());
 +    }
      for (ds::sdl::Action a : input.take_actions()) {
        using A = ds::sdl::Action;
        switch (a) {
-@@ -3230,6 +3319,13 @@ sdl_ready:
+@@ -3230,6 +3314,13 @@ sdl_ready:
        case A::VolumeUp: audio.set_volume(audio.volume() + 10); audio.set_muted(false); VLOG("volume %d%%\n", audio.volume()); break;
        case A::VolumeDown: audio.set_volume(audio.volume() - 10); VLOG("volume %d%%\n", audio.volume()); break;
        case A::Mute: audio.set_muted(!audio.muted()); VLOG("%s\n", audio.muted() ? "muted" : "unmuted"); break;
@@ -344,6 +352,16 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
        // Anything moving the screens while paused must recomposite the menu.
        case A::Fullscreen: display.toggle_fullscreen(); if (dual_window) display2.toggle_fullscreen(); menu_dirty = true; break;
        case A::LayoutNext: case A::LayoutPrev: {
+@@ -3931,6 +4022,9 @@ sdl_ready:
+   autosave_now();
+   flush_save();
+   discard_session_cache();
++  // The level the game was left at, 0 muted, for whoever ran DSperate to keep (DS_VOLUME_OUT, a file)
++  if (const char* out = std::getenv("DS_VOLUME_OUT"); out && *out)
++    if (std::FILE* f = std::fopen(out, "w")) { std::fprintf(f, "%d\n", audio.muted() ? 0 : audio.volume()); std::fclose(f); }
+   // Not after a DSiWare session: nothing a DSi title wrote belongs beside the DS firmware.
+   if (!fw_override.empty() && nds.firmware_override_dirty() && !nds.dsi) {
+     std::string err;
 diff --git a/tests/input_test.cpp b/tests/input_test.cpp
 --- a/tests/input_test.cpp
 +++ b/tests/input_test.cpp
@@ -356,7 +374,7 @@ diff --git a/tests/input_test.cpp b/tests/input_test.cpp
      T::pad(in, SDL_CONTROLLER_BUTTON_GUIDE, false);
      CHECK(in.take_actions().empty()); }                     // a DS button counts as a press too
    { Rig r; Input& in = r.set("hotkeys.modifier", "Left Ctrl").set("hotkeys.pause", "mod").go();
-@@ -531,6 +531,43 @@ void test_stick_dpad_moves_the_pen_under_the_chord() {
+@@ -531,6 +531,61 @@ void test_stick_dpad_moves_the_pen_under_the_chord() {
    in.update_stylus(); CHECK(in.stylus_x() == x1);
  }
  
@@ -397,11 +415,32 @@ diff --git a/tests/input_test.cpp b/tests/input_test.cpp
 +  in.update_stylus(); CHECK(in.stylus_x() == x1);
 +}
 +
++// SELECT with up or down is the panel's light, as on omega-zero's own systems:
++// "dpup+back" fires in either order and the d-pad press never reaches the game.
++void test_select_with_the_dpad_is_the_light() {
++  using SB = SDL_GameControllerButton;
++  Rig r; r.set("padhotkeys.modifier", "guide").set("padhotkeys.brightness_up", "dpup+back").set("padhotkeys.brightness_down", "dpdown+back");
++  Input& in = r.go();
++  CHECK(T::pad(in, SDL_CONTROLLER_BUTTON_BACK, true));
++  CHECK(T::pad(in, SDL_CONTROLLER_BUTTON_DPAD_UP, true));
++  CHECK((in.frame().buttons & (1u << B::BTN_UP)) == 0);
++  { const auto a = in.take_actions(); CHECK(a.size() == 1 && a[0] == Action::BrightnessUp); }
++  CHECK(T::pad(in, SDL_CONTROLLER_BUTTON_DPAD_UP, false));
++  T::tap_pad(in, static_cast<SB>(SDL_CONTROLLER_BUTTON_DPAD_DOWN));
++  { const auto a = in.take_actions(); CHECK(a.size() == 1 && a[0] == Action::BrightnessDown); }
++  CHECK(T::pad(in, SDL_CONTROLLER_BUTTON_BACK, false));
++  CHECK(T::pad(in, SDL_CONTROLLER_BUTTON_DPAD_UP, true));                  // alone, up is the game's
++  CHECK(in.take_actions().empty() && (in.frame().buttons & (1u << B::BTN_UP)) != 0);
++}
++
  // pad.axis_<name>: a pad whose left stick SDL reports rotated (X on lefty,
  // Y on leftx backwards) is put right by naming the physical axis per
  // remapped one; everything downstream sees the corrected stick.
-@@ -588,6 +625,7 @@ int main() {
+@@ -586,8 +641,10 @@ int main() {
+   ds::sdl::test_pad_labels();
+   ds::sdl::test_stylus_tap_alt_binding();
    ds::sdl::test_stick_face_buttons();
++  ds::sdl::test_select_with_the_dpad_is_the_light();
    ds::sdl::test_stick_dpad_names_a_stick();
    ds::sdl::test_stick_dpad_moves_the_pen_under_the_chord();
 +  ds::sdl::test_stylus_toggle_gives_the_dpad_to_the_pen();
