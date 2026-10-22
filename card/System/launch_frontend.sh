@@ -3,6 +3,7 @@ SD="${OMEGA_ROOT:-/mnt/sdcard}"
 SYS="$SD/System"
 RUN="${AGS_RUN:-/run}"
 LOADER="${AGS_LOADER:-/lib/ld-linux-aarch64.so.1}"
+POWEROFF="${AGS_POWEROFF:-poweroff}"
 export OMEGA_ROOT="$SD"
 # every thread allocates from the one heap: glibc's arenas, 64 MB of address space reserved
 # for each thread that contends, crowded the cores loaded after them, and gpsp's JIT cache has
@@ -13,6 +14,23 @@ log() {
 	echo "$(date '+%H:%M:%S') $*" >> "$SD/emellie-slot-session.log" 2>/dev/null
 }
 
+# The handheld going down starts nothing again: lid.sh, shut too long, switches it off itself
+# (omega-lid-off); POWER held in DSperate leaves it to be switched off here (omega-power-off).
+going_off() {
+	if [ -f "$RUN/omega-power-off" ]; then
+		rm -f "$RUN/omega-power-off"
+		log "power held, switching off"
+		sync
+		$POWEROFF
+		exit 0
+	fi
+	if [ -f "$RUN/omega-lid-off" ]; then
+		log "lid shut, switched off by lid.sh"
+		sync
+		exit 0
+	fi
+}
+
 pid="$(cat "$RUN/omega-led.pid" 2>/dev/null)"
 if [ -z "$pid" ] || [ ! -d "/proc/$pid" ]; then
 	sh "$SYS/led.sh" once
@@ -21,7 +39,7 @@ if [ -z "$pid" ] || [ ! -d "/proc/$pid" ]; then
 fi
 
 # The lid sleeps the handheld, and switches it off shut LID_OFF_S, whatever is running (lid.sh)
-rm -f "$RUN/omega-lid-off"
+rm -f "$RUN/omega-lid-off" "$RUN/omega-power-off"
 pid="$(cat "$RUN/omega-lid.pid" 2>/dev/null)"
 if [ -z "$pid" ] || [ ! -d "/proc/$pid" ]; then
 	sh "$SYS/lid.sh" > /dev/null 2>&1 &
@@ -51,7 +69,7 @@ while :; do
 	log "start $SYS/emellie-slot returned=$returned"
 	OMEGA_RETURNED=$returned $LOADER "$SYS/emellie-slot" >> "$SD/emellie-slot.log" 2>&1
 	status=$?
-	lid_off
+	going_off
 	if [ ! -f "$OMEGA_HANDOFF" ]; then
 		log "emellie-slot left, status $status"
 		exit "$status"
@@ -75,6 +93,6 @@ while :; do
 	*) log "handoff: nothing here runs $platform" ;;
 	esac
 	sync
-	lid_off
+	going_off
 	returned=1
 done

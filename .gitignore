@@ -28,3 +28,4 @@
 
 # Playwright MCP snapshots and console logs from browser checks.
 /.playwright-mcp
+/screenshots/

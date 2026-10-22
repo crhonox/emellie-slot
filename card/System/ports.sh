@@ -23,30 +23,26 @@ RELEASE="${AGS_BASEOS_RELEASE:-/etc/baseos-release}"
 CPU="${AGS_CPUFREQ:-/sys/devices/system/cpu/cpu0/cpufreq}"
 LOADER="${AGS_LOADER:-/lib/ld-linux-aarch64.so.1}"
 NET_WAIT_S="${AGS_PORTS_NET_WAIT_S:-15}"
+AMIXER="${AGS_AMIXER:-amixer}"
 
 log() {
 	echo "ports: $*"
 }
 
-splash=
-# A line on the panel while the bundle is laid out, the first time a minute or more: PortMaster's
-# own sdl2imgshow, taken from the bundle, through the mali SDL2
-splash_start() {
-	tmp="$RUN/ports-splash"
-	rm -rf "$tmp"
-	mkdir -p "$tmp"
-	"$SEVENZIP" e -y -o"$tmp" "$BUNDLE" portmaster/PortMaster/sdl2imgshow.aarch64 \
-		portmaster/PortMaster/pylibs/resources/DejaVuSans.ttf > /dev/null 2>&1
-	[ -f "$tmp/sdl2imgshow.aarch64" ] || return 0
-	LD_LIBRARY_PATH="$DIR/lib" $LOADER "$tmp/sdl2imgshow.aarch64" \
-		-f "$tmp/DejaVuSans.ttf" -s 28 -t "$1" > /dev/null 2>&1 &
-	splash=$!
-}
-
-splash_stop() {
-	[ -n "$splash" ] && kill "$splash" 2> /dev/null
-	splash=
-	rm -rf "$RUN/ports-splash"
+# 7-Zip laying the bundle out with ARGS, its progress drawn on the panel as it goes: omega-zero's
+# own progress screen reads the NN% 7-Zip writes. 7-Zip's status, through the pipe.
+lay_out() {
+	{
+		"$SEVENZIP" x -y -bso0 -bsp1 -o"$SD/Tools" "$BUNDLE" "$@"
+		echo $? > "$RUN/ports-7z.status"
+	} | {
+		$LOADER "$SYS/emellie-slot" --progress "$SD" "INSTALLING PORTMASTER" > /dev/null 2>&1
+		# a screen that failed must not take 7-Zip down with it
+		cat > /dev/null
+	}
+	status="$(cat "$RUN/ports-7z.status" 2> /dev/null)"
+	rm -f "$RUN/ports-7z.status"
+	return "${status:-1}"
 }
 
 # The bundle's PortMaster in Tools/portmaster, unless this very bundle was laid there already or
@@ -69,16 +65,14 @@ install_portmaster() {
 		return 0
 	fi
 	log "laying out PortMaster $want over '${have:-nothing}'"
-	splash_start "Installing PortMaster..."
 	mkdir -p "$SD/Tools"
 	if [ -n "$laid" ]; then
-		"$SEVENZIP" x -y -o"$SD/Tools" "$BUNDLE" portmaster/PortMaster '-x!portmaster/PortMaster/config' > /dev/null
+		lay_out portmaster/PortMaster '-x!portmaster/PortMaster/config'
 	else
-		"$SEVENZIP" x -y -o"$SD/Tools" "$BUNDLE" > /dev/null
+		lay_out
 	fi
 	status=$?
 	sync
-	splash_stop
 	if [ "$status" != 0 ]; then
 		log "PortMaster could not be laid out, status $status"
 		return 1
@@ -162,6 +156,23 @@ export SDL_GAMECONTROLLERCONFIG="$(pad_map_positional "$(pad_layout "$target")")
 governor="$(cat "$CPU/scaling_governor" 2> /dev/null)"
 echo performance > "$CPU/scaling_governor" 2> /dev/null
 
+# The volume keys, which nothing else hears while a port plays, step the sound card's own volume
+# from omega-zero's level (omega-zero --volume-keys); the control gets back its level after
+hw_volume="$($AMIXER sget 'lineout volume' 2> /dev/null | sed -n 's/.*: Playback \([0-9][0-9]*\) .*/\1/p' | head -n 1)"
+$LOADER "$SYS/emellie-slot" --volume-keys "$SD" &
+volume_keys=$!
+
+# Whatever way this leaves: the keys stopped, the sound card's volume and the governor back.
+# A port that leaves its keyboard behind would have it typing into omega-zero.
+finish() {
+	killall gptokeyb gptokeyb2 > /dev/null 2>&1
+	kill "$volume_keys" 2> /dev/null
+	[ -n "$hw_volume" ] && $AMIXER -q sset 'lineout volume' "$hw_volume" > /dev/null 2>&1
+	sync
+	[ -n "$governor" ] && echo "$governor" > "$CPU/scaling_governor" 2> /dev/null
+}
+trap finish EXIT
+
 if [ -z "$port" ]; then
 	network
 	script="$RUN/portmaster.sh"
@@ -176,8 +187,4 @@ else
 	status=$?
 fi
 
-# a port that leaves its keyboard behind would have it typing into omega-zero
-killall gptokeyb gptokeyb2 > /dev/null 2>&1
-sync
-[ -n "$governor" ] && echo "$governor" > "$CPU/scaling_governor" 2> /dev/null
 exit "$status"

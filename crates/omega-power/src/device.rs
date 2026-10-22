@@ -434,7 +434,8 @@ fn charge_at(dir: &Path) -> Charge {
     }
 }
 
-fn headphones_in(gpio: &str) -> bool {
+/// Whether the headphones are in, by the kernel's gpio table (`/sys/kernel/debug/gpio`).
+pub fn headphones_in(gpio: &str) -> bool {
     gpio.lines()
         .find(|l| l.contains("|Headphone detection"))
         .and_then(|l| l.rsplit_once(')'))

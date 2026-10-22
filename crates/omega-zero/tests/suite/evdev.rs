@@ -334,3 +334,80 @@ fn a_hat_axis_is_traced_as_the_axis_it_is() {
     assert!(line.contains("hat0y"), "{line}");
     assert!(!line.contains("ignored"), "{line}");
 }
+
+const EV_ABS: u16 = 0x03;
+const ABS_X: u16 = 0x00;
+const ABS_Y: u16 = 0x01;
+const ABS_HAT0X: u16 = 0x10;
+
+fn axis(code: u16, value: i32) -> omega_zero::input::evdev::Ev {
+    decode(&packet(EV_ABS, code, value)).expect("an axis event")
+}
+
+fn stick_pad() -> omega_zero::input::evdev::Hat {
+    omega_zero::input::evdev::Hat::with_stick(Some((0, 4000)), Some((0, 4000)))
+}
+
+#[test]
+fn the_left_stick_pushed_well_over_works_the_d_pad() {
+    let mut hat = stick_pad();
+    assert!(
+        hat.feed(axis(ABS_X, 2600)).is_empty(),
+        "a nudge pressed a direction"
+    );
+    assert_eq!(
+        hat.feed(axis(ABS_X, 3600)),
+        vec![RawEvent::Down(Btn::Right)]
+    );
+    assert_eq!(hat.feed(axis(ABS_X, 2000)), vec![RawEvent::Up(Btn::Right)]);
+    assert_eq!(hat.feed(axis(ABS_Y, 200)), vec![RawEvent::Down(Btn::Up)]);
+    assert_eq!(
+        hat.feed(axis(ABS_Y, 3900)),
+        vec![RawEvent::Up(Btn::Up), RawEvent::Down(Btn::Down)]
+    );
+}
+
+#[test]
+fn a_stick_resting_near_the_line_does_not_flicker_a_direction() {
+    let mut hat = stick_pad();
+    assert_eq!(
+        hat.feed(axis(ABS_X, 3100)),
+        vec![RawEvent::Down(Btn::Right)]
+    );
+    // back under the line it crossed, but not past the one that lets go
+    assert!(hat.feed(axis(ABS_X, 2900)).is_empty());
+    assert!(hat.feed(axis(ABS_X, 3050)).is_empty());
+    assert_eq!(hat.feed(axis(ABS_X, 2500)), vec![RawEvent::Up(Btn::Right)]);
+}
+
+#[test]
+fn the_d_pad_and_the_stick_together_are_one_d_pad() {
+    let mut hat = stick_pad();
+    assert_eq!(
+        hat.feed(axis(ABS_HAT0X, 1)),
+        vec![RawEvent::Down(Btn::Right)]
+    );
+    // the stick to the right as well: still one Right held
+    assert!(hat.feed(axis(ABS_X, 3900)).is_empty());
+    assert!(
+        hat.feed(axis(ABS_HAT0X, 0)).is_empty(),
+        "the stick still holds Right"
+    );
+    assert_eq!(hat.feed(axis(ABS_X, 2000)), vec![RawEvent::Up(Btn::Right)]);
+    // the hat wins where they disagree
+    hat.feed(axis(ABS_X, 100));
+    assert_eq!(
+        hat.feed(axis(ABS_HAT0X, 1)),
+        vec![RawEvent::Up(Btn::Left), RawEvent::Down(Btn::Right)]
+    );
+}
+
+#[test]
+fn a_pad_with_no_stick_takes_no_direction_from_its_axes() {
+    let mut hat = omega_zero::input::evdev::Hat::default();
+    assert!(hat.feed(axis(ABS_X, 4000)).is_empty());
+    assert_eq!(
+        hat.feed(axis(ABS_HAT0X, -1)),
+        vec![RawEvent::Down(Btn::Left)]
+    );
+}

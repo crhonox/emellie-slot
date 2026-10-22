@@ -42,16 +42,32 @@ setup() {
 		[ "$1 $2" = "e -so" ] && { cat "$TMP/bundle-version"; exit 0; }
 		[ "$1" = e ] && exit 0
 		echo "$*" >> "$TMP/7z.log"
+		# its progress, as 7-Zip writes it with -bsp1
+		printf '  0%%\b\b\b\b 42%% 12 - x\b\b\b\b\b\b\b\b\b100%%'
 		[ -f "$TMP/7z-fail" ] && exit 2
-		out="${3#-o}"
+		out="${5#-o}"
 		mkdir -p "$out/portmaster/PortMaster" "$out/portmaster/bin"
 		cp "$TMP/bundle-version" "$out/portmaster/PortMaster/version"
 		echo 'export CFW_NAME="Unknown"' > "$out/portmaster/PortMaster/device_info.txt"
 		: > "$out/portmaster/PortMaster/pylibs.zip"
-		[ -n "${5:-}" ] || : > "$out/portmaster/bin/python3.10"
+		[ -n "${7:-}" ] || : > "$out/portmaster/bin/python3.10"
 		exit 0
 	SH
 	chmod +x "$TMP/7zzs"
+	# omega-zero: its progress screen notes what it was given, its volume keys that they ran
+	cat > "$CARD/System/emellie-slot" <<-'SH'
+		case "$1" in
+		--progress) { echo "$2|$3"; cat; echo; } >> "$TMP/progress.log" ;;
+		--volume-keys) echo "$2" >> "$TMP/volume.log"; exec sleep 30 ;;
+		esac
+	SH
+	# amixer: the sound card's volume at 25 to start with, every change noted
+	cat > "$TMP/amixer" <<-'SH'
+		#!/bin/sh
+		[ "$1" = sget ] && { echo "  Mono: Playback 25 [80%]"; exit 0; }
+		echo "$*" >> "$TMP/amixer.log"
+	SH
+	chmod +x "$TMP/amixer"
 	# the port: what it was run with
 	cat > "$PORT" <<-'SH'
 		{
@@ -70,7 +86,7 @@ setup() {
 ports() {
 	TMP="$TMP" OMEGA_ROOT="$CARD" AGS_RUN="$TMP/run" AGS_LOADER=sh AGS_7Z="$TMP/7zzs" \
 		AGS_BASH="$TMP/bin/bash" AGS_CPUFREQ="$TMP/cpu" AGS_BASEOS_RELEASE="$TMP/release" \
-		AGS_PORTS_NET_WAIT_S=0 sh "$CARD/System/ports.sh" "$@"
+		AGS_PORTS_NET_WAIT_S=0 AGS_AMIXER="$TMP/amixer" sh "$CARD/System/ports.sh" "$@"
 }
 
 # --- the first port: PortMaster laid out whole, Emellie Slot's files in it, the port run
@@ -78,9 +94,14 @@ setup
 status=0
 ports "$PORT" > /dev/null || status=$?
 [ "$status" = 4 ] || fail "ports.sh did not leave with the port's status: $status"
-[ "$(cat "$TMP/7z.log")" = "x -y -o$CARD/Tools $CARD/System/ports/portmaster.7z" ] \
+[ "$(cat "$TMP/7z.log")" = "x -y -bso0 -bsp1 -o$CARD/Tools $CARD/System/ports/portmaster.7z" ] \
 	|| fail "the bundle was not laid out whole: [$(cat "$TMP/7z.log")]"
 [ "$(cat "$TOOLS/.bundle")" = 2026.10.01-0433 ] || fail "the bundle laid out was not noted"
+grep -q "^$CARD|INSTALLING PORTMASTER" "$TMP/progress.log" || fail "no progress screen over the layout"
+grep -q '100%' "$TMP/progress.log" || fail "7-Zip's progress did not reach the screen: [$(cat "$TMP/progress.log")]"
+[ "$(cat "$TMP/volume.log")" = "$CARD" ] || fail "the volume keys were not listened to over the port"
+[ "$(cat "$TMP/amixer.log")" = "-q sset lineout volume 25" ] \
+	|| fail "the sound card's volume was not given back: [$(cat "$TMP/amixer.log" 2>/dev/null)]"
 [ ! -f "$PM/pylibs.zip" ] || fail "a stale pylibs.zip was left to unpack over the bundle"
 [ -x "$TMP/bin/bash" ] || fail "bash was not put in"
 grep -qx "export controlfolder=\"$PM\"" "$PM/control.txt" || fail "control.txt was not written with the card"
@@ -113,7 +134,7 @@ grep -q '# old' "$PM/control.txt" && fail "control.txt was left as an update had
 # --- a newer bundle: PortMaster/ over what is there, its config/ kept
 echo 2026.11.02-1200 > "$TMP/bundle-version"
 ports "$PORT" > /dev/null || true
-[ "$(cat "$TMP/7z.log")" = "x -y -o$CARD/Tools $CARD/System/ports/portmaster.7z portmaster/PortMaster -x!portmaster/PortMaster/config" ] \
+[ "$(cat "$TMP/7z.log")" = "x -y -bso0 -bsp1 -o$CARD/Tools $CARD/System/ports/portmaster.7z portmaster/PortMaster -x!portmaster/PortMaster/config" ] \
 	|| fail "a newer bundle was not laid over PortMaster/: [$(cat "$TMP/7z.log")]"
 [ "$(cat "$TOOLS/.bundle")" = 2026.11.02-1200 ] || fail "the newer bundle was not noted"
 
@@ -129,7 +150,7 @@ ports "$PORT" > /dev/null || true
 # --- a layout cut short: laid out whole again
 rm -f "$TOOLS/.bundle" "$TMP/7z.log"
 ports "$PORT" > /dev/null || true
-[ "$(cat "$TMP/7z.log")" = "x -y -o$CARD/Tools $CARD/System/ports/portmaster.7z" ] \
+[ "$(cat "$TMP/7z.log")" = "x -y -bso0 -bsp1 -o$CARD/Tools $CARD/System/ports/portmaster.7z" ] \
 	|| fail "a layout cut short was not done whole: [$(cat "$TMP/7z.log")]"
 
 # --- a layout that fails: no port, nothing noted

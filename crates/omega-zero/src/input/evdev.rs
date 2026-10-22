@@ -10,37 +10,116 @@ pub const EV_SW: u16 = 0x05;
 pub const SW_LID: u16 = 0x00;
 
 pub const EV_ABS: u16 = 0x03;
+pub const ABS_X: u16 = 0x00;
+pub const ABS_Y: u16 = 0x01;
 pub const ABS_HAT0X: u16 = 0x10;
 pub const ABS_HAT0Y: u16 = 0x11;
 
+/// How far over a stick is pushed, as a share of its reach either side of its middle, before it
+/// holds a direction of the d-pad, and how far back it has to come to let it go: apart, so a
+/// stick resting near the line does not flicker it.
+pub const STICK_ON: f32 = 0.5;
+pub const STICK_OFF: f32 = 0.35;
+
+/// The d-pad, from its hat and from the left stick, which works it as well: a direction is held
+/// while either holds it, the hat's over the stick's when they disagree.
 #[derive(Default)]
 pub struct Hat {
     x: i32,
     y: i32,
+    stick_x: i32,
+    stick_y: i32,
+    /// The left stick's reach on each axis, the kernel's minimum and maximum, where it has one.
+    reach_x: Option<(i32, i32)>,
+    reach_y: Option<(i32, i32)>,
 }
 
 impl Hat {
+    /// A d-pad whose left stick reaches `x` and `y` (minimum, maximum) on its two axes.
+    pub fn with_stick(x: Option<(i32, i32)>, y: Option<(i32, i32)>) -> Self {
+        Hat {
+            reach_x: x.filter(|(lo, hi)| hi > lo),
+            reach_y: y.filter(|(lo, hi)| hi > lo),
+            ..Hat::default()
+        }
+    }
+
     pub fn feed(&mut self, ev: Ev) -> Vec<RawEvent> {
-        let (held, ends) = match ev.code {
-            ABS_HAT0X => (&mut self.x, [Btn::Left, Btn::Right]),
-            ABS_HAT0Y => (&mut self.y, [Btn::Up, Btn::Down]),
+        let (horizontal, before) = match ev.code {
+            ABS_HAT0X | ABS_X => (true, self.held(true)),
+            ABS_HAT0Y | ABS_Y => (false, self.held(false)),
             _ => return Vec::new(),
         };
-        let (was, now) = (*held, ev.value.signum());
-        if now == was {
+        match ev.code {
+            ABS_HAT0X => self.x = ev.value.signum(),
+            ABS_HAT0Y => self.y = ev.value.signum(),
+            ABS_X => match self.reach_x {
+                Some(reach) => self.stick_x = stick(self.stick_x, ev.value, reach),
+                None => return Vec::new(),
+            },
+            _ => match self.reach_y {
+                Some(reach) => self.stick_y = stick(self.stick_y, ev.value, reach),
+                None => return Vec::new(),
+            },
+        }
+        let now = self.held(horizontal);
+        if now == before {
             return Vec::new();
         }
-        *held = now;
+        let ends = match horizontal {
+            true => [Btn::Left, Btn::Right],
+            false => [Btn::Up, Btn::Down],
+        };
         let btn = |v: i32| ends[usize::from(v > 0)];
         let mut out = Vec::new();
-        if was != 0 {
-            out.push(RawEvent::Up(btn(was)));
+        if before != 0 {
+            out.push(RawEvent::Up(btn(before)));
         }
         if now != 0 {
             out.push(RawEvent::Down(btn(now)));
         }
         out
     }
+
+    /// The direction held across (or down): the hat's, else the stick's.
+    fn held(&self, horizontal: bool) -> i32 {
+        let (hat, stick) = match horizontal {
+            true => (self.x, self.stick_x),
+            false => (self.y, self.stick_y),
+        };
+        if hat != 0 {
+            hat
+        } else {
+            stick
+        }
+    }
+}
+
+/// The direction a stick axis reaching `reach` holds at `value`, having held `was`.
+fn stick(was: i32, value: i32, (lo, hi): (i32, i32)) -> i32 {
+    let mid = (lo as f32 + hi as f32) / 2.0;
+    let pushed = (value as f32 - mid) / ((hi - lo) as f32 / 2.0);
+    let line = if was == 0 { STICK_ON } else { STICK_OFF };
+    if pushed.abs() < line {
+        0
+    } else if was != 0 && was.signum() != pushed.signum() as i32 && pushed.abs() < STICK_ON {
+        0
+    } else {
+        pushed.signum() as i32
+    }
+}
+
+/// The reach of axis `code` on the evdev node open as `fd`, (minimum, maximum), as the kernel
+/// gives it (EVIOCGABS); None where the node has no such axis.
+pub fn abs_reach(fd: i32, code: u16) -> Option<(i32, i32)> {
+    extern "C" {
+        fn ioctl(fd: i32, request: u64, ...) -> i32;
+    }
+    // _IOR('E', 0x40 + code, struct input_absinfo): value, minimum, maximum, fuzz, flat, resolution
+    let request = (2u64 << 30) | (24u64 << 16) | ((b'E' as u64) << 8) | (0x40 + code as u64);
+    let mut info = [0i32; 6];
+    let done = unsafe { ioctl(fd, request, info.as_mut_ptr()) };
+    (done == 0 && info[2] > info[1]).then_some((info[1], info[2]))
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

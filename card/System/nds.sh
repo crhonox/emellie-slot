@@ -11,6 +11,7 @@ RELEASE="${AGS_BASEOS_RELEASE:-/etc/baseos-release}"
 CPU="${AGS_CPUFREQ:-/sys/devices/system/cpu/cpu0/cpufreq}"
 LOADER="${AGS_LOADER:-/lib/ld-linux-aarch64.so.1}"
 CONFIG_DIR="$SD/Config/dsperate"
+RUN="${AGS_RUN:-/run}"
 
 rom="$1"
 # held A on the shelf: started afresh, DSperate's own resume left where it is
@@ -82,6 +83,10 @@ case "$volume" in '' | *[!0-9]*) volume=60 ;; esac
 # reads them itself (cores/dsperate/emellie-hotkeys.patch), and SELECT with them runs this
 export DS_VOLUME_KEYS=1
 export DS_BRIGHTNESS="sh $SYS/brightness.sh"
+# POWER held 2 s, as spruceOS's default: DSperate leaves with the game saved and this file
+# written, and launch_frontend.sh switches the handheld off
+export DS_POWER_OFF="$RUN/omega-power-off"
+export DS_POWER_HOLD_MS=2000
 
 # MENU held a second quits, over whatever the player's settings say
 cd "$DIR" || exit 2

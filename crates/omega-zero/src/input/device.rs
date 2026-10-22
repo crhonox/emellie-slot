@@ -7,7 +7,8 @@ use std::time::Instant;
 use omega_input::{Btn, InputSource, Millis, RawEvent};
 
 use super::evdev::{
-    decode, device_name, pick_devices, to_raw, Ev, Hat, EVENT_BYTES, EV_ABS, EV_KEY, EV_SYN,
+    abs_reach, decode, device_name, pick_devices, to_raw, Ev, Hat, ABS_X, ABS_Y, EVENT_BYTES,
+    EV_ABS, EV_KEY, EV_SYN,
 };
 use super::trace;
 
@@ -91,7 +92,6 @@ fn read_node(node: &Path, queue: &Mutex<Vec<RawEvent>>, trace: Option<&Trace>) {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| node.display().to_string());
-    let mut hat = Hat::default();
     let mut file = match File::open(node) {
         Ok(f) => f,
         Err(e) => {
@@ -99,6 +99,12 @@ fn read_node(node: &Path, queue: &Mutex<Vec<RawEvent>>, trace: Option<&Trace>) {
             return;
         }
     };
+    let fd = std::os::fd::AsRawFd::as_raw_fd(&file);
+    let (x, y) = (abs_reach(fd, ABS_X), abs_reach(fd, ABS_Y));
+    if let (Some(x), Some(y)) = (x, y) {
+        eprintln!("omega-zero: input {label}: left stick works the d-pad, x {x:?}, y {y:?}");
+    }
+    let mut hat = Hat::with_stick(x, y);
     let mut buf = [0u8; EVENT_BYTES * 16];
     loop {
         let read = match file.read(&mut buf) {

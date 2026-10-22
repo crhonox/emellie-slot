@@ -826,6 +826,16 @@ tasks:
     cmds:
       - sh scripts/console.sh log
 
+  screenshot:wifi:
+    desc: >-
+      Save the panel of a console on the home network as it is now, shaders and overlays on it,
+      to OUT (default screenshots/<time>.png); CONSOLE, SD and CONSOLE_PASSWORD as deploy:wifi
+    env:
+      CONSOLE: '{{.CONSOLE}}'
+      CONSOLE_PASSWORD: '{{.CONSOLE_PASSWORD}}'
+    cmds:
+      - sh scripts/console.sh screenshot {{.OUT}}
+
   clean:
     desc: Remove build output and dist
     cmds:

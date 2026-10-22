@@ -36,7 +36,7 @@ omega() {
 
 launch() {
 	TMP="$TMP" OMEGA_ROOT="$TMP/card" AGS_RUN="$TMP/run" AGS_LOADER=sh \
-		sh "$TMP/card/System/launch_frontend.sh"
+		AGS_POWEROFF="touch $TMP/poweroff" sh "$TMP/card/System/launch_frontend.sh"
 }
 
 # --- no handoff: omega-zero runs once and the script leaves with it
@@ -107,6 +107,27 @@ rm -f "$TMP/omega.log" "$TMP/nds.log"
 launch || fail "launch_frontend.sh failed over a stale handoff"
 [ ! -f "$TMP/nds.log" ] || fail "a stale handoff was acted on"
 
+# --- POWER held in DSperate: nothing starts again, and the handheld is switched off
+setup
+omega
+printf '#!/bin/sh\ntouch "$TMP/run/omega-power-off"\n' > "$TMP/card/System/nds.sh"
+printf '%s\n' "platform=NDS\\nrom=/g.nds\\n" > "$TMP/handoffs"
+rm -f "$TMP/omega.log" "$TMP/poweroff"
+launch || fail "launch_frontend.sh failed over POWER held"
+[ -f "$TMP/poweroff" ] || fail "POWER held in DSperate did not switch the handheld off"
+[ "$(cat "$TMP/omega.log")" = "returned=0" ] || fail "omega-zero started again over POWER held"
+[ ! -f "$TMP/run/omega-power-off" ] || fail "POWER held was left behind for the next boot"
+
+# --- the lid shut too long: lid.sh switches off, nothing starts again here
+setup
+omega
+printf '#!/bin/sh\ntouch "$TMP/run/omega-lid-off"\n' > "$TMP/card/System/nds.sh"
+printf '%s\n' "platform=NDS\\nrom=/g.nds\\n" > "$TMP/handoffs"
+rm -f "$TMP/omega.log" "$TMP/poweroff"
+launch || fail "launch_frontend.sh failed over the lid"
+[ "$(cat "$TMP/omega.log")" = "returned=0" ] || fail "omega-zero started again with the lid switching off"
+[ ! -f "$TMP/poweroff" ] || fail "launch_frontend.sh switched off what lid.sh switches off"
+
 # --- nds.sh: seeds the settings, maps the pad for the model, runs DSperate, restores the governor
 setup
 mkdir -p "$TMP/cpu"
@@ -121,6 +142,7 @@ cat > "$TMP/card/System/dsperate/dsperate" <<-'SH'
 		echo "gov=$(cat "$CPUDIR/scaling_governor")"
 		echo "rotate=${DS_ROTATE:-}"
 		echo "volkeys=${DS_VOLUME_KEYS:-}"
+		echo "poweroff=${DS_POWER_OFF:-} ${DS_POWER_HOLD_MS:-}"
 	} > "$TMP/dsperate.log"
 	exit 3
 SH
@@ -137,6 +159,8 @@ grep -q -- " --volume 60 " "$TMP/dsperate.log" || fail "DSperate did not start a
 grep -q -- "--set padhotkeys.quit_hold_ms=1000" "$TMP/dsperate.log" \
 	|| fail "DSperate was not told a held MENU quits"
 grep -qx 'volkeys=1' "$TMP/dsperate.log" || fail "DSperate was not told to read the volume keys"
+grep -qx 'poweroff=/run/omega-power-off 2000' "$TMP/dsperate.log" \
+	|| fail "DSperate was not told POWER held 2 s switches off: [$(grep poweroff= "$TMP/dsperate.log")]"
 grep -q 'lefttrigger:b12,righttrigger:b13' "$TMP/dsperate.log" \
 	|| fail "the RG35XX SP's triggers are not b12/b13: [$(grep map= "$TMP/dsperate.log")]"
 grep -q 'rightx' "$TMP/dsperate.log" && fail "a pad with no sticks was given a right stick"

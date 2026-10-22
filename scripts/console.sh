@@ -4,6 +4,8 @@
 #   console.sh deploy BINARY [FILE...]   copy BINARY to System/emellie-slot, and every FILE into
 #                                        System/, then reboot into it and wait for it to start
 #   console.sh log                       print omega-zero's log
+#   console.sh screenshot [OUT.png]      the panel as it is now, from /dev/fb0, the shaders and
+#                                        overlays on it; OUT defaults to screenshots/<time>.png
 #
 # CONSOLE (default rg35xxsp.local, HOST:PORT for another port) and SD (default /mnt/sdcard) say
 # where. CONSOLE_PASSWORD is root's password; when it is not set, it is read from
@@ -38,14 +40,26 @@ else
 	password=root
 fi
 
-command -v sshpass > /dev/null || {
-	echo "console.sh: needs sshpass (brew install sshpass)" >&2
-	exit 1
-}
+# Without sshpass, ssh is handed the password by SSH_ASKPASS, a script that prints it: it is
+# read from the environment, never written down.
+askpass=
+if ! command -v sshpass > /dev/null; then
+	askpass="$(mktemp)"
+	trap 'rm -f "$askpass"' EXIT
+	printf '#!/bin/sh\nprintf "%%s\\n" "$CONSOLE_ASKPASS"\n' > "$askpass"
+	chmod 700 "$askpass"
+fi
 
 ssh_once() {
-	sshpass -p "$password" ssh -p "$port" -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
-		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+	if [ -z "$askpass" ]; then
+		sshpass -p "$password" ssh -p "$port" -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
+			-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+			-o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" "$@"
+		return
+	fi
+	CONSOLE_ASKPASS="$password" SSH_ASKPASS="$askpass" SSH_ASKPASS_REQUIRE=force \
+		DISPLAY="${DISPLAY:-:0}" ssh -p "$port" -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
+		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o NumberOfPasswordPrompts=1 \
 		-o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" "$@"
 }
 
@@ -176,8 +190,40 @@ deploy)
 log)
 	on "cat '$sd/emellie-slot.log'"
 	;;
+screenshot)
+	out="${2:-$repo/screenshots/$(date '+%Y-%m-%d_%H-%M-%S').png}"
+	mkdir -p "$(dirname "$out")"
+	raw="$(mktemp)"
+	# One login: the framebuffer's shape on four lines, then all of it. Its virtual height holds
+	# the three buffers it flips between; pan says which one is on the panel.
+	on "g=/sys/class/graphics/fb0; for f in virtual_size bits_per_pixel stride pan; do echo \$f=\$(cat \$g/\$f); done; cat /dev/fb0" > "$raw"
+	python3 - "$raw" "$out" << 'PY'
+import sys
+from PIL import Image
+
+raw, out = sys.argv[1:3]
+data = open(raw, "rb").read()
+head = {}
+at = 0
+for _ in range(4):
+    end = data.index(b"\n", at)
+    key, _, value = data[at:end].decode().partition("=")
+    head[key] = value
+    at = end + 1
+fb = data[at:]
+w, virtual = (int(v) for v in head["virtual_size"].split(","))
+bpp = int(head["bits_per_pixel"])
+stride = int(head["stride"] or w * bpp // 8)
+_, y = (int(v) for v in (head["pan"] or "0,0").split(","))
+h = virtual // 3 if virtual % 3 == 0 else virtual
+mode = {32: "BGRX", 16: "BGR;16"}[bpp]
+Image.frombuffer("RGB", (w, h), fb[y * stride : (y + h) * stride], "raw", mode, stride, 1).save(out)
+print(f"{out} ({w}x{h}, buffer at line {y})")
+PY
+	rm -f "$raw"
+	;;
 *)
-	echo "usage: console.sh deploy BINARY [FILE...] | console.sh log" >&2
+	echo "usage: console.sh deploy BINARY [FILE...] | console.sh log | console.sh screenshot [OUT.png]" >&2
 	exit 2
 	;;
 esac

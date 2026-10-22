@@ -13,6 +13,9 @@ omega-zero is now **Emellie Slot**, a personal fork of it.
   kernel, CPU and panel asleep. Opened, the game goes on where it was; left shut 15 minutes
   (`LID_OFF_S`), the RTC wakes the handheld, the game in play leaves with its save, and the
   handheld switches off.
+- On a handheld with sticks (RG CubeXX, RG40XX V) the left stick works the d-pad in every
+  system the frontend runs, PS1 included, as well as the d-pad itself: pushed over half its
+  reach it holds the direction, and lets go back under a third.
 - Over the selected cart on every shelf stands its file name, without the extension, so two
   games wearing the same label (a game and a romhack of it) can be told apart.
 - SELECT+L1 and SELECT+R1 no longer load and save a state; MENU twice still opens the save

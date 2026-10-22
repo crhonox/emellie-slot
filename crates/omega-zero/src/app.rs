@@ -64,7 +64,7 @@ const POWER_ON_S: f32 = 0.6;
 
 const POWER_OFF_S: f32 = 0.5;
 
-const VOLUME_STEP: u8 = 5;
+pub(crate) const VOLUME_STEP: u8 = 5;
 
 const AUTOSAVE_MS: Millis = 60_000;
 
