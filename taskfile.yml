@@ -20,6 +20,9 @@ vars:
   SPRUCE: '{{.SPRUCE | default "../spruceOS"}}'
   # Files for the card beyond the build (Overlays/, Config/...), copied over dist-device
   SD_EXTRAS: '{{.SD_EXTRAS | default "../sd-extras"}}'
+  # ScreenScraper's developer key for the device build, a shell file exporting OMEGA_SS_DEVID and
+  # OMEGA_SS_DEVPASSWORD, which build.rs masks into the binary. Never committed
+  SS_ENV: '{{.SS_ENV | default (print .HOME "/.config/emellie-slot/screenscraper.env")}}'
   # The libretro names of the cores the device bundle ships, <name>_libretro.so in System/
   DEVICE_CORES: mgba gpsp snes9x mednafen_supafaust pcsx_rearmed gambatte
   # The cores built by cores/<name>/build.sh whose source archive ships in System/licenses/
@@ -601,6 +604,10 @@ tasks:
     cmds:
       - |
         set -eu
+        # ScreenScraper's developer key, from SS_ENV unless already exported
+        if [ -z "${OMEGA_SS_DEVID:-}" ] && [ -f "{{.SS_ENV}}" ]; then
+          set -a; . "{{.SS_ENV}}"; set +a
+        fi
         if [ "$(uname -s)-$(uname -m)" = "Linux-aarch64" ]; then
           sh -c '{{.CMD}}'
         else
