@@ -2,7 +2,10 @@ use std::collections::BTreeMap;
 
 use omega_retro::ButtonMask;
 
-pub const DELAY: u64 = 3;
+/// How many frames after it is pressed a button is played, on both consoles, so the other's
+/// press has time to arrive. One: over the link's own hotspot a press arrives in well under a
+/// millisecond, and each frame more was ~17 ms more input lag.
+pub const DELAY: u64 = 1;
 
 const PACKET: usize = 11;
 
