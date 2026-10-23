@@ -92,6 +92,14 @@ pub trait RetroCore: Send {
         self.run_frame(p1);
     }
     fn set_option(&mut self, _key: &str, _value: &str) {}
+    /// Where the player's sticks are pushed, left across and down then right across and down,
+    /// each -32767 to 32767, for the frames after.
+    fn set_sticks(&mut self, _sticks: [i16; 4]) {}
+    /// Whether the game reads the sticks as sticks: a PlayStation game that has switched its
+    /// DualShock to analog. Otherwise the left stick is the d-pad's.
+    fn takes_sticks(&self) -> bool {
+        false
+    }
     fn set_frame_skip(&mut self, _skip: bool) {}
     /// The last picture the core drew, XRGB8888 in rows `video_size().0` pixels long.
     fn video_xrgb8888(&self) -> &[u8];

@@ -11,7 +11,7 @@ use omega_input::Action;
 use omega_power::{baseos_release, BaseosRelease};
 use omega_ui::{ease, Draw, TexId, OPENING_ADVANCE, OPENING_PITCH, OPENING_RISE};
 
-use crate::app::{App, Phase};
+use crate::app::App;
 use crate::audio::Sfx;
 use crate::boot_fade::{FADE_MS, STEP_MS};
 
@@ -477,7 +477,7 @@ impl App {
     /// Moves the opening on by `dt` seconds, from its first frame, sounding what falls due,
     /// and ends it once the shelf has come in or gone.
     pub(crate) fn step_opening(&mut self, dt: f32) {
-        let on_shelf = matches!(self.phase, Phase::Shelf);
+        let on_shelf = self.phase.is_home();
         let Some(o) = &mut self.opening else {
             return;
         };

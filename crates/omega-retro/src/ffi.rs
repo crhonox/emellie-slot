@@ -32,6 +32,12 @@ pub const PIXEL_FORMAT_0RGB1555: c_uint = 0;
 pub const PIXEL_FORMAT_XRGB8888: c_uint = 1;
 pub const PIXEL_FORMAT_RGB565: c_uint = 2;
 pub const DEVICE_JOYPAD: c_uint = 1;
+pub const DEVICE_ANALOG: c_uint = 5;
+/// pcsx_rearmed's DualShock, `RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)`.
+pub const DEVICE_DUALSHOCK: c_uint = (2 << 8) | DEVICE_ANALOG;
+/// Whether the core's pad on a port is reading its sticks: Emellie Slot's patch to pcsx_rearmed
+/// (cores/pcsx_rearmed/emellie-pad-analog.patch), which only that core has.
+pub type PadAnalogFn = unsafe extern "C" fn(c_uint) -> std::ffi::c_int;
 pub const MEMORY_SAVE_RAM: c_uint = 0;
 pub const MEMORY_RTC: c_uint = 1;
 pub const MEMORY_SYSTEM_RAM: c_uint = 2;

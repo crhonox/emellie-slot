@@ -98,10 +98,12 @@ fn a_select_tap_in_a_game_opens_nothing() {
 }
 
 /// The shelf's lines for a system with a core to pick, the GBA's and the SNES's.
-const SHELF_WITH_CORES: [(&str, &str); 8] = [
+const SHELF_WITH_CORES: [(&str, &str); 10] = [
     ("A", "PLAY"),
     ("HOLD A", "CLEAN START"),
     ("X", "CORE"),
+    ("Y", "FAVORITE"),
+    ("MENU", "ADD TO"),
     ("START", "SETTINGS"),
     ("SELECT", "CONTROLS"),
     ("◀▶", "BROWSE"),
@@ -181,7 +183,8 @@ fn a_snes_game_fast_forwards_but_neither_rewinds_links_nor_corrects_colour() {
 
 #[test]
 fn a_playstation_game_fast_forwards_on_select_r2_and_swaps_discs() {
-    let view = ControlsView::new(Platform::Ps1);
+    // on a pad with no stick: one with a stick says what it does first
+    let view = ControlsView::for_pad(Platform::Ps1, omega_power::PadLayout::NoStick);
     assert!(!view.groups[0].lines.contains(&("X", "CORE")));
     assert_eq!(
         view.groups[1].lines,
@@ -270,4 +273,23 @@ fn a_ds_game_is_worked_as_its_own_emulator_binds_it_on_each_pad() {
             assert!(!lines.contains(&gone), "{pad:?} still says {gone:?}");
         }
     }
+}
+
+#[test]
+fn a_playstation_game_on_a_pad_with_sticks_says_the_left_one_is_the_d_pad_or_analog() {
+    use omega_power::PadLayout;
+    let line = ("L STICK", "D-PAD / ANALOG");
+    for pad in [PadLayout::OneStick, PadLayout::TwoSticks] {
+        assert!(ControlsView::for_pad(Platform::Ps1, pad).groups[1]
+            .lines
+            .contains(&line));
+        assert!(!ControlsView::for_pad(Platform::Snes, pad).groups[1]
+            .lines
+            .contains(&line));
+    }
+    assert!(
+        !ControlsView::for_pad(Platform::Ps1, PadLayout::NoStick).groups[1]
+            .lines
+            .contains(&line)
+    );
 }

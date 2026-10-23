@@ -91,6 +91,12 @@ fn the_banner_says_what_happened_and_never_what_is_on_screen() {
             Toast::OneDisc,
             Toast::Disc(1),
             Toast::Screenshot,
+            Toast::FavoriteAdded,
+            Toast::FavoriteRemoved,
+            Toast::NothingHere,
+            Toast::NoCollections,
+            Toast::CollectionAdded,
+            Toast::CollectionRemoved,
         ],
         "a banner was added or dropped"
     );

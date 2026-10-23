@@ -73,12 +73,12 @@ fn start_opens_settings_with_its_top_row_selected_every_time() {
 }
 
 #[test]
-fn menu_opens_nothing_on_the_carousel() {
+fn menu_on_the_carousel_opens_the_collect_panel_not_settings() {
     let (_d, mut a, _) = on_carousel();
     a.apply(Action::QuickMenu);
     assert!(
-        matches!(a.phase(), Phase::Shelf),
-        "MENU still opened {:?}",
+        matches!(a.phase(), Phase::Collect(_)),
+        "MENU opened {:?}",
         a.phase()
     );
     assert_eq!(a.settings_row(), None);

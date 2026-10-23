@@ -70,14 +70,20 @@ pub enum Actions {
     Confirm,
     /// The save-state switcher's: B RETURN to the game, A LOAD the save shown.
     Switcher,
+    /// The grid of systems': B RETURN on the left, A OPEN on the right.
+    Systems,
+    /// The main menu's: START SETTINGS on the left, A OPEN on the right.
+    Home,
 }
 
 impl Actions {
-    pub const ALL: [Actions; 4] = [
+    pub const ALL: [Actions; 6] = [
         Actions::Shelf,
         Actions::Menu,
         Actions::Confirm,
         Actions::Switcher,
+        Actions::Systems,
+        Actions::Home,
     ];
 
     pub fn index(self) -> usize {
@@ -93,6 +99,9 @@ impl Actions {
             (Actions::Menu | Actions::Confirm, Side::Right) => ("CONFIRM", "A"),
             (Actions::Confirm, Side::Left) => ("", ""),
             (Actions::Switcher, Side::Right) => ("LOAD", "A"),
+            (Actions::Systems, Side::Left) => ("RETURN", "B"),
+            (Actions::Home, Side::Left) => ("SETTINGS", "START"),
+            (Actions::Systems | Actions::Home, Side::Right) => ("OPEN", "A"),
         }
     }
 }
@@ -130,6 +139,9 @@ pub struct BarFaces {
 pub fn actions_on(phase: &Phase) -> Option<Actions> {
     match phase {
         Phase::Shelf | Phase::Inserting { .. } | Phase::Ejecting { .. } => Some(Actions::Shelf),
+        Phase::Systems { .. } => Some(Actions::Systems),
+        Phase::Home { .. } => Some(Actions::Home),
+        Phase::Collections { .. } | Phase::Collect(_) => Some(Actions::Menu),
         Phase::SetClock {
             from_menu: false, ..
         } => Some(Actions::Confirm),

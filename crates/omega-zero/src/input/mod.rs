@@ -7,6 +7,7 @@ mod keys;
 mod mask;
 #[cfg(feature = "host")]
 mod pad;
+pub mod sticks;
 pub mod trace;
 
 pub use device::DeviceInput;

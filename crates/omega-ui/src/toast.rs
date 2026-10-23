@@ -22,6 +22,16 @@ pub enum Toast {
     Disc(u8),
     /// SELECT + R1 kept the picture in Screenshots/.
     Screenshot,
+    /// Y on the shelf put the game on the Favourites, or took it off.
+    FavoriteAdded,
+    FavoriteRemoved,
+    /// A list opened from the main menu has none of its games on the card.
+    NothingHere,
+    /// Collections opened with none made yet.
+    NoCollections,
+    /// The Collect panel put the game on a collection, or took it off.
+    CollectionAdded,
+    CollectionRemoved,
 }
 
 /// What the toast says once disc `n` is in, for every disc a PlayStation game can have.
@@ -39,7 +49,7 @@ const DISC_IN: [&str; 9] = [
 
 impl Toast {
     /// Every toast there is, a disc's once, as disc 1.
-    pub const ALL: [Toast; 12] = [
+    pub const ALL: [Toast; 18] = [
         Toast::StateSaved,
         Toast::StateLoaded,
         Toast::NeedsGpsp,
@@ -52,6 +62,12 @@ impl Toast {
         Toast::OneDisc,
         Toast::Disc(1),
         Toast::Screenshot,
+        Toast::FavoriteAdded,
+        Toast::FavoriteRemoved,
+        Toast::NothingHere,
+        Toast::NoCollections,
+        Toast::CollectionAdded,
+        Toast::CollectionRemoved,
     ];
 
     /// Its place in `ALL`: every disc's toast is the one place.
@@ -69,6 +85,12 @@ impl Toast {
             Toast::OneDisc => 9,
             Toast::Disc(_) => 10,
             Toast::Screenshot => 11,
+            Toast::FavoriteAdded => 12,
+            Toast::FavoriteRemoved => 13,
+            Toast::NothingHere => 14,
+            Toast::NoCollections => 15,
+            Toast::CollectionAdded => 16,
+            Toast::CollectionRemoved => 17,
         }
     }
 
@@ -84,6 +106,10 @@ impl Toast {
             Toast::ColourOn | Toast::ColourOff => "COLOUR",
             Toast::OneDisc | Toast::Disc(_) => "DISC",
             Toast::Screenshot => "SCREENSHOT",
+            Toast::FavoriteAdded | Toast::FavoriteRemoved | Toast::NothingHere => "FAVORITES",
+            Toast::NoCollections | Toast::CollectionAdded | Toast::CollectionRemoved => {
+                "COLLECTIONS"
+            }
         }
     }
 
@@ -101,6 +127,12 @@ impl Toast {
             Toast::ColourOff => "Correction off",
             Toast::OneDisc => "Only one disc",
             Toast::Screenshot => "Screenshot saved",
+            Toast::FavoriteAdded => "Added to favorites",
+            Toast::FavoriteRemoved => "Removed from favorites",
+            Toast::NothingHere => "Nothing here yet",
+            Toast::NoCollections => "MENU on a game makes one",
+            Toast::CollectionAdded => "Added to collection",
+            Toast::CollectionRemoved => "Taken off collection",
             Toast::Disc(n) => DISC_IN
                 .get(usize::from(n).wrapping_sub(1))
                 .copied()

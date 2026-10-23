@@ -14,7 +14,7 @@ use omega_input::{Action, Btn};
 use omega_store::{Core, Platform};
 use omega_ui::{clean_label, ease, Draw, TexId};
 
-use crate::app::{App, Phase};
+use crate::app::App;
 use crate::audio::Sfx;
 use crate::boot_fade::STEP_MS;
 use crate::opening::{self, draw_terminal, Facts, COLS, IN_MS, LINES};
@@ -422,7 +422,7 @@ impl App {
                 self.bring_up_notice(BLACK_MS);
             }
         }
-        let on_shelf = matches!(self.phase, Phase::Shelf);
+        let on_shelf = self.phase.is_home();
         let Some(up) = self.notice_up_mut() else {
             return;
         };

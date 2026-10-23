@@ -35,6 +35,8 @@ struct Host {
     disk: Option<DiskControlExtCallback>,
     audio: Vec<i16>,
     inputs: [u16; 2],
+    /// Port 1's sticks: left across and down, right across and down.
+    sticks: [i16; 4],
     system_dir: CString,
     save_dir: CString,
     rumble: Rumble,
@@ -70,6 +72,7 @@ impl Host {
             disk: None,
             audio: Vec::new(),
             inputs: [0; 2],
+            sticks: [0; 4],
             system_dir,
             save_dir,
             rumble: Rumble::default(),
@@ -511,7 +514,14 @@ unsafe extern "C" fn audio_batch(data: *const i16, frames: usize) -> usize {
 
 unsafe extern "C" fn input_poll() {}
 
-unsafe extern "C" fn input_state(port: c_uint, device: c_uint, _index: c_uint, id: c_uint) -> i16 {
+unsafe extern "C" fn input_state(port: c_uint, device: c_uint, index: c_uint, id: c_uint) -> i16 {
+    if device == DEVICE_ANALOG {
+        // port 1's left (index 0) and right (index 1) sticks, across (id 0) and down (id 1)
+        return match (port, index, id) {
+            (0, 0..=1, 0..=1) => with_host(|h| h.sticks[(index * 2 + id) as usize]).unwrap_or(0),
+            _ => 0,
+        };
+    }
     if device != DEVICE_JOYPAD {
         return 0;
     }
@@ -536,6 +546,8 @@ pub struct LibretroCore {
     /// The disc to start from, and the file it is read from, handed to the core before it loads.
     initial_disc: Option<(c_uint, CString)>,
     loaded: bool,
+    /// The core's word on whether its pad reads the sticks, where it has one to give.
+    pad_analog: Option<PadAnalogFn>,
     _lib: Library,
 }
 
@@ -723,6 +735,9 @@ impl LibretroCore {
     ) -> Result<Self, CoreError> {
         let lib = unsafe { Library::new(dylib) }.map_err(|e| CoreError::Load(e.to_string()))?;
         let api = unsafe { Api::load(&lib) }?;
+        let pad_analog = unsafe { lib.get::<PadAnalogFn>(b"retro_omega_pad_analog\0") }
+            .ok()
+            .map(|f| *f);
         let version = unsafe { (api.api_version)() };
         if version != API_VERSION {
             return Err(CoreError::Unsupported(format!("libretro api {version}")));
@@ -750,6 +765,7 @@ impl LibretroCore {
             rom_path: None,
             initial_disc: None,
             loaded: false,
+            pad_analog,
             _lib: lib,
         })
     }
@@ -820,12 +836,29 @@ impl RetroCore for LibretroCore {
             sample_rate: av.timing.sample_rate,
         };
         self.host.geometry = av.geometry;
-        unsafe { (self.api.set_controller_port_device)(0, DEVICE_JOYPAD) };
+        // a core that says whether its pad reads the sticks, pcsx_rearmed, is handed a
+        // DualShock: a game that knows it switches it to analog, and the rest play it as a pad
+        let device = match self.pad_analog {
+            Some(_) => DEVICE_DUALSHOCK,
+            None => DEVICE_JOYPAD,
+        };
+        unsafe { (self.api.set_controller_port_device)(0, device) };
         Ok(())
     }
 
     fn run_frame(&mut self, input: ButtonMask) {
         self.run_frame_linked(input, ButtonMask::default());
+    }
+
+    fn set_sticks(&mut self, sticks: [i16; 4]) {
+        self.host.sticks = sticks;
+    }
+
+    fn takes_sticks(&self) -> bool {
+        match (self.loaded, self.pad_analog) {
+            (true, Some(f)) => unsafe { f(0) != 0 },
+            _ => false,
+        }
     }
 
     fn run_frame_linked(&mut self, p1: ButtonMask, p2: ButtonMask) {
@@ -1908,6 +1941,20 @@ mod tests {
         let button = |id| unsafe { input_state(1, DEVICE_JOYPAD, 0, id) };
         assert_eq!(button(0), 1, "B is bit 0 of the libretro joypad");
         assert_eq!(button(8), 0, "A is not held on port 1");
+    }
+
+    #[test]
+    fn input_state_answers_port_1s_sticks_as_libretro_reads_them() {
+        let mut host = host_with(HashMap::new(), false);
+        host.sticks = [100, -200, 300, -400];
+        let _active = Active::bind(&mut host);
+
+        let at = |port, index, id| unsafe { input_state(port, DEVICE_ANALOG, index, id) };
+        assert_eq!((at(0, 0, 0), at(0, 0, 1)), (100, -200), "the left stick");
+        assert_eq!((at(0, 1, 0), at(0, 1, 1)), (300, -400), "the right stick");
+        assert_eq!(at(1, 0, 0), 0, "port 2 has no sticks");
+        assert_eq!(at(0, 2, 0), 0, "there is no third stick");
+        assert_eq!(DEVICE_DUALSHOCK, 0x205, "RETRO_DEVICE_SUBCLASS(ANALOG, 1)");
     }
 
     #[test]

@@ -52,6 +52,12 @@ pub struct AppState {
     pub backdrop_colour: u8,
     /// The font the bar's actions write their big words in.
     pub font: Font,
+    /// The system whose games were last in view, to come back to.
+    pub system: Option<Platform>,
+    /// The main menu's entry last opened, to come back lit.
+    pub home_at: u8,
+    /// The game last picked on each system's shelf, to come back to.
+    pub picks: Vec<(Platform, String)>,
 }
 
 impl Default for AppState {
@@ -78,6 +84,9 @@ impl Default for AppState {
             backdrop_moving: true,
             backdrop_colour: 0,
             font: Font::Bold,
+            system: None,
+            home_at: 3,
+            picks: Vec::new(),
         }
     }
 }
@@ -119,6 +128,16 @@ pub fn write_app_state(root: &Path, s: &AppState) -> std::io::Result<()> {
         BACKDROP_COLOURS[(s.backdrop_colour as usize).min(BACKDROP_COLOURS.len() - 1)],
         s.font.key()
     );
+    let mut text = text;
+    text += &format!("home_at={}\n", s.home_at);
+    if let Some(system) = s.system {
+        text += &format!("system={}\n", platform_key(system));
+    }
+    for (platform, stem) in &s.picks {
+        if !stem.contains('\n') {
+            text += &format!("pick_{}={stem}\n", platform_key(*platform));
+        }
+    }
     atomic_write(&state_path(root), text.as_bytes())
 }
 
@@ -144,6 +163,9 @@ fn parse(text: &str) -> Option<AppState> {
     let mut backdrop_moving = None;
     let mut backdrop_colour = None;
     let mut font = None;
+    let mut system = None;
+    let mut home_at = None;
+    let mut picks = Vec::new();
     for line in text.lines().filter(|l| !l.is_empty()) {
         let Some((key, value)) = line.split_once('=') else {
             continue;
@@ -170,7 +192,15 @@ fn parse(text: &str) -> Option<AppState> {
             "backdrop_moving" => backdrop_moving = flag(value),
             "backdrop_colour" => backdrop_colour = colour_index(value),
             "font" => font = Font::from_key(value),
-            _ => {}
+            "system" => system = platform_value(value),
+            "home_at" => home_at = level(value, 9),
+            _ => {
+                let pick = key.strip_prefix("pick_").and_then(platform_value);
+                if let (Some(platform), false) = (pick, value.is_empty()) {
+                    picks.retain(|(p, _)| *p != platform);
+                    picks.push((platform, value.to_string()));
+                }
+            }
         }
     }
     let cart = cart?;
@@ -197,6 +227,9 @@ fn parse(text: &str) -> Option<AppState> {
         backdrop_moving: backdrop_moving.unwrap_or(fallback.backdrop_moving),
         backdrop_colour: backdrop_colour.unwrap_or(fallback.backdrop_colour),
         font: font.unwrap_or(fallback.font),
+        system,
+        home_at: home_at.unwrap_or(fallback.home_at),
+        picks,
     })
 }
 

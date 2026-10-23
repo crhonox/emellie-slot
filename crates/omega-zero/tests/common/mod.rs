@@ -8,7 +8,7 @@ use std::time::Duration;
 use omega_power::{Battery, Charge, LedState, Motor, Platform, Power, SimPlatform};
 use omega_retro::{ButtonMask, MockCore, RetroCore};
 use omega_store::{write_app_state, AppState, Platform as CartPlatform};
-use omega_zero::app::App;
+use omega_zero::app::{App, Phase as AppPhase};
 use omega_zero::persist::Snapshot;
 use omega_zero::session::Session;
 use tempfile::TempDir;
@@ -594,4 +594,41 @@ fn seated(root: &Path, snapshot: Box<dyn Snapshot>, state: AppState) -> App {
         a.update(1.0 / 60.0);
     }
     a
+}
+
+/// A on the screen shown, and the slide it starts run out.
+fn open_lit(a: &mut App) {
+    a.apply(omega_input::Action::GbaDown(omega_input::Btn::A));
+    a.apply(omega_input::Action::GbaUp(omega_input::Btn::A));
+    for _ in 0..40 {
+        a.update(1.0 / 60.0);
+    }
+}
+
+/// From the main menu a boot with games on more than one system opens on, Games lit, into the
+/// grid of systems. Anywhere else, nothing.
+pub fn into_grid(a: &mut App) {
+    if matches!(a.phase(), AppPhase::Home { .. }) {
+        open_lit(a);
+        assert!(
+            matches!(a.phase(), AppPhase::Systems { .. }),
+            "Games opened {:?}",
+            a.phase()
+        );
+    }
+}
+
+/// Into the shelf picked on the grid of systems, from the main menu a boot with games on more
+/// than one system opens on. On a shelf already, nothing.
+pub fn onto_shelf(a: &mut App) {
+    into_grid(a);
+    if !matches!(a.phase(), AppPhase::Systems { .. }) {
+        return;
+    }
+    open_lit(a);
+    assert!(
+        matches!(a.phase(), AppPhase::Shelf),
+        "A on the grid opened {:?}",
+        a.phase()
+    );
 }

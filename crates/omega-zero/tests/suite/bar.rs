@@ -107,6 +107,7 @@ fn booted_without_bar(d: &TempDir) -> App {
     let (mut a, _) = app_booting_at(d.path(), CLOCK_IS_SET);
     a.set_wifi_jobs(Box::new(Radio::default()));
     a.tick_ms(16);
+    common::onto_shelf(&mut a);
     assert!(matches!(a.phase(), Phase::Shelf), "{:?}", a.phase());
     a
 }

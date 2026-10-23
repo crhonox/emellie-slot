@@ -1658,6 +1658,7 @@ name = "omega-zero"
 version = "1.2.0"
 dependencies = [
  "cpal",
+ "fontdue",
  "gilrs",
  "libloading",
  "lz4_flex",

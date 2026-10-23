@@ -317,7 +317,7 @@ fn a_named_shelf_that_no_longer_has_the_cart_is_an_empty_slot() {
     let d = two_tetrises();
     let a = resumed(&d, Some(Platform::Gbc));
     assert!(
-        matches!(a.phase(), Phase::Shelf),
+        matches!(a.phase(), Phase::Home { .. }),
         "a Colour Tetris that is not on the card seated something: {:?}",
         a.phase()
     );
@@ -327,6 +327,7 @@ fn a_named_shelf_that_no_longer_has_the_cart_is_an_empty_slot() {
 fn seating_a_cart_records_the_shelf_it_came_off() {
     let d = two_tetrises();
     let mut a = boot(d.path());
+    common::onto_shelf(&mut a);
     a.apply(Action::GbaDown(Btn::R1));
     assert_eq!(
         a.selected_stem(),

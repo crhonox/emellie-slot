@@ -380,7 +380,7 @@ impl Session {
             return;
         }
         let stem = match self.app.phase() {
-            Phase::Shelf => {
+            Phase::Shelf | Phase::Systems { .. } | Phase::Home { .. } => {
                 self.emu = None;
                 return;
             }

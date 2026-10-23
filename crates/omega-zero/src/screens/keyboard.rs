@@ -54,6 +54,11 @@ pub(crate) fn typing_of(phase: &Phase) -> Option<TypingView<'_>> {
             keys: &t.keys,
             refused: false,
         }),
+        Phase::Collect(screen) => screen.typing.as_ref().map(|keys| TypingView {
+            prompt: "Name the new collection".to_string(),
+            keys,
+            refused: false,
+        }),
         _ => None,
     }
 }

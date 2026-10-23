@@ -51,6 +51,8 @@ impl ControlsView {
             shelf.push(("X", "CORE"));
         }
         shelf.extend([
+            ("Y", "FAVORITE"),
+            ("MENU", "ADD TO"),
             ("START", "SETTINGS"),
             ("SELECT", "CONTROLS"),
             ("◀▶", "BROWSE"),
@@ -98,6 +100,10 @@ impl ControlsView {
                 ("SELECT+R1", "SCREENSHOT"),
             ]);
         } else if platform.game_owns_l2_r2() {
+            // a DualShock: the left stick is the d-pad until the game switches it to analog
+            if platform == Platform::Ps1 && pad != PadLayout::NoStick {
+                game.push(("L STICK", "D-PAD / ANALOG"));
+            }
             game.extend([
                 ("SELECT+R2", "FAST FORWARD"),
                 ("SELECT+R2 ×2", "LATCH FAST FWD"),
@@ -235,7 +241,7 @@ impl App {
                 self.ds_hotkeys_reset = false;
                 self.go(Phase::Shelf, Dir::Back);
             }
-            Action::GbaDown(Btn::X) if self.shelves[self.shelf_at].0 == Platform::Nds => {
+            Action::GbaDown(Btn::X) if self.shelf_system() == Platform::Nds => {
                 self.reset_ds_hotkeys();
             }
             _ => {}
@@ -260,7 +266,7 @@ impl App {
     /// What the Controls screen says, while it is open: for the system of the shelf it was
     /// opened on, the DS's saying its hotkeys were put back once X has.
     pub fn controls_view(&self) -> Option<ControlsView> {
-        let platform = self.shelves[self.shelf_at].0;
+        let platform = self.shelf_system();
         matches!(self.phase, Phase::Controls).then(|| {
             let mut view = ControlsView::new(platform);
             if self.ds_hotkeys_reset {

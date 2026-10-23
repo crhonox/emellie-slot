@@ -105,6 +105,11 @@ fn read_node(node: &Path, queue: &Mutex<Vec<RawEvent>>, trace: Option<&Trace>) {
         eprintln!("omega-zero: input {label}: left stick works the d-pad, x {x:?}, y {y:?}");
     }
     let mut hat = Hat::with_stick(x, y);
+    // the sticks as a game reads them, kept whether or not they work the d-pad
+    let sticks = super::sticks::Sticks::of(|code| abs_reach(fd, code));
+    if sticks.any() {
+        eprintln!("omega-zero: input {label}: sticks {sticks:?}");
+    }
     let mut buf = [0u8; EVENT_BYTES * 16];
     loop {
         let read = match file.read(&mut buf) {
@@ -125,7 +130,10 @@ fn read_node(node: &Path, queue: &Mutex<Vec<RawEvent>>, trace: Option<&Trace>) {
                 crate::latency::read();
             }
             match ev.kind {
-                EV_ABS => events.extend(hat.feed(ev)),
+                EV_ABS => {
+                    sticks.feed(ev);
+                    events.extend(hat.feed(ev));
+                }
                 _ => events.extend(to_raw(ev)),
             }
         }

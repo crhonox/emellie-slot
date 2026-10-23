@@ -648,6 +648,7 @@ impl Worker {
             }
         }
         let _cheevos = crate::cheevos::loaded(self.rules.platform, &rom, resume.is_some());
+        let _dpad = crate::input::sticks::DpadBack;
         if let Some(resume) = resume {
             if let Err(e) = core.unserialize(&self.for_core(resume)) {
                 eprintln!("omega-zero: resume: {e}");
@@ -770,6 +771,10 @@ impl Worker {
             }
             let input = ButtonMask(self.shared.input.load(Ordering::Relaxed));
             crate::latency::emu_frame(input.0);
+            // the sticks as they are pushed, and whose the left one is: the game's while it
+            // reads it as a stick, else the d-pad's
+            core.set_sticks(crate::input::sticks::sticks());
+            crate::input::sticks::set_left_is_dpad(!core.takes_sticks());
             let mut span = 1u32;
             let ceiling = match speed {
                 Speed::Paused => 0,

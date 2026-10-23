@@ -1,0 +1,20 @@
+--- a/libpcsxcore/pad.c	2026-10-22 23:03:49.451870871 -0300
++++ b/libpcsxcore/pad.c	2026-10-22 23:03:49.454101478 -0300
+@@ -625,3 +625,17 @@
+ 	padReset();
+ 	g.replug_frame = frame_counter ? frame_counter : -1;
+ }
++
++/* Emellie Slot: whether the pad on `port` hands the game its sticks, a DualShock the game has
++ * switched to analog mode (or an analog joystick, always), for the frontend to give the left
++ * stick to the game as a stick, and as the d-pad otherwise. Named retro_* so the version
++ * script lets it out of the core. */
++int retro_omega_pad_analog(unsigned port)
++{
++	if (port >= sizeof(g.pads) / sizeof(g.pads[0]))
++		return 0;
++	if (g.pads[port].controllerType == PSE_PAD_TYPE_ANALOGJOY)
++		return 1;
++	return g.pads[port].controllerType == PSE_PAD_TYPE_ANALOGPAD
++		&& (g.pads[port].ds.padMode | g.pads[port].ds.configMode) != 0;
++}

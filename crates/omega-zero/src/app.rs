@@ -7,7 +7,7 @@ use omega_power::{Battery, Charge, LedState, LidPolicy, Power};
 use omega_retro::LinkChannel;
 use omega_store::{
     format_stamp, read_app_state, scan, write_app_state, AppState, BackdropStyle, Cart, Core,
-    Platform, StateEntry, StateRing, Theme, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, VOLUME_MAX,
+    GameRef, Platform, StateEntry, StateRing, Theme, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, VOLUME_MAX,
 };
 use omega_ui::kit::action::Font;
 use omega_ui::kit::fade::stepped;
@@ -226,6 +226,21 @@ pub enum Phase {
         from_menu: bool,
     },
     Shelf,
+    /// The grid of systems with games, `at` the one picked among `App::systems`: A opens its
+    /// shelf, and B on a shelf comes back here, to it.
+    Systems {
+        at: usize,
+    },
+    /// The main menu, `at` the entry lit (screens/home.rs).
+    Home {
+        at: usize,
+    },
+    /// The player's collections, `at` the one lit.
+    Collections {
+        at: usize,
+    },
+    /// MENU on a shelf: the picked game onto the Favorites or a collection.
+    Collect(crate::screens::home::CollectScreen),
     /// The settings START opens on the shelf, with `row` lit.
     Settings {
         row: SettingsRow,
@@ -278,6 +293,17 @@ pub struct App {
     pub(crate) phase: Phase,
     pub(crate) shelves: Vec<(Platform, Shelf)>,
     pub(crate) shelf_at: usize,
+    /// Where a menu left comes back to: the main menu, the grid of systems or a shelf.
+    pub(crate) base: crate::screens::home::Base,
+    /// The shelf of a list opened from the main menu, in view in place of a system's.
+    pub(crate) list_shelf: Option<crate::screens::home::ListShelf>,
+    /// How many lists' shelves have been opened, each one's number.
+    pub(crate) list_ids: u64,
+    pub(crate) home_faces: Option<crate::screens::home::HomeFaces>,
+    /// The Collections or Collect panel, as last baked.
+    pub(crate) list_panel: Option<crate::screens::lone::Lone>,
+    /// The grid's pictures, once the frontend has made them for the canvas.
+    pub(crate) systems_faces: Option<crate::screens::systems::SystemsFaces>,
     pub(crate) play_held: Option<Millis>,
     pub(crate) refusal: Option<Refusal>,
     pub(crate) refused_from: Option<f32>,
@@ -329,6 +355,8 @@ pub struct App {
     pub(crate) act_at: Millis,
     pub(crate) root: Option<PathBuf>,
     pub(crate) state: AppState,
+    /// The player's favourite games, as Config/favorites.txt lists them.
+    pub(crate) favorites: Vec<GameRef>,
     pub(crate) vol_before: Vec<(u8, bool, Millis)>,
     pub(crate) snapshot: Option<Box<dyn Snapshot>>,
     pub(crate) core: Core,
@@ -460,6 +488,12 @@ impl App {
             opening: None,
             start_notice: None,
             phase: Phase::Shelf,
+            base: crate::screens::home::Base::Shelf,
+            list_shelf: None,
+            list_ids: 0,
+            home_faces: None,
+            list_panel: None,
+            systems_faces: None,
             shelves,
             shelf_at,
             play_held: None,
@@ -502,6 +536,7 @@ impl App {
             act_at: 0,
             root: None,
             state: AppState::default(),
+            favorites: Vec::new(),
             vol_before: Vec::new(),
             snapshot: None,
             core: Core::default(),
@@ -550,6 +585,8 @@ impl App {
         app.root = Some(root.to_path_buf());
         app.theme = Theme::read_override(root);
         app.state = read_app_state(root);
+        app.favorites = omega_store::lists::favorites(root);
+        app.come_back_to_place();
         app.wifi.start(app.state.wifi);
         app.ssh.start(app.state.ssh, Some(root));
         app.bluetooth.start(app.state.bluetooth);
@@ -614,16 +651,87 @@ impl App {
                 self.state.cart = None;
                 self.state.cart_platform = None;
                 self.name_pending = true;
+                // nothing to put back: a card with games on more than one system opens on the
+                // main menu
+                if self.uses_menu() {
+                    self.base = crate::screens::home::Base::Home;
+                    self.phase = self.home();
+                }
             }
         }
     }
 
     pub(crate) fn shelf(&self) -> &Shelf {
-        &self.shelves[self.shelf_at].1
+        match &self.list_shelf {
+            Some(list) => &list.shelf,
+            None => &self.shelves[self.shelf_at].1,
+        }
     }
 
     pub(crate) fn shelf_mut(&mut self) -> &mut Shelf {
-        &mut self.shelves[self.shelf_at].1
+        match &mut self.list_shelf {
+            Some(list) => &mut list.shelf,
+            None => &mut self.shelves[self.shelf_at].1,
+        }
+    }
+
+    /// Each shelf at the game last picked on it, and the system last in view on show, as the
+    /// state kept them; the cart seated, if any, is picked over them by `start`.
+    fn come_back_to_place(&mut self) {
+        let picks = self.state.picks.clone();
+        for (platform, stem) in picks {
+            if let Some((at, i)) = self.seat_of(&stem, Some(platform)) {
+                self.shelves[at].1.select(i);
+            }
+        }
+        let system = self.state.system;
+        if let Some(at) = self
+            .shelves
+            .iter()
+            .position(|(p, s)| Some(*p) == system && !s.carts.is_empty())
+        {
+            self.shelf_at = at;
+        }
+    }
+
+    /// The system in view and the game picked on each shelf, for the state to keep.
+    fn place(&self) -> (Option<Platform>, Vec<(Platform, String)>) {
+        let picks = self
+            .shelves
+            .iter()
+            .filter_map(|(p, s)| s.carts.get(s.index).map(|c| (*p, c.stem.clone())))
+            .collect();
+        let system = self.shelves.get(self.shelf_at).map(|(p, _)| *p);
+        (system, picks)
+    }
+
+    /// Y on the shelf: the picked game onto the Favourites, or off them.
+    pub(crate) fn toggle_favorite(&mut self) {
+        let Some(cart) = self.picked_cart() else {
+            return;
+        };
+        let game = GameRef::new(cart.platform, cart.stem.clone());
+        let Some(root) = self.root.clone() else {
+            return;
+        };
+        match omega_store::lists::toggle_favorite(&root, &game) {
+            Ok(now) => {
+                self.favorites = omega_store::lists::favorites(&root);
+                let said = if now {
+                    Toast::FavoriteAdded
+                } else {
+                    Toast::FavoriteRemoved
+                };
+                self.hud.toast(said, self.now());
+            }
+            Err(e) => eprintln!("omega-zero: favorites: {e}"),
+        }
+    }
+
+    pub fn is_favorite(&self, platform: Platform, stem: &str) -> bool {
+        self.favorites
+            .iter()
+            .any(|g| g.platform == platform && g.stem == stem)
     }
 
     fn switch_shelf(&mut self, by: i32) {
@@ -637,6 +745,7 @@ impl App {
         self.pill_letter = None;
         self.shelf_named = None;
         self.name_pending = true;
+        self.persist();
     }
 
     fn jump_letter(&mut self, dir: i32) {
@@ -755,6 +864,7 @@ impl App {
     pub fn pill_text(&self) -> Option<String> {
         match self.pill_letter {
             Some(letter) => Some(letter.to_string()),
+            None if self.list_shelf.is_some() => self.shelf_platform_name().map(str::to_string),
             None => self
                 .shelves
                 .get(self.shelf_at)
@@ -773,6 +883,9 @@ impl App {
     }
 
     pub fn shelf_platform_name(&self) -> Option<&'static str> {
+        if let Some(list) = &self.list_shelf {
+            return Some(list.list.pill());
+        }
         self.next_shelf(1)?;
         Some(self.shelves[self.shelf_at].0.name())
     }
@@ -1169,6 +1282,7 @@ impl App {
     }
 
     pub fn poweroff(&mut self) {
+        self.persist();
         self.settle_saves();
         if let Some(power) = &mut self.power {
             power.poweroff();
@@ -1238,6 +1352,10 @@ impl App {
         match self.phase {
             Phase::Shelf => match action {
                 Action::GbaDown(Btn::X) if self.core_picker.is_none() => self.open_core_picker(),
+                Action::GbaDown(Btn::Y) if self.core_picker.is_none() => self.toggle_favorite(),
+                Action::GbaDown(Btn::B) if self.list_shelf.is_some() => self.leave_list(),
+                Action::GbaDown(Btn::B) if self.uses_grid() => self.back_to_grid(),
+                Action::QuickMenu => self.open_collect(),
                 _ if self.core_picker.is_some() => self.core_picker_input(action),
                 // START is the settings button on the shelf; MENU opens nothing here
                 Action::GbaDown(Btn::Start) => self.open_settings(),
@@ -1255,8 +1373,8 @@ impl App {
                     }
                 }
                 Action::Insert => self.insert(false),
-                Action::GbaDown(Btn::L1) => self.switch_shelf(-1),
-                Action::GbaDown(Btn::R1) => self.switch_shelf(1),
+                Action::GbaDown(Btn::L1) if self.list_shelf.is_none() => self.switch_shelf(-1),
+                Action::GbaDown(Btn::R1) if self.list_shelf.is_none() => self.switch_shelf(1),
                 _ => {}
             },
             Phase::Inserting { .. } if action == Action::Eject => self.eject(),
@@ -1284,6 +1402,10 @@ impl App {
                 Action::GbaDown(Btn::B) | Action::Polaroids => self.close_polaroids(),
                 _ => {}
             },
+            Phase::Systems { at } => self.systems_input(at, action),
+            Phase::Home { at } => self.home_input(at, action),
+            Phase::Collections { at } => self.collections_input(at, action),
+            Phase::Collect(_) => self.collect_input(action),
             Phase::About => self.about_input(action),
             Phase::Settings { row } => self.settings_input(row, action),
             Phase::Controls => self.controls_input(action),
@@ -1372,6 +1494,8 @@ impl App {
             Phase::Network(_) | Phase::Info(_) => Watch::Networks,
             Phase::Settings { .. } => Watch::Status,
             Phase::Shelf
+            | Phase::Systems { .. }
+            | Phase::Home { .. }
             | Phase::Inserting { .. }
             | Phase::Ejecting { .. }
             | Phase::Labels(_)
@@ -1457,24 +1581,6 @@ impl App {
     pub fn face_of(&self, platform: Platform, stem: &str) -> Option<TexId> {
         let (_, shelf) = self.shelves.iter().find(|(p, _)| *p == platform)?;
         shelf.find(stem)?.1
-    }
-
-    /// Every cart, the shelf in view first and on each shelf the carts nearest its picked one
-    /// first, either way round: the order a boot draws their labels in, so the ones on screen
-    /// come first.
-    pub fn carts_nearest_first(&self) -> Vec<&Cart> {
-        let n = self.shelves.len();
-        let mut carts = Vec::new();
-        for (_, shelf) in self.shelves.iter().cycle().skip(self.shelf_at).take(n) {
-            let len = shelf.carts.len();
-            let mut row: Vec<(usize, &Cart)> = shelf.carts.iter().enumerate().collect();
-            row.sort_by_key(|(i, _)| {
-                let d = i.abs_diff(shelf.index);
-                d.min(len - d)
-            });
-            carts.extend(row.into_iter().map(|(_, c)| c));
-        }
-        carts
     }
 
     pub fn set_label_jobs(&mut self, jobs: Box<dyn LabelJobs>) {
@@ -1947,16 +2053,25 @@ impl App {
         if self.state.cart == cart && self.state.cart_platform == platform {
             return;
         }
+        // a game put in goes first in Recents
+        if let (Some(stem), Some(platform), Some(root)) = (&cart, platform, &self.root) {
+            if let Err(e) = omega_store::lists::push_recent(root, &GameRef::new(platform, stem)) {
+                eprintln!("omega-zero: recents: {e}");
+            }
+        }
         self.state.cart = cart;
         self.state.cart_platform = platform;
         self.persist();
     }
 
+    /// Writes the state, with the system in view and the game picked on each shelf.
     pub(crate) fn persist(&self) {
         let Some(root) = &self.root else {
             return;
         };
-        if let Err(e) = write_app_state(root, &self.state) {
+        let mut state = self.state.clone();
+        (state.system, state.picks) = self.place();
+        if let Err(e) = write_app_state(root, &state) {
             eprintln!("omega-zero: omega-zero.state: {e}");
         }
     }
@@ -2089,7 +2204,11 @@ impl App {
     /// back with the shelf.
     fn top_bar_reach(&self) -> f32 {
         let shows = |phase: &Phase| match phase {
-            Phase::Shelf | Phase::Ejecting { .. } | Phase::Polaroids { .. } => true,
+            Phase::Shelf
+            | Phase::Systems { .. }
+            | Phase::Home { .. }
+            | Phase::Ejecting { .. }
+            | Phase::Polaroids { .. } => true,
             Phase::Inserting { resumed, .. } => !resumed,
             _ => false,
         };
@@ -2114,6 +2233,15 @@ impl App {
         let start = out.len();
         match phase {
             Phase::Shelf => return self.draw_shelf(off, out),
+            Phase::Systems { at } => return self.draw_systems(*at, off, out),
+            Phase::Home { at } => return self.draw_home(*at, off, out),
+            Phase::Collections { .. } => self.draw_list_panel(out),
+            Phase::Collect(screen) if screen.typing.is_none() => self.draw_list_panel(out),
+            Phase::Collect(_) => {
+                if let Some(t) = typing_of(phase) {
+                    self.draw_keyboard(&t, out);
+                }
+            }
             // the lone panels stand over the backdrop, with nothing between
             Phase::SetClock { .. } => self.draw_clock(out),
             // the modal stands over the backdrop, which shows round it
@@ -2567,12 +2695,13 @@ impl App {
     }
 
     fn wake(&mut self) {
+        let home = self.home_phase();
         let Phase::Doze { cart } = &mut self.phase else {
             return;
         };
         self.phase = match cart.take() {
             Some(cart) => Phase::Playing { cart },
-            None => Phase::Shelf,
+            None => home,
         };
         if let Some(power) = &mut self.power {
             power.on_open();

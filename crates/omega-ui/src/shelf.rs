@@ -178,6 +178,23 @@ impl Shelf {
         self.faces = faces;
     }
 
+    /// Whether every cart has its face.
+    pub fn has_faces(&self) -> bool {
+        !self.carts.is_empty() && self.faces.len() == self.carts.len()
+    }
+
+    /// The carts' faces, given back for another row to draw on; the carts are faceless after.
+    pub fn take_faces(&mut self) -> Vec<TexId> {
+        std::mem::take(&mut self.faces)
+    }
+
+    /// The outlines and models `other` draws its carts with, for a row made after them, of
+    /// carts from more than one shelf.
+    pub fn take_looks(&mut self, other: &Shelf) {
+        self.shadows = other.shadows;
+        self.meshes = other.meshes;
+    }
+
     /// The model the cart `stem` is drawn with, once models are set: a game on several discs
     /// all its discs in one model.
     pub fn mesh_for(&self, stem: &str) -> Option<MeshId> {

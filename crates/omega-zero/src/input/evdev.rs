@@ -45,6 +45,11 @@ impl Hat {
     }
 
     pub fn feed(&mut self, ev: Ev) -> Vec<RawEvent> {
+        self.feed_as(ev, super::sticks::left_is_dpad())
+    }
+
+    /// As `feed`, the left stick working the d-pad only while `stick_is_dpad`.
+    pub fn feed_as(&mut self, ev: Ev, stick_is_dpad: bool) -> Vec<RawEvent> {
         let (horizontal, before) = match ev.code {
             ABS_HAT0X | ABS_X => (true, self.held(true)),
             ABS_HAT0Y | ABS_Y => (false, self.held(false)),
@@ -53,6 +58,9 @@ impl Hat {
         match ev.code {
             ABS_HAT0X => self.x = ev.value.signum(),
             ABS_HAT0Y => self.y = ev.value.signum(),
+            // a game reading the left stick as a stick has it to itself: it holds no direction
+            ABS_X if !stick_is_dpad => self.stick_x = 0,
+            ABS_Y if !stick_is_dpad => self.stick_y = 0,
             ABS_X => match self.reach_x {
                 Some(reach) => self.stick_x = stick(self.stick_x, ev.value, reach),
                 None => return Vec::new(),

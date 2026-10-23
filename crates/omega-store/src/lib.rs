@@ -8,6 +8,7 @@ mod font;
 pub mod gb;
 mod gba;
 pub mod ini;
+pub mod lists;
 pub mod nds;
 mod platform;
 pub mod ps1;
@@ -31,6 +32,7 @@ pub use core::{
 };
 pub use font::Font;
 pub use gba::{header_clean, header_code, header_title};
+pub use lists::GameRef;
 pub use platform::Platform;
 pub use region::Region;
 pub use ring::{StateEntry, StateRing, RING_MAX};

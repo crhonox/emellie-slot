@@ -19,6 +19,7 @@ use crate::list_view::ListView;
 use crate::opening::Facts;
 use crate::screens::about::AboutView;
 use crate::session::Session;
+use crate::shelf_faces::ShelfKey;
 use crate::wallpaper;
 
 mod faces;
@@ -32,6 +33,7 @@ mod sync_clock;
 mod sync_controls;
 mod sync_core_picker;
 mod sync_disc;
+mod sync_home;
 mod sync_hud;
 mod sync_info;
 mod sync_keyboard;
@@ -44,6 +46,7 @@ mod sync_settings;
 mod sync_shelf_name;
 mod sync_start_notice;
 mod sync_switcher;
+mod sync_systems;
 mod sync_top_bar;
 
 use lone::Baked;
@@ -56,6 +59,7 @@ use sync_clock::{sync_clock, Clocks};
 use sync_controls::sync_controls;
 use sync_core_picker::sync_core_picker;
 use sync_disc::{sync_disc, DiscTexes};
+use sync_home::sync_list_panel;
 use sync_hud::{sync_hud, HudTexes};
 use sync_info::{sync_info, InfoTexes};
 use sync_keyboard::{sync_keyboard, KeyboardTexes};
@@ -68,6 +72,7 @@ use sync_settings::{sync_settings, SettingsTexes};
 use sync_shelf_name::sync_shelf_name;
 use sync_start_notice::sync_start_notice;
 use sync_switcher::{sync_switcher, Switcher};
+use sync_systems::sync_systems;
 use sync_top_bar::{sync_top_bar, TopBarTexes};
 
 const DOZE_TIMEOUT: Duration = Duration::from_secs(180);
@@ -78,6 +83,22 @@ const DOZE_TIMEOUT: Duration = Duration::from_secs(180);
 /// well inside the opening a boot plays over the shelf.
 const FACE_BYTES_PER_FRAME: usize = 1 << 20;
 
+/// How long a shelf's faces are kept once no screen shows it, so going back and forth between
+/// the grid and a system, or between two systems, draws them only once.
+const FACES_KEPT: Duration = Duration::from_secs(300);
+
+/// How many shelves keep their faces at most, the one in use among them: the rest give their
+/// textures back however recently they were shown.
+const SHELVES_KEPT: usize = 3;
+
+/// The shelves whose carts have faces, and when each was last in use; and the textures given
+/// back, shrunk to a pixel, for the next shelf's faces to be drawn into.
+#[derive(Default)]
+struct ShelfFaces {
+    kept: Vec<(ShelfKey, Instant)>,
+    spare: Vec<TexId>,
+}
+
 pub struct Frontend {
     session: Session,
     start: Instant,
@@ -85,6 +106,8 @@ pub struct Frontend {
     draws: Vec<Draw>,
     polaroid_texes: Vec<TexId>,
     faces: FaceBuilder,
+    /// The faces of the shelves in use, drawn when a shelf is first shown.
+    shelf_faces: ShelfFaces,
     /// Draws each cart's face from its label, the scans with no cut yet cut first, for compose
     /// to upload as they come back.
     cutter: LabelCutter,
@@ -112,6 +135,7 @@ pub struct Frontend {
     keyboard: KeyboardTexes,
     info: InfoTexes,
     labels: Baked<(ListView, u8)>,
+    list_panel: Baked<(ListView, &'static str, u8)>,
     cheevos: Baked<(ListView, u8)>,
     controls: Baked<(crate::screens::controls::ControlsView, u8)>,
     shelf_name: Baked<(String, u8)>,
@@ -185,6 +209,7 @@ impl Frontend {
             draws: Vec::new(),
             polaroid_texes: Vec::new(),
             faces: FaceBuilder::spawn(),
+            shelf_faces: ShelfFaces::default(),
             cutter: LabelCutter::spawn(),
             link: LinkTexes::default(),
             disc: DiscTexes::default(),
@@ -204,6 +229,7 @@ impl Frontend {
             keyboard: KeyboardTexes::default(),
             info: InfoTexes::default(),
             labels: Baked::default(),
+            list_panel: Baked::default(),
             cheevos: Baked::default(),
             controls: Baked::default(),
             shelf_name: Baked::default(),
@@ -252,29 +278,11 @@ impl Frontend {
         }
     }
 
-    /// Draws every cart's face. No label is decoded here, where hundreds of them would hold the
-    /// boot logo up: every cart comes up in its generated face, and each one that wears a label
-    /// scan is drawn in it on the label workers' threads, the carts on screen first, for compose
-    /// to upload as they come back.
+    /// Makes what every shelf draws its carts with: the outlines, the models and the core
+    /// picker's parts. The carts' own faces are drawn when their shelf is first shown
+    /// (`sync_shelf_faces`).
     pub fn upload_faces(&mut self, compositor: &mut Compositor) {
-        let carts: Vec<&Cart> = self.session.app().carts().collect();
-        let mut labelled = std::collections::HashSet::new();
-        let faces = carts
-            .iter()
-            .zip(boot_faces(&carts))
-            .map(|(c, (f, label))| {
-                if label {
-                    labelled.insert((c.platform as u8, c.stem.as_str()));
-                }
-                compositor.create_texture(f.w, f.h, &f.rgba)
-            })
-            .collect();
-        for cart in self.session.app().carts_nearest_first() {
-            if labelled.contains(&(cart.platform as u8, cart.stem.as_str())) {
-                self.cutter.request(cart.clone());
-            }
-        }
-        self.session.app_mut().set_faces(faces);
+        self.sync_shelf_faces(compositor);
         // the core picker's parts are pixel art, a texel to an art pixel, kept sharp at 2x
         let mut sprite = |f: CartFace| compositor.create_texture_nearest(f.w, f.h, &f.rgba);
         let sockets = omega_store::Core::ALL
@@ -363,6 +371,8 @@ impl Frontend {
         sync_controls(self.session.app_mut(), compositor, &mut self.controls);
         sync_shelf_name(self.session.app_mut(), compositor, &mut self.shelf_name);
         sync_labels(self.session.app_mut(), compositor, &mut self.labels);
+        sync_systems(self.session.app_mut(), compositor);
+        sync_list_panel(self.session.app_mut(), compositor, &mut self.list_panel);
         sync_cheevos(self.session.app_mut(), compositor, &mut self.cheevos);
         sync_background(
             self.session.app_mut(),
@@ -375,6 +385,7 @@ impl Frontend {
         sync_hud(self.session.app_mut(), compositor, &mut self.hud);
         sync_opening(self.session.app_mut(), compositor, &mut self.opening);
         sync_start_notice(self.session.app_mut(), compositor, &mut self.start_notice);
+        self.sync_shelf_faces(compositor);
         self.relabel(compositor);
         sync_core_picker(
             self.session.app_mut(),
@@ -405,13 +416,79 @@ impl Frontend {
     /// Uploads the faces the label workers have handed back onto the faces their carts are drawn
     /// on, up to [`FACE_BYTES_PER_FRAME`] of them a frame, and asks the workers for the face of
     /// each cart a label arrived for, which comes back in a later frame.
+    /// Draws the faces of the shelf in use, when it has none: every cart in its generated
+    /// face, on as many threads as there are cores, and each one that wears a label scan drawn
+    /// in it on the label workers' threads after, the carts on screen first, for compose to
+    /// upload as they come back. No label is decoded here, where hundreds would hold a frame up.
+    /// A shelf no screen has shown for a while gives its textures back.
+    fn sync_shelf_faces(&mut self, compositor: &mut Compositor) {
+        let now = Instant::now();
+        let in_use = self.session.app().shelf_in_use();
+        if let Some(key) = in_use {
+            if !self.session.app().has_faces(key) {
+                let carts = self.session.app().carts_on(key);
+                let refs: Vec<&Cart> = carts.iter().collect();
+                let drawn = boot_faces(&refs);
+                let labelled: std::collections::HashSet<&str> = carts
+                    .iter()
+                    .zip(&drawn)
+                    .filter(|(_, (_, label))| *label)
+                    .map(|(c, _)| c.stem.as_str())
+                    .collect();
+                let spare = &mut self.shelf_faces.spare;
+                let faces: Vec<TexId> = drawn
+                    .iter()
+                    .map(|(f, _)| match spare.pop() {
+                        Some(id) => {
+                            compositor.update_texture(id, f.w, f.h, &f.rgba);
+                            id
+                        }
+                        None => compositor.create_texture(f.w, f.h, &f.rgba),
+                    })
+                    .collect();
+                for cart in self.session.app().carts_on_nearest_first(key) {
+                    if labelled.contains(cart.stem.as_str()) {
+                        self.cutter.request(cart);
+                    }
+                }
+                self.session.app_mut().set_shelf_faces(key, faces);
+                self.shelf_faces.kept.retain(|(k, _)| *k != key);
+            }
+            self.shelf_faces.kept.retain(|(k, _)| *k != key);
+            self.shelf_faces.kept.push((key, now));
+        }
+        // the oldest first: past the most kept, or unshown too long, a shelf gives its back
+        self.shelf_faces.kept.sort_by_key(|(_, at)| *at);
+        let mut keep = Vec::new();
+        let n = self.shelf_faces.kept.len();
+        for (i, (key, at)) in std::mem::take(&mut self.shelf_faces.kept)
+            .into_iter()
+            .enumerate()
+        {
+            let stale = Some(key) != in_use
+                && (now.duration_since(at) > FACES_KEPT || n - i > SHELVES_KEPT);
+            if !stale {
+                keep.push((key, at));
+                continue;
+            }
+            for id in self.session.app_mut().take_shelf_faces(key) {
+                compositor.update_texture(id, 1, 1, &[0; 4]);
+                self.shelf_faces.spare.push(id);
+            }
+        }
+        self.shelf_faces.kept = keep;
+    }
+
     fn relabel(&mut self, compositor: &mut Compositor) {
         for drawn in self.cutter.take(FACE_BYTES_PER_FRAME) {
-            let Some(tex) = self.session.app().face_of(drawn.platform, &drawn.stem) else {
-                continue;
-            };
+            let texes = self
+                .session
+                .app()
+                .faces_of_cart(drawn.platform, &drawn.stem);
             let face = &drawn.face;
-            compositor.update_texture(tex, face.w, face.h, &face.rgba);
+            for tex in texes {
+                compositor.update_texture(tex, face.w, face.h, &face.rgba);
+            }
             self.drop_core_lid(&drawn.stem);
         }
         for (cart, _) in self.session.app_mut().take_stale_faces() {

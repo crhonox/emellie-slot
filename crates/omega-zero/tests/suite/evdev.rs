@@ -411,3 +411,54 @@ fn a_pad_with_no_stick_takes_no_direction_from_its_axes() {
         vec![RawEvent::Down(Btn::Left)]
     );
 }
+
+#[test]
+fn a_game_reading_the_left_stick_as_a_stick_has_it_to_itself() {
+    let mut hat = stick_pad();
+    assert_eq!(
+        hat.feed_as(axis(ABS_X, 3600), true),
+        vec![RawEvent::Down(Btn::Right)]
+    );
+    // the game switches to analog: the stick lets the d-pad go, and holds it no more
+    assert_eq!(
+        hat.feed_as(axis(ABS_X, 3700), false),
+        vec![RawEvent::Up(Btn::Right)]
+    );
+    assert!(hat.feed_as(axis(ABS_Y, 0), false).is_empty());
+    // the hat is the d-pad's still
+    assert_eq!(
+        hat.feed_as(axis(ABS_HAT0X, -1), false),
+        vec![RawEvent::Down(Btn::Left)]
+    );
+}
+
+#[test]
+fn a_stick_is_read_from_its_middle_a_resting_one_centred() {
+    use omega_zero::input::sticks::scaled;
+    assert_eq!(scaled(2000, (0, 4000)), 0);
+    assert_eq!(
+        scaled(2100, (0, 4000)),
+        0,
+        "a stick resting off its middle drifted"
+    );
+    assert_eq!(scaled(4000, (0, 4000)), 32767);
+    assert_eq!(scaled(0, (0, 4000)), -32767);
+    assert_eq!(scaled(-5, (0, 4000)), -32767, "past its reach is its reach");
+    let half = scaled(3000, (0, 4000));
+    assert!((14000..18000).contains(&half), "{half}");
+    assert_eq!(scaled(10, (10, 10)), 0);
+}
+
+#[test]
+fn the_right_stick_is_rx_and_ry_or_else_z_and_rz() {
+    use omega_zero::input::sticks::{Sticks, ABS_RX, ABS_RZ, ABS_X, ABS_Y, ABS_Z};
+    let both = Sticks::of(|c| [ABS_X, ABS_Y, ABS_RX, 4].contains(&c).then_some((0, 4000)));
+    let zed = Sticks::of(|c| {
+        [ABS_X, ABS_Y, ABS_Z, ABS_RZ]
+            .contains(&c)
+            .then_some((0, 4000))
+    });
+    assert!(both.any() && zed.any());
+    assert_ne!(both, zed);
+    assert!(!Sticks::of(|_| None).any(), "a pad with no sticks has none");
+}

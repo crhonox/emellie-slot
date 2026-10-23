@@ -9,7 +9,7 @@ use omega_input::Action;
 use omega_ui::kit::fade::stepped;
 use omega_ui::{ease, Draw, TexId};
 
-use crate::app::{App, Phase};
+use crate::app::App;
 
 /// How long the logo takes to fade out, in ms.
 pub const FADE_MS: f32 = 500.0;
@@ -59,7 +59,7 @@ impl App {
     /// Whether the boot logo would fade now: on the shelf with nothing moving off it, as a boot
     /// that has not gone into a game or to the clock is.
     pub fn boot_fades(&self) -> bool {
-        matches!(self.phase, Phase::Shelf) && self.slide.is_none()
+        self.phase.is_home() && self.slide.is_none()
     }
 
     /// How opaque the boot logo is drawn, while it fades.
@@ -77,7 +77,7 @@ impl App {
     /// Moves the fade on by `dt` seconds, from the first frame, and ends it once it is over or
     /// the shelf has gone.
     pub(crate) fn step_boot_fade(&mut self, dt: f32) {
-        let on_shelf = matches!(self.phase, Phase::Shelf);
+        let on_shelf = self.phase.is_home();
         let Some(fade) = &mut self.boot_fade else {
             return;
         };
@@ -97,7 +97,7 @@ impl App {
         let (Some(fade), Some(alpha)) = (self.boot_fade, self.boot_logo_alpha()) else {
             return;
         };
-        if !matches!(self.phase, Phase::Shelf) {
+        if !self.phase.is_home() {
             return;
         }
         out.push(Draw::Tex {

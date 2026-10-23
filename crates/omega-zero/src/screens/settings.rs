@@ -120,7 +120,7 @@ impl App {
             Action::GbaDown(Btn::Right) => return self.change_setting(row, true),
             Action::GbaDown(Btn::A) => return self.open_settings_row(row),
             Action::GbaDown(Btn::B | Btn::Start) | Action::QuickMenu => {
-                return self.go(Phase::Shelf, Dir::FromAside);
+                return self.go(self.home_phase(), Dir::FromAside);
             }
             _ => return,
         };
