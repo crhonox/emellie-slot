@@ -462,3 +462,49 @@ fn the_right_stick_is_rx_and_ry_or_else_z_and_rz() {
     assert_ne!(both, zed);
     assert!(!Sticks::of(|_| None).any(), "a pad with no sticks has none");
 }
+
+/// The RG CubeXX's ANBERNIC-keys: no X or Y, its sticks on Z, RX, RY and RZ (ABS=3003c).
+fn cube_reach(code: u16) -> Option<(i32, i32)> {
+    use omega_zero::input::sticks::{ABS_RX, ABS_RY, ABS_RZ, ABS_Z};
+    [ABS_Z, ABS_RX, ABS_RY, ABS_RZ]
+        .contains(&code)
+        .then_some((-4096, 4096))
+}
+
+#[test]
+fn a_pad_with_no_x_has_its_left_stick_on_z_and_rx_and_its_right_on_ry_and_rz() {
+    use omega_zero::input::sticks::{Sticks, ABS_RX, ABS_RY, ABS_RZ, ABS_Z};
+    let cube = Sticks::of(cube_reach);
+    assert_eq!(
+        cube.left(),
+        Some([(ABS_Z, (-4096, 4096)), (ABS_RX, (-4096, 4096))])
+    );
+    // the right stick is the other two: fed RY and RZ, the left reads nothing of them
+    let right = Sticks::of(|c| [ABS_RY, ABS_RZ].contains(&c).then_some((-4096, 4096)));
+    assert!(right.left().is_none(), "RY and RZ alone are no left stick");
+}
+
+#[test]
+fn the_cubes_left_stick_works_the_d_pad_on_z_and_rx() {
+    use omega_zero::input::sticks::{Sticks, ABS_RX, ABS_RY, ABS_Z};
+    let left = Sticks::of(cube_reach).left().expect("a left stick");
+    let mut hat = omega_zero::input::evdev::Hat::with_stick_on(left);
+    assert_eq!(
+        hat.feed_as(axis(ABS_Z, 4000), true),
+        vec![RawEvent::Down(Btn::Right)]
+    );
+    assert_eq!(
+        hat.feed_as(axis(ABS_RX, -4000), true),
+        vec![RawEvent::Down(Btn::Up)]
+    );
+    assert!(
+        hat.feed_as(axis(ABS_RY, 4000), true).is_empty(),
+        "the right stick moved the d-pad"
+    );
+    // a game reading the stick as a stick has it: the d-pad lets go
+    assert_eq!(
+        hat.feed_as(axis(ABS_Z, 4000), false),
+        vec![RawEvent::Up(Btn::Right)]
+    );
+    assert!(hat.feed_as(axis(ABS_X, 4000), true).is_empty(), "X is no axis here");
+}

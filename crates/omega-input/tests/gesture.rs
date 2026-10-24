@@ -516,12 +516,13 @@ fn select_and_y_toggles_colour_correction_and_costs_the_game_nothing() {
 }
 
 #[test]
-fn select_and_r1_takes_a_screenshot_and_costs_the_game_nothing() {
+fn select_and_r1_takes_no_screenshot() {
     let mut g = Gestures::new();
-    assert!(g.feed(Down(Select), 0).is_empty());
-    assert_eq!(g.feed(Down(R1), 10), vec![Screenshot]);
-    assert!(g.feed(Up(R1), 40).is_empty());
-    assert!(g.feed(Up(Select), 200).is_empty());
+    let mut got = g.feed(Down(Select), 0);
+    got.extend(g.feed(Down(R1), 10));
+    got.extend(g.feed(Up(R1), 40));
+    got.extend(g.feed(Up(Select), 200));
+    assert!(!got.contains(&Screenshot), "{got:?}");
 }
 
 #[test]

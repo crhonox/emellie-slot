@@ -6,11 +6,11 @@ use omega_store::Platform;
 use crate::plate::UndoFace;
 
 /// The console's body, where a picture that does not fill the canvas leaves it bare: the
-/// dark grey of a GBA's lens around its screen.
+/// black of the panel around the picture.
 pub const BEZEL_FILL: [f32; 4] = [
-    0x19 as f32 / 255.0,
-    0x19 as f32 / 255.0,
-    0x19 as f32 / 255.0,
+    0x00 as f32 / 255.0,
+    0x00 as f32 / 255.0,
+    0x00 as f32 / 255.0,
     1.0,
 ];
 

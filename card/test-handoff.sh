@@ -235,8 +235,8 @@ grep -qx 'brightness_up = dpup+back' "$cube" && grep -qx 'brightness_down = dpdo
 	|| fail "SELECT with up or down is not the panel's light"
 grep -qx 'steps=5' "$TMP/dsperate.log" || fail "DSperate does not step the volume as the frontend does"
 
-# SELECT with R1 is a screenshot, kept in Screenshots/NDS beside the other systems'
-grep -qx 'screenshot = rightshoulder+back' "$cube" || fail "SELECT with R1 takes no screenshot"
+# no hotkey takes a screenshot; one taken from DSperate's menu goes in Screenshots/NDS
+grep -qx 'screenshot = none' "$cube" || fail "a hotkey still takes a screenshot"
 grep -q -- "--set paths.screenshots=$TMP/card/Screenshots/NDS" "$TMP/dsperate.log" \
 	|| fail "screenshots do not go to Screenshots/NDS"
 [ -d "$TMP/card/Screenshots/NDS" ] || fail "Screenshots/NDS was not made"

@@ -194,10 +194,13 @@ screenshot)
 	out="${2:-$repo/screenshots/$(date '+%Y-%m-%d_%H-%M-%S').png}"
 	mkdir -p "$(dirname "$out")"
 	raw="$(mktemp)"
-	# One login: the framebuffer's shape on four lines, then all of it. Its virtual height holds
-	# the three buffers it flips between; pan says which one is on the panel.
-	on "g=/sys/class/graphics/fb0; for f in virtual_size bits_per_pixel stride pan; do echo \$f=\$(cat \$g/\$f); done; cat /dev/fb0" > "$raw"
+	# One login: the framebuffer's shape on five lines, then all of it. Its virtual height holds
+	# the buffers it flips between, three or two (the Cube's 720x720 in two is 1440 lines, as the
+	# SP's 640x480 in three), so the panel's own height comes from modes; pan says which buffer
+	# is on the panel.
+	on "g=/sys/class/graphics/fb0; for f in virtual_size bits_per_pixel stride pan modes; do echo \$f=\$(cat \$g/\$f); done; cat /dev/fb0" > "$raw"
 	python3 - "$raw" "$out" << 'PY'
+import re
 import sys
 from PIL import Image
 
@@ -205,7 +208,7 @@ raw, out = sys.argv[1:3]
 data = open(raw, "rb").read()
 head = {}
 at = 0
-for _ in range(4):
+for _ in range(5):
     end = data.index(b"\n", at)
     key, _, value = data[at:end].decode().partition("=")
     head[key] = value
@@ -215,7 +218,12 @@ w, virtual = (int(v) for v in head["virtual_size"].split(","))
 bpp = int(head["bits_per_pixel"])
 stride = int(head["stride"] or w * bpp // 8)
 _, y = (int(v) for v in (head["pan"] or "0,0").split(","))
-h = virtual // 3 if virtual % 3 == 0 else virtual
+# modes reads like U:720x720p-60, one mode a line; the first is the one in use
+mode_size = re.search(r"(\d+)x(\d+)", head.get("modes", ""))
+if mode_size and int(mode_size.group(1)) == w and virtual % int(mode_size.group(2)) == 0:
+    h = int(mode_size.group(2))
+else:
+    h = virtual // 3 if virtual % 3 == 0 else virtual
 mode = {32: "BGRX", 16: "BGR;16"}[bpp]
 Image.frombuffer("RGB", (w, h), fb[y * stride : (y + h) * stride], "raw", mode, stride, 1).save(out)
 print(f"{out} ({w}x{h}, buffer at line {y})")

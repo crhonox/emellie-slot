@@ -32,6 +32,8 @@ pub struct Hat {
     /// The left stick's reach on each axis, the kernel's minimum and maximum, where it has one.
     reach_x: Option<(i32, i32)>,
     reach_y: Option<(i32, i32)>,
+    /// The axes the left stick is on, across and down, where they are not X and Y.
+    stick_axes: Option<(u16, u16)>,
 }
 
 impl Hat {
@@ -44,24 +46,35 @@ impl Hat {
         }
     }
 
+    /// A d-pad whose left stick is on axes `x` and `y`, each a code and its reach.
+    pub fn with_stick_on([(code_x, x), (code_y, y)]: [(u16, (i32, i32)); 2]) -> Self {
+        Hat {
+            stick_axes: Some((code_x, code_y)),
+            ..Hat::with_stick(Some(x), Some(y))
+        }
+    }
+
     pub fn feed(&mut self, ev: Ev) -> Vec<RawEvent> {
         self.feed_as(ev, super::sticks::left_is_dpad())
     }
 
     /// As `feed`, the left stick working the d-pad only while `stick_is_dpad`.
     pub fn feed_as(&mut self, ev: Ev, stick_is_dpad: bool) -> Vec<RawEvent> {
+        let (stick_x, stick_y) = self.stick_axes.unwrap_or((ABS_X, ABS_Y));
         let (horizontal, before) = match ev.code {
-            ABS_HAT0X | ABS_X => (true, self.held(true)),
-            ABS_HAT0Y | ABS_Y => (false, self.held(false)),
+            ABS_HAT0X => (true, self.held(true)),
+            ABS_HAT0Y => (false, self.held(false)),
+            c if c == stick_x => (true, self.held(true)),
+            c if c == stick_y => (false, self.held(false)),
             _ => return Vec::new(),
         };
         match ev.code {
             ABS_HAT0X => self.x = ev.value.signum(),
             ABS_HAT0Y => self.y = ev.value.signum(),
             // a game reading the left stick as a stick has it to itself: it holds no direction
-            ABS_X if !stick_is_dpad => self.stick_x = 0,
-            ABS_Y if !stick_is_dpad => self.stick_y = 0,
-            ABS_X => match self.reach_x {
+            _ if !stick_is_dpad && horizontal => self.stick_x = 0,
+            _ if !stick_is_dpad => self.stick_y = 0,
+            _ if horizontal => match self.reach_x {
                 Some(reach) => self.stick_x = stick(self.stick_x, ev.value, reach),
                 None => return Vec::new(),
             },

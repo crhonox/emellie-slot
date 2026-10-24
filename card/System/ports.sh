@@ -136,7 +136,7 @@ install_portmaster || exit 2
 stage
 
 target="$(sed -n 's/^BASEOS_TARGET=//p' "$RELEASE" 2> /dev/null | tr -d '"' | tr -d ' ')"
-# pad_layout and pad_map_positional
+# pad_layout and pad_map
 . "$SYS/pad.sh"
 
 mkdir -p "$PORTS" "$SD/Saves/PORTS"
@@ -150,8 +150,8 @@ export LC_ALL=C
 # The mali SDL2 first, the one that reaches the panel and classifies the pad; the vendor one
 # last, for the ports mod.txt moves it ahead for
 export LD_LIBRARY_PATH="$DIR/lib:/usr/lib:/usr/lib/aarch64-linux-gnu:$DIR/sdl2"
-# By position, as spruceOS gives its ports and PortMaster
-export SDL_GAMECONTROLLERCONFIG="$(pad_map_positional "$(pad_layout "$target")")"
+# By the printed names, Nintendo's layout: A is the right face button, as on the pad
+export SDL_GAMECONTROLLERCONFIG="$(pad_map "$(pad_layout "$target")")"
 
 governor="$(cat "$CPU/scaling_governor" 2> /dev/null)"
 echo performance > "$CPU/scaling_governor" 2> /dev/null

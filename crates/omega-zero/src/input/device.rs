@@ -7,7 +7,7 @@ use std::time::Instant;
 use omega_input::{Btn, InputSource, Millis, RawEvent};
 
 use super::evdev::{
-    abs_reach, decode, device_name, pick_devices, to_raw, Ev, Hat, ABS_X, ABS_Y, EVENT_BYTES,
+    abs_reach, decode, device_name, pick_devices, to_raw, Ev, Hat, EVENT_BYTES,
     EV_ABS, EV_KEY, EV_SYN,
 };
 use super::trace;
@@ -100,16 +100,18 @@ fn read_node(node: &Path, queue: &Mutex<Vec<RawEvent>>, trace: Option<&Trace>) {
         }
     };
     let fd = std::os::fd::AsRawFd::as_raw_fd(&file);
-    let (x, y) = (abs_reach(fd, ABS_X), abs_reach(fd, ABS_Y));
-    if let (Some(x), Some(y)) = (x, y) {
-        eprintln!("omega-zero: input {label}: left stick works the d-pad, x {x:?}, y {y:?}");
-    }
-    let mut hat = Hat::with_stick(x, y);
     // the sticks as a game reads them, kept whether or not they work the d-pad
     let sticks = super::sticks::Sticks::of(|code| abs_reach(fd, code));
     if sticks.any() {
         eprintln!("omega-zero: input {label}: sticks {sticks:?}");
     }
+    let mut hat = match sticks.left() {
+        Some(left) => {
+            eprintln!("omega-zero: input {label}: left stick works the d-pad, {left:?}");
+            Hat::with_stick_on(left)
+        }
+        None => Hat::default(),
+    };
     let mut buf = [0u8; EVENT_BYTES * 16];
     loop {
         let read = match file.read(&mut buf) {

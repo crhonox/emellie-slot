@@ -115,7 +115,7 @@ grep -qx "home=$CARD/Saves/PORTS" "$TMP/port.log" || fail "the port's HOME is no
 grep -qx "xdg=$TOOLS" "$TMP/port.log" || fail "the port does not find PortMaster by XDG_DATA_HOME"
 grep -qx "lib=$CARD/System/ports/lib:/usr/lib:/usr/lib/aarch64-linux-gnu:$CARD/System/ports/sdl2" \
 	"$TMP/port.log" || fail "the port does not find the mali SDL2 first: [$(grep lib= "$TMP/port.log")]"
-grep -q 'ANBERNIC-keys,a:b4,b:b3,x:b5,y:b6,' "$TMP/port.log" || fail "the pad is not mapped by position"
+grep -q 'ANBERNIC-keys,a:b3,b:b4,x:b6,y:b5,' "$TMP/port.log" || fail "the pad is not mapped by its printed names"
 grep -q 'lefttrigger:b12,righttrigger:b13' "$TMP/port.log" || fail "the RG35XX SP's triggers are not b12/b13"
 grep -qx 'gov=performance' "$TMP/port.log" || fail "the port did not run under performance"
 grep -qx 'bash=yes' "$TMP/port.log" || fail "the port was not run by bash"
