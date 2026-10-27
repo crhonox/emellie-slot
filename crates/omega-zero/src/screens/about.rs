@@ -37,7 +37,7 @@ pub const FORK_OF: &str = "OMEGA-ZERO @OAURAMOS";
 /// can be in the credits' well at 640x480, 44 letters, and the well holds eight. No hyphen
 /// stands between two small letters: Chrome sets one a pixel lower there than Rust can.
 pub const CREDITS: [&str; 8] = [
-    "Emulation by mGBA (MPL-2.0), gpSP (GPL-2.0),",
+    "Emulation: mGBA (MPL-2.0), armGBA (GPL-2.0),",
     "Snes9x (no commercial use), Mednafen's",
     "Supafaust and PCSX-ReARMed (both GPL-2.0).",
     "Made on BaseOS by pvaibhav.",

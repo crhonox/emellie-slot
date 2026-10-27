@@ -101,9 +101,9 @@ fn mgba_gba_ram_is_where_retroachievements_expects_it() {
 }
 
 #[test]
-fn gpsp_gba_ram_is_where_retroachievements_expects_it() {
+fn armgba_gba_ram_is_where_retroachievements_expects_it() {
     let _l = CORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(mut core) = vendored("gpsp") else {
+    let Some(mut core) = vendored("armgba") else {
         return;
     };
     core.load(&gba_rom()).unwrap();

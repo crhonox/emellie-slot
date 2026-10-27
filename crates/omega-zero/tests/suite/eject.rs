@@ -39,14 +39,14 @@ fn eject_clears_the_slot_only_after_the_state_is_durable() {
     eject(
         d.path(),
         Platform::Gba,
-        Core::Mgba,
+        Core::Armgba,
         "Emerald",
         Some(&[9u8; 1024]),
         Some(b"savdata"),
     )
     .unwrap();
     assert_eq!(read_app_state(d.path()).cart, None);
-    let r = StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald");
+    let r = StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald");
     assert_eq!(r.read_resume().unwrap().unwrap().len(), 1024);
     assert_eq!(
         std::fs::read(d.path().join("Saves/GBA/Emerald.sav")).unwrap(),
@@ -63,11 +63,11 @@ fn a_resume_that_cannot_be_written_leaves_the_cart_in_the_slot() {
     let d = tmp_root_with_carts(&["Emerald"]);
     write_app_state(d.path(), &seated("Emerald")).unwrap();
     std::fs::create_dir_all(d.path().join("States/GBA")).unwrap();
-    std::fs::write(d.path().join("States/GBA/mgba"), b"in the way").unwrap();
+    std::fs::write(d.path().join("States/GBA/armgba"), b"in the way").unwrap();
     assert!(eject(
         d.path(),
         Platform::Gba,
-        Core::Mgba,
+        Core::Armgba,
         "Emerald",
         Some(&[9u8; 1024]),
         None
@@ -91,7 +91,7 @@ fn an_unchanged_battery_save_is_not_rewritten() {
     let unchanged = eject(
         d.path(),
         Platform::Gba,
-        Core::Mgba,
+        Core::Armgba,
         "Emerald",
         Some(&[0u8; 8]),
         Some(b"savdata"),
@@ -99,7 +99,7 @@ fn an_unchanged_battery_save_is_not_rewritten() {
     let changed = eject(
         d.path(),
         Platform::Gba,
-        Core::Mgba,
+        Core::Armgba,
         "Emerald",
         Some(&[0u8; 8]),
         Some(b"changed"),
@@ -132,7 +132,7 @@ fn eject_preserves_the_levels() {
     eject(
         d.path(),
         Platform::Gba,
-        Core::Mgba,
+        Core::Armgba,
         "Emerald",
         Some(&[0u8; 8]),
         None,
@@ -149,7 +149,7 @@ fn ejecting_a_playing_cart_flushes_before_the_animation_starts() {
     let mut a = app_playing_in(d.path(), "Emerald");
     a.apply(Action::Eject);
     assert!(matches!(a.phase(), Phase::Ejecting { .. }));
-    let r = StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald");
+    let r = StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald");
     assert_eq!(
         r.read_resume().unwrap().expect("nothing was flushed").len(),
         1024
@@ -168,7 +168,7 @@ fn a_refused_cart_writes_no_resume() {
         a.update(1.0 / 60.0);
     }
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_none()

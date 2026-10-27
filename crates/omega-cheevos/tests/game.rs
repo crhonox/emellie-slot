@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use omega_cheevos::game::{console_for, hash, identify, GB, GBA, GBC, PS1, SNES};
+use omega_cheevos::game::{console_for, hash, identify, GB, GBA, GBC, MEGA_DRIVE, NES, PS1, SNES};
 use omega_store::Platform;
 
 fn gb_rom(cgb: u8) -> Vec<u8> {
@@ -14,6 +14,19 @@ fn each_system_counts_as_its_retroachievements_console() {
     assert_eq!(console_for(Platform::Gba, &[]), Some(GBA));
     assert_eq!(console_for(Platform::Snes, &[]), Some(SNES));
     assert_eq!(console_for(Platform::Ps1, &[]), Some(PS1));
+    assert_eq!(console_for(Platform::Nes, &[]), Some(NES));
+    assert_eq!(console_for(Platform::Md, &[]), Some(MEGA_DRIVE));
+    assert_eq!(console_for(Platform::Pico8, &[]), None);
+}
+
+#[test]
+fn a_nes_dump_hashes_the_same_with_its_ines_header_or_without() {
+    let rom: Vec<u8> = (0..0x8000u32).map(|i| (i * 7) as u8).collect();
+    let mut headed = b"NES\x1a\x02\x01".to_vec();
+    headed.resize(16, 0);
+    headed.extend_from_slice(&rom);
+    assert!(hash(NES, &rom).is_some());
+    assert_eq!(hash(NES, &headed), hash(NES, &rom));
 }
 
 #[test]

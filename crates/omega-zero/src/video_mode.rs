@@ -176,7 +176,10 @@ pub fn screen_for(platform: Platform, mode: VideoMode, frame: (u32, u32)) -> Scr
 /// and are laid out by their own, rather than a handheld drawn for the GBA's screen.
 fn is_console(platform: Platform) -> bool {
     // the DS is never drawn here, its emulator draws itself; laid out as a console if it is
-    matches!(platform, Platform::Snes | Platform::Ps1 | Platform::Nds)
+    matches!(
+        platform,
+        Platform::Nes | Platform::Snes | Platform::Md | Platform::Ps1 | Platform::Nds
+    )
 }
 
 /// The GBA frame at three panel pixels to a game pixel, which every canvas but 640x480 holds.
@@ -223,7 +226,14 @@ pub fn screen_on_frame(
         };
     }
     match platform {
-        Platform::Gba | Platform::Snes | Platform::Ps1 | Platform::Nds | Platform::Ports => {
+        Platform::Gba
+        | Platform::Nes
+        | Platform::Snes
+        | Platform::Md
+        | Platform::Ps1
+        | Platform::Nds
+        | Platform::Pico8
+        | Platform::Ports => {
             let h = (cw * SRC_H as f32 / SRC_W as f32).round();
             let view = GameView {
                 rect: [0.0, 0.0, cw, h],
@@ -272,6 +282,9 @@ const SNES_W: f32 = 256.0;
 /// pixels a line, or an interlaced one, twice the lines, fills the same rect. Stretched, the
 /// SNES takes a television's 4:3, as large as the canvas holds.
 ///
+/// The NES and the Mega Drive at their actual size are laid out as the SNES is, 256 and 320
+/// pixels a line: 512x480 and 640x448 on 640x480, 720x675 and 720x504 across 720x720.
+///
 /// The PlayStation at its actual size is that 4:3: 640x480 on 640x480, where its usual 320x240
 /// is exactly 2x, centred on 720x480, and 720x540 across 720x720. Stretched, it fills the
 /// canvas.
@@ -279,6 +292,8 @@ fn console_screen(c: Canvas, platform: Platform, mode: VideoMode, frame: (u32, u
     let (cw, ch) = (c.w as f32, c.h as f32);
     let (w, h) = match (platform, mode) {
         (Platform::Snes, VideoMode::Actual) => snes_whole(cw, ch, frame.1),
+        (Platform::Nes, VideoMode::Actual) => whole(cw, ch, NES_W, lines_or(frame.1, 240)),
+        (Platform::Md, VideoMode::Actual) => whole(cw, ch, MD_W, lines_or(frame.1, 224)),
         (Platform::Ps1, VideoMode::Stretch) => (cw, ch),
         _ => four_three(cw, ch),
     };
@@ -299,17 +314,32 @@ fn console_screen(c: Canvas, platform: Platform, mode: VideoMode, frame: (u32, u
 /// width where its height holds that, otherwise at the largest whole scale it holds. An
 /// interlaced frame's lines count as the half they each are of the picture.
 fn snes_whole(cw: f32, ch: f32, lines: u32) -> (f32, f32) {
-    let lines = match lines {
-        0 => 224,
+    whole(cw, ch, SNES_W, lines_or(lines, 224))
+}
+
+/// The NES's lines are 256 pixels wide; the Mega Drive's 320, its 256-pixel mode stretched to
+/// them as a television does.
+const NES_W: f32 = 256.0;
+const MD_W: f32 = 320.0;
+
+/// A frame's `lines`, `none` before there is one, an interlaced frame's as the half they are.
+fn lines_or(lines: u32, none: u32) -> f32 {
+    (match lines {
+        0 => none,
         l if l > 256 => l / 2,
         l => l,
-    } as f32;
-    let across = (lines * cw / SNES_W).round();
+    }) as f32
+}
+
+/// A picture `width` pixels by `lines` with square pixels: across the canvas's whole width
+/// where its height holds that, otherwise at the largest whole scale it holds.
+fn whole(cw: f32, ch: f32, width: f32, lines: f32) -> (f32, f32) {
+    let across = (lines * cw / width).round();
     if across <= ch {
         return (cw, across);
     }
-    let scale = (cw / SNES_W).min(ch / lines).floor().max(1.0);
-    let (w, h) = (SNES_W * scale, lines * scale);
+    let scale = (cw / width).min(ch / lines).floor().max(1.0);
+    let (w, h) = (width * scale, lines * scale);
     if w <= cw && h <= ch {
         (w, h)
     } else {

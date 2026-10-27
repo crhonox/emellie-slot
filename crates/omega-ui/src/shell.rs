@@ -60,6 +60,12 @@ pub const SNES_SHELL: Shell = shell([0x8b, 0x8a, 0x91], Finish::Solid);
 /// The Super Famicom cart's light grey, which Europe's carts share.
 pub const SFC_SHELL: Shell = shell([0xb7, 0xb6, 0xbb], Finish::Solid);
 
+/// A NES cart's grey, in the Famicom's shape.
+pub const NES_SHELL: Shell = shell([0x76, 0x76, 0x78], Finish::Solid);
+
+/// A Mega Drive cart's black.
+pub const MD_SHELL: Shell = shell([0x2a, 0x2a, 0x2c], Finish::Solid);
+
 const GB_CODES: &[(&str, Shell)] = &[
     ("AAU", shell([0xb3, 0x8b, 0x3a], Finish::Solid)),
     ("AAUJ", DUAL_MODE_SHELL),
@@ -100,7 +106,9 @@ pub fn shell_for(cart: &Cart) -> Shell {
             SnesShell::Ntsc => SNES_SHELL,
             SnesShell::Famicom => SFC_SHELL,
         },
-        Platform::Ps1 | Platform::Nds | Platform::Ports => DEFAULT_SHELL,
+        Platform::Nes => NES_SHELL,
+        Platform::Md => MD_SHELL,
+        Platform::Ps1 | Platform::Nds | Platform::Pico8 | Platform::Ports => DEFAULT_SHELL,
     }
 }
 

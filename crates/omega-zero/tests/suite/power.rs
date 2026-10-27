@@ -26,7 +26,7 @@ fn lid_close_flushes_resume_before_dozing() {
     let d = tmp_root_with_carts(&["Emerald"]);
     let mut a = app_playing_in(d.path(), "Emerald");
     a.apply(Action::LidClose);
-    let r = StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald");
+    let r = StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald");
     assert!(
         r.read_resume().unwrap().is_some(),
         "state must be durable before doze"
@@ -68,7 +68,7 @@ fn lid_close_on_the_shelf_wakes_back_to_the_shelf() {
     a.apply(Action::LidClose);
     assert!(matches!(a.phase(), Phase::Doze { cart: None }));
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_none()
@@ -87,7 +87,7 @@ fn lid_close_over_the_switcher_wakes_into_the_game() {
     a.apply(Action::LidOpen);
     assert!(matches!(a.phase(), Phase::Playing { .. }));
     assert_eq!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .list()
             .unwrap()
             .len(),
@@ -150,7 +150,7 @@ fn a_hold_opens_the_menu_and_commits_nothing() {
     assert_eq!(a.power_menu(), Some(0), "the menu opens on Restart");
     assert!(!a.powering_off() && !a.restarting());
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_some(),

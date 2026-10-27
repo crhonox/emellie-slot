@@ -312,17 +312,17 @@ fn a_socket_prints_its_cores_name_in_flat_half_strength_ink() {
             .filter(|&(x, y)| alpha(&face, x, y) == 255 && rgb(&face, x, y) == ink)
             .collect()
     };
-    let (mgba, gpsp) = (printed(Core::Mgba), printed(Core::Gpsp));
+    let (mgba, armgba) = (printed(Core::Mgba), printed(Core::Armgba));
     assert!(
-        mgba.len() > 20 && gpsp.len() > 20,
+        mgba.len() > 20 && armgba.len() > 20,
         "a socket's name is barely there"
     );
-    assert_ne!(mgba, gpsp, "both sockets print the same name");
+    assert_ne!(mgba, armgba, "both sockets print the same name");
 }
 
 #[test]
 fn the_chip_is_level_and_needs_no_room_to_turn() {
-    for core in [None, Some(Core::Mgba), Some(Core::Gpsp)] {
+    for core in [None, Some(Core::Mgba), Some(Core::Armgba)] {
         let face = chip_face(core);
         assert_eq!((face.w, face.h), (CHIP_W, CHIP_H));
         assert_eq!(alpha(&face, 0, 0), 0, "{core:?}'s pins reach its corner");
@@ -349,14 +349,14 @@ fn a_seated_chip_wears_its_name_and_a_flying_one_is_blank() {
     assert_eq!(light(&chip_face(None)), 0, "the blank chip says something");
     assert_ne!(
         chip_face(Some(Core::Mgba)).rgba,
-        chip_face(Some(Core::Gpsp)).rgba,
+        chip_face(Some(Core::Armgba)).rgba,
         "both cores wear the same mark"
     );
 }
 
 #[test]
 fn padding_moves_nothing() {
-    let face = chip_face(Some(Core::Gpsp));
+    let face = chip_face(Some(Core::Armgba));
     let more = padded(&face, 3);
     assert_eq!((more.w, more.h), (face.w + 6, face.h + 6));
     for (x, y) in [(0, 0), (10, 7), (face.w - 1, face.h - 1)] {
@@ -396,7 +396,7 @@ fn a_shadow_is_a_checker_of_black_with_its_corners_clear() {
 #[test]
 fn the_seated_chips_name_is_printed_in_whole_pixels() {
     let red = |face: &CartFace, x: u32, y: u32| face.rgba[((y * face.w + x) * 4) as usize];
-    for core in [Core::Mgba, Core::Gpsp] {
+    for core in [Core::Mgba, Core::Armgba] {
         let named = chip_face(Some(core));
         let blank = chip_face(None);
         let mut inks: Vec<u8> = (0..named.h)
@@ -573,7 +573,10 @@ fn every_cores_name_fits_its_chip_with_room_either_side() {
     }
     assert_eq!(
         Core::ALL.map(Core::text),
-        ["mGBA", "gpSP", "Snes9x", "Faust", "PCSX", "DSpr", "Gamb", "Port"]
+        [
+            "arm", "mGBA", "Snes9x", "Faust", "PCSX", "DSpr", "Gamb", "PicoDr", "GPGX", "FCEUmm",
+            "Nesto", "PICO", "Port"
+        ]
     );
 }
 

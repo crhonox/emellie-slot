@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in omega-zero does not work the way it should.
+description: Something in Emellie Slot does not work the way it should.
 labels: [bug]
 body:
   - type: dropdown
@@ -23,21 +23,21 @@ body:
   - type: input
     id: versions
     attributes:
-      label: omega-zero and BaseOS versions
-      description: omega-zero's version is on the About label. BaseOS's is in /etc/baseos-release.
-      placeholder: omega-zero v0.1.0, BaseOS v1.3.0
+      label: Emellie Slot and BaseOS versions
+      description: Emellie Slot's version is on the About label. BaseOS's is in /etc/baseos-release.
+      placeholder: Emellie Slot v0.1.0, BaseOS v1.3.0
     validations:
       required: true
   - type: textarea
     id: what
     attributes:
       label: What happened
-      description: What you did, what you expected, and what omega-zero did instead.
+      description: What you did, what you expected, and what Emellie Slot did instead.
     validations:
       required: true
   - type: textarea
     id: log
     attributes:
-      label: omega-zero.log
-      description: Paste omega-zero.log from the root of the card omega-zero runs from.
+      label: emellie-slot.log
+      description: Paste emellie-slot.log from the root of the card Emellie Slot runs from.
       render: text

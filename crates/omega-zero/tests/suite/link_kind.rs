@@ -1,4 +1,4 @@
-use omega_zero::link_kind::{link_carried, link_kind, serial_option, LinkKind};
+use omega_zero::link_kind::{armgba_port, both_ports, link_kind, LinkKind};
 
 #[test]
 fn the_wireless_adapter_games_are_wireless() {
@@ -51,136 +51,28 @@ fn everything_else_is_the_cable() {
 }
 
 #[test]
-fn the_mode_gpsp_would_pick_is_left_to_gpsp() {
-    for (kind, code, title) in [
-        (LinkKind::Cable, "OMTE", "OMEGA TEST"),
-        (LinkKind::Wireless, "BMGE", "MARIOGOLFADV"),
-        (LinkKind::Wireless, "BPEE", "POKEMON EMER"),
-        (LinkKind::Cable, "AXVE", "POKEMON RUBY"),
-        (LinkKind::Cable, "AWRE", "ADVANCEWARS"),
-        (LinkKind::Cable, "AW2E", "ADVANCEWARS2"),
-    ] {
-        assert_eq!(serial_option(kind, kind, code, title), "auto", "{code}");
-    }
+fn armgba_is_put_on_the_port_chosen() {
+    assert_eq!(armgba_port(LinkKind::Cable), "cable");
+    assert_eq!(armgba_port(LinkKind::Wireless), "wireless");
 }
 
 #[test]
-fn switched_to_the_adapter_is_rfu() {
-    for (code, title) in [
-        ("OMTE", "OMEGA TEST"),
-        ("AXVE", "POKEMON RUBY"),
-        ("AWRE", "ADVANCEWARS"),
-        ("", ""),
-    ] {
-        assert_eq!(
-            serial_option(LinkKind::Wireless, LinkKind::Cable, code, title),
-            "rfu",
-            "{code}"
-        );
-    }
-}
-
-#[test]
-fn a_pokemon_cart_switched_to_the_cable_uses_the_pokemon_protocol() {
+fn only_pokemon_links_both_ways() {
     for (code, title) in [
         ("BPEE", "POKEMON EMER"),
-        ("ZZZZ", "POKEMON"),
-        ("AXVE", "PKMN HACK"),
-        ("AXPE", "PKMN HACK"),
+        ("BPRE", "POKEMON FIRE"),
+        ("AXVE", "POKEMON RUBY"),
         ("BPEE", "PKMN HACK"),
-        ("BPRE", "PKMN HACK"),
-        ("BPGE", "PKMN HACK"),
-    ] {
-        assert_eq!(
-            serial_option(LinkKind::Cable, LinkKind::Wireless, code, title),
-            "mul_poke",
-            "{code} {title}"
-        );
-    }
-}
-
-#[test]
-fn advance_wars_switched_to_the_cable_uses_its_own_protocol() {
-    assert_eq!(
-        serial_option(LinkKind::Cable, LinkKind::Wireless, "AWRE", "ADVANCEWARS"),
-        "mul_aw1"
-    );
-    assert_eq!(
-        serial_option(LinkKind::Cable, LinkKind::Wireless, "AW2E", "ADVANCEWARS2"),
-        "mul_aw2"
-    );
-}
-
-#[test]
-fn any_other_cart_switched_to_the_cable_stays_on_auto() {
-    for (code, title) in [("BMGE", "MARIOGOLFADV"), ("AWXE", "ADVANCEWARS"), ("", "")] {
-        assert_eq!(
-            serial_option(LinkKind::Cable, LinkKind::Wireless, code, title),
-            "auto",
-            "{code}"
-        );
-    }
-}
-
-#[test]
-fn gpsp_carries_the_adapter_list_the_pokemon_family_and_advance_wars() {
-    for (code, title) in [
-        ("BMGE", "MARIOGOLFADV"),
-        ("BTME", "MARIOKARTADV"),
-        ("B2WE", "WARIOWARE"),
-        ("BPEE", "POKEMON EMER"),
-        ("AXVE", "POKEMON RUBY"),
-        ("AXPE", "POKEMON SAPP"),
-        ("ZZZZ", "POKEMON FIRE"),
-        ("AWRE", "ADVANCEWARS"),
-        ("AWRP", "ADVANCEWARS"),
-        ("AW2E", "ADVANCEWARS2"),
-        ("AW2P", "ADVANCEWARS2"),
-    ] {
-        assert!(link_carried(code, title), "{code} {title}");
-    }
-}
-
-#[test]
-fn gpsp_carries_nothing_else() {
-    for (code, title) in [
-        ("2ATE", "APOTRIS"),
-        ("OMTE", "OMEGA TEST"),
-        ("AMTE", "METROIDFUSION"),
-        ("A88E", "MARIO&LUIGIRPG"),
-        ("AX4E", "SUPER MARIOD"),
-        ("", ""),
-    ] {
-        assert!(!link_carried(code, title), "{code} {title}");
-    }
-}
-
-#[test]
-fn a_pokemon_hack_is_carried_the_same_as_the_retail_game() {
-    for (code, title) in [
-        ("BPEE", "PKMN RADICAL"),
         ("ZZZZ", "POKEMON"),
-        ("BPPE", "POKEMON PINB"),
     ] {
-        assert!(link_carried(code, title), "{code} {title}");
+        assert!(both_ports(code, title), "{code} {title}");
     }
-}
-
-#[test]
-fn the_carried_carts_are_exactly_the_ones_with_a_mode_of_their_own() {
     for (code, title) in [
         ("BMGE", "MARIOGOLFADV"),
-        ("BPEE", "POKEMON EMER"),
-        ("AXVE", "POKEMON RUBY"),
         ("AWRE", "ADVANCEWARS"),
-        ("AW2E", "ADVANCEWARS2"),
         ("2ATE", "APOTRIS"),
-        ("OMTE", "OMEGA TEST"),
-        ("A88E", "MARIO&LUIGIRPG"),
         ("", ""),
     ] {
-        let own = link_kind(code, title, true) == LinkKind::Wireless
-            || serial_option(LinkKind::Cable, LinkKind::Wireless, code, title) != "auto";
-        assert_eq!(link_carried(code, title), own, "{code} {title}");
+        assert!(!both_ports(code, title), "{code} {title}");
     }
 }

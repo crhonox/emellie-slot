@@ -87,6 +87,18 @@ launch || fail "launch_frontend.sh failed over a port"
 [ "$(tr '\n' ' ' < "$TMP/omega.log")" = "returned=0 returned=1 returned=1 " ] \
 	|| fail "omega-zero did not start again after the port: [$(cat "$TMP/omega.log")]"
 
+# --- a PICO-8 cart: pico8.sh runs it, then omega-zero starts again
+setup
+omega
+printf '#!/bin/sh\necho "$@" >> "$TMP/pico8.log"\nexit 0\n' > "$TMP/card/System/pico8.sh"
+printf '%s\n' "platform=PICO8\nrom=$TMP/card/Games/PICO8/celeste.p8.png\n" > "$TMP/handoffs"
+rm -f "$TMP/omega.log" "$TMP/pico8.log"
+launch || fail "launch_frontend.sh failed over a PICO-8 cart"
+[ "$(cat "$TMP/pico8.log")" = "$TMP/card/Games/PICO8/celeste.p8.png" ] \
+	|| fail "pico8.sh was not run with the cart: [$(cat "$TMP/pico8.log" 2>/dev/null)]"
+[ "$(tr '\n' ' ' < "$TMP/omega.log")" = "returned=0 returned=1 " ] \
+	|| fail "omega-zero did not start again after PICO-8: [$(cat "$TMP/omega.log")]"
+
 # --- a system nothing runs: omega-zero just starts again
 setup
 omega

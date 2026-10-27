@@ -19,7 +19,7 @@
 set -eu
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
-cores="${DEVICE_CORES:-mgba gpsp snes9x mednafen_supafaust pcsx_rearmed}"
+cores="${DEVICE_CORES:-mgba armgba snes9x mednafen_supafaust pcsx_rearmed}"
 console="${CONSOLE:-rg35xxsp.local}"
 port=22
 case "$console" in

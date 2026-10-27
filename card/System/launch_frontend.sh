@@ -6,8 +6,8 @@ LOADER="${AGS_LOADER:-/lib/ld-linux-aarch64.so.1}"
 POWEROFF="${AGS_POWEROFF:-poweroff}"
 export OMEGA_ROOT="$SD"
 # every thread allocates from the one heap: glibc's arenas, 64 MB of address space reserved
-# for each thread that contends, crowded the cores loaded after them, and gpsp's JIT cache has
-# to be mapped within 128 MB of its code
+# for each thread that contends, crowded the cores loaded after them, and a recompiler's code
+# cache has to be mapped near its code
 export MALLOC_ARENA_MAX=1
 
 log() {
@@ -56,8 +56,8 @@ fi
 [ -f "$SD/emellie-slot.log" ] && mv -f "$SD/emellie-slot.log" "$SD/emellie-slot.log.1"
 : > "$SD/emellie-slot.log"
 
-# A game whose system has an emulator of its own (the DS, in DSperate; a port, in ports.sh) is
-# handed over: omega-zero writes what to run here and leaves, letting go of the panel, the sound
+# A game whose system has an emulator of its own (the DS, in DSperate; a port, in ports.sh; a
+# PICO-8 cart, in the player's own PICO-8, pico8.sh) is handed over: omega-zero writes what to run here and leaves, letting go of the panel, the sound
 # card and the buttons; the emulator runs, and omega-zero starts again with OMEGA_RETURNED set, the game on its shelf.
 # One left from a boot the handheld went down in is not acted on: omega-zero hands that game
 # over again itself, as the one it was playing.
@@ -89,6 +89,11 @@ while :; do
 		log "handoff: port $rom"
 		sh "$SYS/ports.sh" "$rom" >> "$SD/emellie-slot.log" 2>&1
 		log "handoff: port left, status $?"
+		;;
+	PICO8)
+		log "handoff: pico-8 $rom"
+		sh "$SYS/pico8.sh" "$rom" >> "$SD/emellie-slot.log" 2>&1
+		log "handoff: pico-8 left, status $?"
 		;;
 	*) log "handoff: nothing here runs $platform" ;;
 	esac

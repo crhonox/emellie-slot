@@ -241,8 +241,8 @@ impl Session {
             }
         }
         if let Some(on) = self.app.take_colour_correction() {
-            if let Some((key, value)) = crate::core::colour_option(self.app.core(), on) {
-                if let Some(emu) = &self.emu {
+            if let Some(emu) = &self.emu {
+                for (key, value) in crate::core::colour_options(self.app.core(), on) {
                     emu.set_option(key, value);
                 }
             }
@@ -430,7 +430,13 @@ impl Session {
             .flatten();
         let player = self.app.link_player();
         let setup = match platform {
-            Platform::Snes | Platform::Ps1 | Platform::Nds | Platform::Ports => Setup::Console,
+            Platform::Nes
+            | Platform::Snes
+            | Platform::Md
+            | Platform::Ps1
+            | Platform::Nds
+            | Platform::Pico8
+            | Platform::Ports => Setup::Console,
             Platform::Gba | Platform::Gb | Platform::Gbc => Setup::Handheld {
                 serial,
                 colour: self.app.colour_correction(),
@@ -489,7 +495,7 @@ impl Session {
     }
 
     fn reload_for_link(&mut self, stem: &str, serial: &'static str) {
-        eprintln!("omega-zero: link: loading {stem} again with gpsp_serial={serial}");
+        eprintln!("omega-zero: link: loading {stem} again on armGBA's {serial} port");
         if self.emu.is_some() {
             self.app.flush_resume();
         }

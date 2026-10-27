@@ -2,7 +2,7 @@ use crate::common;
 
 use omega_retro::LibretroCore;
 use omega_store::Core;
-use omega_zero::link_kind::{serial_option, LinkKind};
+use omega_zero::link_kind::{armgba_port, LinkKind};
 
 fn dylib_for(core: Core) -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -11,24 +11,9 @@ fn dylib_for(core: Core) -> std::path::PathBuf {
 }
 
 fn every_serial_mode() -> Vec<&'static str> {
-    let carts = [
-        ("BPEE", "POKEMON EMER"),
-        ("AWRE", "ADVANCEWARS"),
-        ("AW2E", "ADVANCE WARS2"),
-        ("AMFE", "METROID4"),
-    ];
-    let mut modes = Vec::new();
-    for (code, title) in carts {
-        for auto in [LinkKind::Cable, LinkKind::Wireless] {
-            for chosen in [LinkKind::Cable, LinkKind::Wireless] {
-                let mode = serial_option(chosen, auto, code, title);
-                if !modes.contains(&mode) {
-                    modes.push(mode);
-                }
-            }
-        }
-    }
-    modes
+    [LinkKind::Cable, LinkKind::Wireless]
+        .map(armgba_port)
+        .to_vec()
 }
 
 fn every_option_is_one_the_core_has(core: &LibretroCore, what: &str) {
@@ -89,7 +74,7 @@ fn both_cores_declare_a_colour_correction_option() {
     let _g = common::core_lock();
     for (which, key) in [
         (Core::Mgba, "mgba_color_correction"),
-        (Core::Gpsp, "gpsp_color_correction"),
+        (Core::Armgba, "armgba_color_correction"),
     ] {
         let path = dylib_for(which);
         if !path.exists() {
@@ -131,17 +116,17 @@ fn a_cable_session_leaves_the_bios_to_the_card() {
 }
 
 #[test]
-fn a_cable_session_sets_nothing_on_gpsp() {
+fn a_cable_session_sets_nothing_on_armgba() {
     let _g = common::core_lock();
-    let path = dylib_for(Core::Gpsp);
+    let path = dylib_for(Core::Armgba);
     if !path.exists() {
-        eprintln!("no gpsp dylib on this host, skipping");
+        eprintln!("no armgba dylib on this host, skipping");
         return;
     }
     let mut core = LibretroCore::open(&path).expect("open core");
-    omega_zero::core::apply_link_options(&mut core, Core::Gpsp, 0);
+    omega_zero::core::apply_link_options(&mut core, Core::Armgba, 0);
     assert!(
         core.options().is_empty(),
-        "a cable session reached into gpSP, which has no cable to offer"
+        "mGBA's cable session reached into armGBA, whose link is its own"
     );
 }

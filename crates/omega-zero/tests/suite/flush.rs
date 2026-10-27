@@ -23,7 +23,7 @@ fn power_press_edge_flushes_immediately_not_on_release() {
     let d = tmp_root_with_carts(&["Emerald"]);
     let mut a = app_playing_in(d.path(), "Emerald");
     a.apply(Action::PowerTap);
-    let r = StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald");
+    let r = StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald");
     assert!(
         r.read_resume().unwrap().is_some(),
         "flush must happen on press, a held power button is a hardware cutoff"
@@ -36,7 +36,7 @@ fn autosave_fires_at_sixty_seconds_and_not_before() {
     let mut a = app_playing_in(d.path(), "Emerald");
     a.tick_ms(59_999);
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_none()
@@ -44,7 +44,7 @@ fn autosave_fires_at_sixty_seconds_and_not_before() {
     a.tick_ms(60_000);
     a.settle_saves();
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_some()
@@ -57,7 +57,7 @@ fn battery_critical_flushes_and_powers_off() {
     let mut a = app_playing_in(d.path(), "Emerald");
     a.on_battery(unknown(3));
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_some()
@@ -86,7 +86,7 @@ fn opening_the_menu_flushes_and_the_choice_powers_off() {
         "the hold asks the question, it does not answer it"
     );
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_some(),
@@ -122,7 +122,7 @@ fn an_idle_doze_times_out_into_a_power_off() {
     a.on_doze_timeout();
     assert!(a.powering_off(), "the timeout powers off");
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_some(),
@@ -137,7 +137,7 @@ fn a_battery_above_the_threshold_keeps_playing() {
     a.on_battery(unknown(20));
     assert!(!a.powering_off());
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_none()
@@ -254,7 +254,7 @@ fn a_critical_battery_that_is_discharging_still_powers_off() {
     a.on_battery(at(3, Charge::Discharging));
     assert!(a.powering_off());
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_some()
@@ -268,7 +268,7 @@ fn an_unknown_charge_state_powers_off_exactly_as_before() {
     a.on_battery(at(3, Charge::Unknown));
     assert!(a.powering_off());
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_some()
@@ -338,7 +338,7 @@ fn an_autosave_lands_once_the_writes_settle() {
     a.tick_ms(60_000);
     a.settle_saves();
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_some()
@@ -353,7 +353,7 @@ fn a_lid_close_right_after_an_autosave_leaves_the_lids_state() {
     a.tick_ms(60_000);
     a.apply(Action::LidClose);
     a.settle_saves();
-    let state = StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
+    let state = StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
         .read_resume()
         .unwrap()
         .expect("no resume written");

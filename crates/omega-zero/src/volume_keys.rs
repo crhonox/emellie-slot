@@ -3,11 +3,16 @@
 //! own volume, so the keys step the card's `lineout volume` instead, as spruceOS does, from the
 //! level omega-zero was at and in its steps; each step is kept in the card's state, so omega-zero
 //! comes back at it. ports.sh gives the control back the level it had.
+//!
+//! `System/pico8.sh` runs it as `--volume-keys CARD --menu-quits PID`: PICO-8 has no way back
+//! of its own, so with MENU held a second the helper ends PICO-8, process PID, and itself, as MENU
+//! held leaves DSperate.
 
 use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 use omega_input::Btn;
 use omega_store::{read_app_state, write_app_state, AppState, VOLUME_MAX};
@@ -19,6 +24,16 @@ use crate::input::evdev::{code_to_btn, decode, pick_devices, EVENT_BYTES, EV_KEY
 pub const CONTROL: &str = "lineout volume";
 
 const GPIO: &str = "/sys/kernel/debug/gpio";
+
+/// How long MENU is held to leave, with `--menu-quits`: as long as it is in DSperate.
+pub const MENU_HOLD: Duration = Duration::from_secs(1);
+
+/// A key the helper hears: a press of a volume key, or MENU going down or up.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Key {
+    Volume(Btn),
+    Menu(bool),
+}
 
 /// The level after `key`, a volume key, in omega-zero's steps.
 pub fn stepped(level: u8, key: Btn) -> u8 {
@@ -63,7 +78,9 @@ fn apply(level: u8) {
     }
 }
 
-pub fn run(root: &Path) {
+/// The volume keys until killed; with `menu_quits`, until MENU is held [`MENU_HOLD`], which
+/// ends that process too.
+pub fn run(root: &Path, menu_quits: Option<u32>) {
     let mut state = read_app_state(root);
     let mut level = level_of(&state, headphones());
     apply(level);
@@ -76,21 +93,57 @@ pub fn run(root: &Path) {
             };
             let mut packet = [0u8; EVENT_BYTES];
             while file.read_exact(&mut packet).is_ok() {
-                // a press, and the repeats of one held
-                let Some(ev) = decode(&packet).filter(|ev| ev.kind == EV_KEY && ev.value != 0)
-                else {
+                let Some(ev) = decode(&packet).filter(|ev| ev.kind == EV_KEY) else {
                     continue;
                 };
-                if let Some(key @ (Btn::VolUp | Btn::VolDown)) = code_to_btn(ev.code) {
-                    if keys.send(key).is_err() {
-                        return;
+                // a press, and the repeats of one held; MENU's going down and up
+                let key = match code_to_btn(ev.code) {
+                    Some(key @ (Btn::VolUp | Btn::VolDown)) if ev.value != 0 => Key::Volume(key),
+                    Some(Btn::Menu) if menu_quits.is_some() && ev.value != 2 => {
+                        Key::Menu(ev.value == 1)
                     }
+                    _ => continue,
+                };
+                if keys.send(key).is_err() {
+                    return;
                 }
             }
         });
     }
     drop(keys);
-    for key in pressed {
+    let mut menu_down: Option<Instant> = None;
+    loop {
+        let key = match menu_down {
+            Some(down) => {
+                let left = (down + MENU_HOLD).saturating_duration_since(Instant::now());
+                match pressed.recv_timeout(left) {
+                    Ok(key) => key,
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        if let Some(pid) = menu_quits {
+                            eprintln!("omega-zero: volume keys: MENU held, ending {pid}");
+                            let _ = Command::new("kill").arg(pid.to_string()).status();
+                        }
+                        return;
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                }
+            }
+            None => match pressed.recv() {
+                Ok(key) => key,
+                Err(_) => return,
+            },
+        };
+        let key = match key {
+            Key::Menu(true) => {
+                menu_down.get_or_insert_with(Instant::now);
+                continue;
+            }
+            Key::Menu(false) => {
+                menu_down = None;
+                continue;
+            }
+            Key::Volume(key) => key,
+        };
         let phones = headphones();
         level = stepped(level_of(&state, phones), key);
         apply(level);

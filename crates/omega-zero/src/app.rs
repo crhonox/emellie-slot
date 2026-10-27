@@ -32,7 +32,7 @@ use crate::disc_screen::{DiscBar, DiscScreen};
 use crate::handoff::{self, Handoff};
 use crate::label_screen::{Labels, LabelsScreen};
 use crate::label_sync::{label_jobs, Account, LabelJobs, NoKey, Want};
-use crate::link_kind::{link_carried, link_kind, serial_option, LinkKind};
+use crate::link_kind::{armgba_port, both_ports, link_kind, LinkKind};
 use crate::link_radio::{radio_jobs, LinkRole, RadioJob, RadioJobs};
 use crate::link_screen::{LinkBar, LinkSprites};
 use crate::link_start::{link_port, LinkFail, LinkProgress, LinkStarter, LinkStep};
@@ -1033,11 +1033,11 @@ impl App {
     }
 
     pub fn link_mode(&self, stem: &str) -> (LinkKind, &'static str) {
-        let Some((cart, auto)) = self.auto_link(stem) else {
-            return (LinkKind::Cable, "auto");
+        let Some((_, auto)) = self.auto_link(stem) else {
+            return (LinkKind::Cable, armgba_port(LinkKind::Cable));
         };
         let chosen = self.link_choices.get(stem).copied().unwrap_or(auto);
-        (chosen, serial_option(chosen, auto, &cart.code, &cart.title))
+        (chosen, armgba_port(chosen))
     }
 
     pub fn link_active(&self) -> bool {
@@ -1351,12 +1351,13 @@ impl App {
         let now = self.now();
         match self.phase {
             Phase::Shelf => match action {
-                Action::GbaDown(Btn::X) if self.core_picker.is_none() => self.open_core_picker(),
-                Action::GbaDown(Btn::Y) if self.core_picker.is_none() => self.toggle_favorite(),
+                // the picker takes every press while it is up: B closes it, not the shelf
+                _ if self.core_picker.is_some() => self.core_picker_input(action),
+                Action::GbaDown(Btn::X) => self.open_core_picker(),
+                Action::GbaDown(Btn::Y) => self.toggle_favorite(),
                 Action::GbaDown(Btn::B) if self.list_shelf.is_some() => self.leave_list(),
                 Action::GbaDown(Btn::B) if self.uses_grid() => self.back_to_grid(),
                 Action::QuickMenu => self.open_collect(),
-                _ if self.core_picker.is_some() => self.core_picker_input(action),
                 // START is the settings button on the shelf; MENU opens nothing here
                 Action::GbaDown(Btn::Start) => self.open_settings(),
                 Action::SelectTap => self.go(Phase::Controls, Dir::Deeper),
@@ -2559,11 +2560,15 @@ impl App {
 
     fn auto_link(&self, stem: &str) -> Option<(&Cart, LinkKind)> {
         let cart = self.shelf().carts.iter().find(|c| c.stem == stem)?;
-        let auto = link_kind(
-            &cart.code,
-            &cart.title,
-            omega_store::header_clean(&cart.rom),
-        );
+        // the Wireless Adapter is the GBA's: a Game Boy game links by cable
+        let auto = match cart.platform {
+            Platform::Gba => link_kind(
+                &cart.code,
+                &cart.title,
+                omega_store::header_clean(&cart.rom),
+            ),
+            _ => LinkKind::Cable,
+        };
         Some((cart, auto))
     }
 
@@ -2790,7 +2795,7 @@ impl App {
                 .seated()
                 .is_some_and(|stem| self.link_mode(stem).0 == LinkKind::Wireless);
             if wireless {
-                self.hud.toast(Toast::NeedsGpsp, self.now());
+                self.hud.toast(Toast::NeedsArmgba, self.now());
                 return;
             }
             self.link_hardware = LinkKind::Cable;
@@ -2798,20 +2803,10 @@ impl App {
             self.game_menu = Some(GameMenu::Pick(self.last_role));
             return;
         }
-        if self.platform != Platform::Gba {
-            self.hud.toast(Toast::NoLink, self.now());
-            return;
-        }
-        let carried = self
-            .seated()
-            .and_then(|stem| self.auto_link(stem))
-            .is_some_and(|(cart, _)| link_carried(&cart.code, &cart.title));
-        if !carried {
-            self.hud.toast(Toast::NoLink, self.now());
-            return;
-        }
-        if self.core != Core::Gpsp {
-            self.hud.toast(Toast::NeedsGpsp, self.now());
+        // armGBA links any GBA game, on the cable or the Wireless Adapter, and any Game Boy game
+        // on the cable
+        if self.core != Core::Armgba {
+            self.hud.toast(Toast::NeedsArmgba, self.now());
             return;
         }
         let hardware = self
@@ -2931,9 +2926,8 @@ impl App {
     }
 
     pub(crate) fn link_switchable(&self, stem: &str) -> bool {
-        self.auto_link(stem).is_some_and(|(cart, auto)| {
-            serial_option(self.link_hardware.other(), auto, &cart.code, &cart.title)
-                != serial_option(self.link_hardware, auto, &cart.code, &cart.title)
+        self.auto_link(stem).is_some_and(|(cart, _)| {
+            cart.platform == Platform::Gba && both_ports(&cart.code, &cart.title)
         })
     }
 
@@ -2941,7 +2935,10 @@ impl App {
         let Some(stem) = self.seated().map(str::to_string) else {
             return;
         };
-        let loaded = self.link_loaded.unwrap_or("auto");
+        // a game loaded on no port of its choosing was loaded on its own: what link_mode says
+        // before any choice
+        let own = self.auto_link(&stem).map_or(LinkKind::Cable, |(_, auto)| auto);
+        let loaded = self.link_loaded.unwrap_or(armgba_port(own));
         if self.core == Core::Mgba {
             let player = role.client_id() as u8;
             if self.link_player == Some(player) {

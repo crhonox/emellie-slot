@@ -2,19 +2,26 @@ version: '3'
 
 vars:
   CORE: vendor/mgba_libretro.dylib
-  GPSP_HOST: vendor/gpsp_libretro.dylib
   SNES9X_HOST: vendor/snes9x_libretro.dylib
   SUPAFAUST_HOST: vendor/mednafen_supafaust_libretro.dylib
   PCSX_HOST: vendor/pcsx_rearmed_libretro.dylib
   GAMBATTE_HOST: vendor/gambatte_libretro.dylib
+  PICODRIVE_HOST: vendor/picodrive_libretro.dylib
+  GPGX_HOST: vendor/genesis_plus_gx_libretro.dylib
+  FCEUMM_HOST: vendor/fceumm_libretro.dylib
+  NESTOPIA_HOST: vendor/nestopia_libretro.dylib
   MGBA_COMMIT: e31759b24e7a4e3899285ff720d7b573ac328ae7
-  GPSP_COMMIT: 7b2dd37394e2822110cacef321e9bb291a305b77
+  ARMGBA_COMMIT: 9847d41da663ebee7839874c34ebde26f0df1e03
   SNES9X_COMMIT: fae2fea08f74180759ef540ee94259213f503480
   SUPAFAUST_COMMIT: 642d1d1b6684aa7e306a02a89885f3f5456a5157
   PCSX_COMMIT: c8816799b50388e61cfe237fe2cdbb7d8175f20a
   GAMBATTE_COMMIT: d9d6cd06382d1ced30de34d56d3609452323dab1
+  PICODRIVE_COMMIT: 1890c2932234c9d30f4cd3851d02228baae8f09e
+  GPGX_COMMIT: 60bee4c724859710ce05672239e5b601ad01382e
+  FCEUMM_COMMIT: ac0d00a7fc01166f84c7bac01d1084ebfd2b865e
+  NESTOPIA_COMMIT: 2110d21b7174455ec98948bb474147dea0e3cad0
   # DSperate is no libretro core: the DS games are handed over to it, System/dsperate/dsperate
-  DSPERATE_COMMIT: 59fce36e59d5c7d181009d72ff824446c27f7d99
+  DSPERATE_COMMIT: e04b806b5c01527b08a8e7181476ada57e97db52
   # The mali-fbdev SDL2 DSperate draws to fb0 through (BaseOS's own cannot reach the panel), and
   # the libsamplerate it needs, taken from a spruceOS checkout, which builds them for the H700
   SPRUCE: '{{.SPRUCE | default "../spruceOS"}}'
@@ -24,10 +31,15 @@ vars:
   # OMEGA_SS_DEVPASSWORD, which build.rs masks into the binary. Never committed
   SS_ENV: '{{.SS_ENV | default (print .HOME "/.config/emellie-slot/screenscraper.env")}}'
   # The libretro names of the cores the device bundle ships, <name>_libretro.so in System/
-  DEVICE_CORES: mgba gpsp snes9x mednafen_supafaust pcsx_rearmed gambatte
+  DEVICE_CORES: >-
+    mgba armgba snes9x mednafen_supafaust pcsx_rearmed gambatte picodrive genesis_plus_gx fceumm
+    nestopia
   # The cores built by cores/<name>/build.sh whose source archive ships in System/licenses/
-  # beside them, as <name>:<libretro name>. gpSP's ships too, the way it always has
-  SOURCE_CORES: snes9x:snes9x supafaust:mednafen_supafaust pcsx_rearmed:pcsx_rearmed gambatte-libretro:gambatte
+  # beside them, as <name>:<libretro name>
+  SOURCE_CORES: >-
+    armgba:armgba snes9x:snes9x supafaust:mednafen_supafaust pcsx_rearmed:pcsx_rearmed
+    gambatte-libretro:gambatte picodrive:picodrive Genesis-Plus-GX:genesis_plus_gx
+    libretro-fceumm:fceumm nestopia:nestopia
 
 tasks:
   default:
@@ -114,6 +126,7 @@ tasks:
       - sh card/test-bluetooth.sh
       - sh card/test-handoff.sh
       - sh card/test-ports.sh
+      - sh card/test-pico8.sh
       - sh card/test-lid.sh
 
   screens:
@@ -135,15 +148,23 @@ tasks:
 
   core:
     desc: >-
-      Build mGBA and Supafaust and fetch gpSP, Snes9x and pcsx_rearmed for this host. A missing
-      core silently runs the mock (a test pattern and a sine tone) instead
+      Build mGBA and Supafaust and fetch Snes9x, pcsx_rearmed, Gambatte, PicoDrive,
+      Genesis Plus GX, FCEUmm and Nestopia for this host. A missing core silently runs the mock
+      (a test pattern and a sine tone) instead
     cmds:
       - task: core:mgba:host
-      - task: core:gpsp:host
       - task: core:snes9x:host
       - task: core:supafaust:host
       - task: core:pcsx:host
       - task: core:gambatte:host
+      - task: core:buildbot
+        vars: {LIB: picodrive}
+      - task: core:buildbot
+        vars: {LIB: genesis_plus_gx}
+      - task: core:buildbot
+        vars: {LIB: fceumm}
+      - task: core:buildbot
+        vars: {LIB: nestopia}
 
   core:mgba:host:
     desc: Build mgba_libretro for this host from the pinned libretro/mgba commit and cores/mgba's patches
@@ -154,12 +175,6 @@ tasks:
       - sh cores/mgba/build.sh build {{.MGBA_COMMIT}} target/mgba {{.CORE}}
       - file {{.CORE}} | grep -q Mach-O
       - 'echo "built {{.CORE}}"'
-
-  core:gpsp:host:
-    desc: Fetch the host gpSP core from the libretro buildbot
-    cmds:
-      - task: core:buildbot
-        vars: {LIB: gpsp}
 
   core:snes9x:host:
     desc: Fetch the host Snes9x core from the libretro buildbot
@@ -240,14 +255,46 @@ tasks:
         tar -tzf vendor/{{.NAME}}-src.tar.gz | grep "^{{.NAME}}-{{.COMMIT}}/{{.FILE}}$" > /dev/null
         echo "{{.COMMIT}}" > vendor/{{.NAME}}-src.sha
 
+  core:src:git:
+    desc: >-
+      core:src for a core whose source has submodules, which GitHub's archive leaves out:
+      libretro/NAME cloned at COMMIT with them, packed as NAME-COMMIT/ the way an archive is
+    internal: true
+    run: when_changed
+    requires:
+      vars: [NAME, COMMIT, FILE]
+    status:
+      - test -f vendor/{{.NAME}}-src.tar.gz
+      - test "$(cat vendor/{{.NAME}}-src.sha 2>/dev/null)" = "{{.COMMIT}}"
+    cmds:
+      - |
+        set -euo pipefail
+        mkdir -p vendor
+        rm -f vendor/{{.NAME}}-src.tar.gz vendor/{{.NAME}}-src.sha
+        vendor="$PWD/vendor"
+        work="$(mktemp -d)"
+        trap 'rm -rf "$work"' EXIT
+        git init -q "$work/{{.NAME}}-{{.COMMIT}}"
+        cd "$work/{{.NAME}}-{{.COMMIT}}"
+        git fetch -q --depth 1 "https://github.com/libretro/{{.NAME}}.git" {{.COMMIT}}
+        git checkout -q FETCH_HEAD
+        git submodule -q update --init --recursive --depth 1
+        test -f {{.FILE}}
+        cd "$work"
+        find "{{.NAME}}-{{.COMMIT}}" -name .git -prune -o -print | LC_ALL=C sort |
+          tar --no-recursion --mtime=@0 --owner=0 --group=0 -cf - -T - | gzip -n \
+          > "$vendor/{{.NAME}}-src.tar.gz"
+        echo "{{.COMMIT}}" > "$vendor/{{.NAME}}-src.sha"
+
   core:update:
     desc: >-
-      Rebuild mGBA and Supafaust and re-fetch gpSP, Snes9x and pcsx_rearmed for this host even
+      Rebuild mGBA and Supafaust and re-fetch Snes9x and pcsx_rearmed for this host even
       if they are already vendored
     cmds:
       - >-
-        rm -f {{.CORE}} {{.CORE}}.meta {{.GPSP_HOST}} {{.SNES9X_HOST}} {{.SUPAFAUST_HOST}}
-        {{.SUPAFAUST_HOST}}.meta {{.PCSX_HOST}} {{.GAMBATTE_HOST}}
+        rm -f {{.CORE}} {{.CORE}}.meta {{.SNES9X_HOST}} {{.SUPAFAUST_HOST}}
+        {{.SUPAFAUST_HOST}}.meta {{.PCSX_HOST}} {{.GAMBATTE_HOST}} {{.PICODRIVE_HOST}}
+        {{.GPGX_HOST}} {{.FCEUMM_HOST}} {{.NESTOPIA_HOST}}
       - task: core
 
   icons:
@@ -339,8 +386,9 @@ tasks:
       - ./target/release/emellie-slot --init-root {{.OUT}}
       - cp target/release/emellie-slot {{.OUT}}/System/emellie-slot
       - >-
-        cp {{.CORE}} {{.GPSP_HOST}} {{.SNES9X_HOST}} {{.SUPAFAUST_HOST}} {{.PCSX_HOST}}
-        {{.GAMBATTE_HOST}} {{.OUT}}/System/
+        cp {{.CORE}} {{.SNES9X_HOST}} {{.SUPAFAUST_HOST}} {{.PCSX_HOST}}
+        {{.GAMBATTE_HOST}} {{.PICODRIVE_HOST}} {{.GPGX_HOST}} {{.FCEUMM_HOST}} {{.NESTOPIA_HOST}}
+        {{.OUT}}/System/
       - 'echo "dist ready at {{.OUT}}, copy its contents to SD2"'
 
   core:device:
@@ -355,48 +403,39 @@ tasks:
       - file vendor/mgba_libretro.so | grep -q aarch64
       - 'echo "built vendor/mgba_libretro.so"'
 
-  core:gpsp:
+  core:armgba:
     desc: >-
-      Build the aarch64 linux gpSP core from its pinned source archive, which ships beside it
-      as its GPL-2.0 section 3(a) corresponding source
+      Build the aarch64 linux armGBA core, the GBA's default, from its pinned source archive,
+      which ships beside it: GPL-2.0 as a whole, as it links Gambatte; its own parts are MPL-2.0
     status:
-      - test -f vendor/gpsp_libretro.so
-      - test -f vendor/gpsp-src.tar.gz
-      - test "$(cat vendor/gpsp-src.sha 2>/dev/null)" = "{{.GPSP_COMMIT}}"
-      - test "$(cat vendor/gpsp_libretro.so.meta 2>/dev/null)" = "$(sh cores/gpsp/build.sh stamp {{.GPSP_COMMIT}})"
-      - test "$(cat vendor/gpsp-src.meta 2>/dev/null)" = "$(sh cores/gpsp/build.sh stamp {{.GPSP_COMMIT}})"
+      - test -f vendor/armgba_libretro.so
+      - test "$(cat vendor/armgba-src.sha 2>/dev/null)" = "{{.ARMGBA_COMMIT}}"
+      - test "$(cat vendor/armgba_libretro.so.meta 2>/dev/null)" = "$(sh cores/armgba/build.sh stamp {{.ARMGBA_COMMIT}})"
     cmds:
       - |
         set -euo pipefail
         mkdir -p vendor
-        rm -f vendor/gpsp_libretro.so vendor/gpsp_libretro.so.meta \
-              vendor/gpsp-src.tar.gz vendor/gpsp-src.sha vendor/gpsp-src.meta
-        curl -fsSL -o vendor/gpsp-src.tar.gz \
-          "https://github.com/libretro/gpsp/archive/{{.GPSP_COMMIT}}.tar.gz"
-        tar -tzf vendor/gpsp-src.tar.gz | grep "^gpsp-{{.GPSP_COMMIT}}/Makefile$" > /dev/null
+        if [ "$(cat vendor/armgba-src.sha 2>/dev/null)" != "{{.ARMGBA_COMMIT}}" ]; then
+          rm -f vendor/armgba-src.tar.gz vendor/armgba-src.sha
+          curl -fsSL -o vendor/armgba-src.tar.gz \
+            "https://github.com/Jacob-Matthew-Cook/armGBA/archive/{{.ARMGBA_COMMIT}}.tar.gz"
+          tar -tzf vendor/armgba-src.tar.gz | grep "^armGBA-{{.ARMGBA_COMMIT}}/libretro/libretro.c$" > /dev/null
+          echo "{{.ARMGBA_COMMIT}}" > vendor/armgba-src.sha
+        fi
       - task: device:sh
         vars:
           CMD: >-
-            sh cores/gpsp/build.sh build {{.GPSP_COMMIT}} vendor/gpsp-src.tar.gz
-            target-device/gpsp vendor/gpsp_libretro.so
-      - file vendor/gpsp_libretro.so | grep -q aarch64
-      - echo "{{.GPSP_COMMIT}}" > vendor/gpsp-src.sha
-      - cp vendor/gpsp_libretro.so.meta vendor/gpsp-src.meta
-      - 'echo "built vendor/gpsp_libretro.so from vendor/gpsp-src.tar.gz @ {{.GPSP_COMMIT}}"'
+            sh cores/dsperate/apt.sh cmake zlib1g-dev &&
+            sh cores/armgba/build.sh build {{.ARMGBA_COMMIT}} vendor/armgba-src.tar.gz
+            target-device/armgba vendor/armgba_libretro.so
+      - file vendor/armgba_libretro.so | grep -q aarch64
+      - 'echo "built vendor/armgba_libretro.so from vendor/armgba-src.tar.gz @ {{.ARMGBA_COMMIT}}"'
 
-  core:gpsp:update:
-    desc: Refetch gpSP's source archive and rebuild the core from it, even if the set is current
+  core:armgba:update:
+    desc: Refetch armGBA's source archive and rebuild the core from it, even if the set is current
     cmds:
-      - >-
-        rm -f vendor/gpsp_libretro.so vendor/gpsp_libretro.so.meta vendor/gpsp-src.tar.gz
-        vendor/gpsp-src.sha vendor/gpsp-src.meta
-      - task: core:gpsp
-
-  core:gpsp:test:
-    desc: Prove gpSP's Advance Wars session-flip patch still fixes what it was written for
-    deps: [core:gpsp]
-    cmds:
-      - sh cores/gpsp/test/run.sh vendor/gpsp-src.tar.gz
+      - rm -f vendor/armgba_libretro.so vendor/armgba_libretro.so.meta vendor/armgba-src.tar.gz vendor/armgba-src.sha
+      - task: core:armgba
 
   core:snes9x:
     desc: >-
@@ -441,6 +480,106 @@ tasks:
     cmds:
       - rm -f vendor/gambatte_libretro.so vendor/gambatte_libretro.so.meta vendor/gambatte-libretro-src.tar.gz vendor/gambatte-libretro-src.sha
       - task: core:gambatte
+
+  core:picodrive:
+    desc: >-
+      Build the aarch64 linux PicoDrive core, the Mega Drive's default, from its pinned source
+      with its submodules. Non-commercial use only; the source ships beside it
+    status:
+      - test -f vendor/picodrive_libretro.so
+      - test "$(cat vendor/picodrive-src.sha 2>/dev/null)" = "{{.PICODRIVE_COMMIT}}"
+      - test "$(cat vendor/picodrive_libretro.so.meta 2>/dev/null)" = "$(sh cores/picodrive/build.sh stamp {{.PICODRIVE_COMMIT}})"
+    cmds:
+      - task: core:src:git
+        vars: {NAME: picodrive, COMMIT: '{{.PICODRIVE_COMMIT}}', FILE: Makefile.libretro}
+      - task: device:sh
+        vars:
+          CMD: >-
+            sh cores/picodrive/build.sh build {{.PICODRIVE_COMMIT}} vendor/picodrive-src.tar.gz
+            target-device/picodrive vendor/picodrive_libretro.so
+      - file vendor/picodrive_libretro.so | grep -q aarch64
+      - 'echo "built vendor/picodrive_libretro.so from vendor/picodrive-src.tar.gz @ {{.PICODRIVE_COMMIT}}"'
+
+  core:picodrive:update:
+    desc: Refetch PicoDrive's source archive and rebuild the device core from it, even if the set is current
+    cmds:
+      - rm -f vendor/picodrive_libretro.so vendor/picodrive_libretro.so.meta vendor/picodrive-src.tar.gz vendor/picodrive-src.sha
+      - task: core:picodrive
+
+  core:gpgx:
+    desc: >-
+      Build the aarch64 linux Genesis Plus GX core, the Mega Drive's second, from its pinned
+      source archive. Non-commercial use only; the archive ships beside it
+    status:
+      - test -f vendor/genesis_plus_gx_libretro.so
+      - test "$(cat vendor/Genesis-Plus-GX-src.sha 2>/dev/null)" = "{{.GPGX_COMMIT}}"
+      - test "$(cat vendor/genesis_plus_gx_libretro.so.meta 2>/dev/null)" = "$(sh cores/genesis_plus_gx/build.sh stamp {{.GPGX_COMMIT}})"
+    cmds:
+      - task: core:src
+        vars: {NAME: Genesis-Plus-GX, COMMIT: '{{.GPGX_COMMIT}}', FILE: Makefile.libretro}
+      - task: device:sh
+        vars:
+          CMD: >-
+            sh cores/genesis_plus_gx/build.sh build {{.GPGX_COMMIT}} vendor/Genesis-Plus-GX-src.tar.gz
+            target-device/genesis_plus_gx vendor/genesis_plus_gx_libretro.so
+      - file vendor/genesis_plus_gx_libretro.so | grep -q aarch64
+      - 'echo "built vendor/genesis_plus_gx_libretro.so from vendor/Genesis-Plus-GX-src.tar.gz @ {{.GPGX_COMMIT}}"'
+
+  core:gpgx:update:
+    desc: Refetch Genesis Plus GX's source archive and rebuild the device core from it, even if the set is current
+    cmds:
+      - rm -f vendor/genesis_plus_gx_libretro.so vendor/genesis_plus_gx_libretro.so.meta vendor/Genesis-Plus-GX-src.tar.gz vendor/Genesis-Plus-GX-src.sha
+      - task: core:gpgx
+
+  core:fceumm:
+    desc: >-
+      Build the aarch64 linux FCEUmm core, the NES's default, from its pinned source archive.
+      GPL-2.0; the archive ships beside it
+    status:
+      - test -f vendor/fceumm_libretro.so
+      - test "$(cat vendor/libretro-fceumm-src.sha 2>/dev/null)" = "{{.FCEUMM_COMMIT}}"
+      - test "$(cat vendor/fceumm_libretro.so.meta 2>/dev/null)" = "$(sh cores/fceumm/build.sh stamp {{.FCEUMM_COMMIT}})"
+    cmds:
+      - task: core:src
+        vars: {NAME: libretro-fceumm, COMMIT: '{{.FCEUMM_COMMIT}}', FILE: Makefile.libretro}
+      - task: device:sh
+        vars:
+          CMD: >-
+            sh cores/fceumm/build.sh build {{.FCEUMM_COMMIT}} vendor/libretro-fceumm-src.tar.gz
+            target-device/fceumm vendor/fceumm_libretro.so
+      - file vendor/fceumm_libretro.so | grep -q aarch64
+      - 'echo "built vendor/fceumm_libretro.so from vendor/libretro-fceumm-src.tar.gz @ {{.FCEUMM_COMMIT}}"'
+
+  core:fceumm:update:
+    desc: Refetch FCEUmm's source archive and rebuild the device core from it, even if the set is current
+    cmds:
+      - rm -f vendor/fceumm_libretro.so vendor/fceumm_libretro.so.meta vendor/libretro-fceumm-src.tar.gz vendor/libretro-fceumm-src.sha
+      - task: core:fceumm
+
+  core:nestopia:
+    desc: >-
+      Build the aarch64 linux Nestopia UE core, the NES's second, from its pinned source
+      archive. GPL-2.0; the archive ships beside it
+    status:
+      - test -f vendor/nestopia_libretro.so
+      - test "$(cat vendor/nestopia-src.sha 2>/dev/null)" = "{{.NESTOPIA_COMMIT}}"
+      - test "$(cat vendor/nestopia_libretro.so.meta 2>/dev/null)" = "$(sh cores/nestopia/build.sh stamp {{.NESTOPIA_COMMIT}})"
+    cmds:
+      - task: core:src
+        vars: {NAME: nestopia, COMMIT: '{{.NESTOPIA_COMMIT}}', FILE: libretro/Makefile}
+      - task: device:sh
+        vars:
+          CMD: >-
+            sh cores/nestopia/build.sh build {{.NESTOPIA_COMMIT}} vendor/nestopia-src.tar.gz
+            target-device/nestopia vendor/nestopia_libretro.so
+      - file vendor/nestopia_libretro.so | grep -q aarch64
+      - 'echo "built vendor/nestopia_libretro.so from vendor/nestopia-src.tar.gz @ {{.NESTOPIA_COMMIT}}"'
+
+  core:nestopia:update:
+    desc: Refetch Nestopia's source archive and rebuild the device core from it, even if the set is current
+    cmds:
+      - rm -f vendor/nestopia_libretro.so vendor/nestopia_libretro.so.meta vendor/nestopia-src.tar.gz vendor/nestopia-src.sha
+      - task: core:nestopia
 
   core:snes9x:update:
     desc: Refetch Snes9x's source archive and rebuild the device core from it, even if the set is current
@@ -588,9 +727,38 @@ tasks:
         file vendor/portmaster/lib/libSDL2-2.0.so.0 | grep -q aarch64
       - 'echo "staged vendor/portmaster from {{.SPRUCE}}"'
 
+  vendor:pico8:
+    desc: >-
+      Build the shim System/pico8.sh preloads under PICO-8, which keeps it from asking the mali
+      SDL2 for the sensors it was built without (cores/pico8/sdl-sensor-shim.c)
+    sources:
+      - cores/pico8/sdl-sensor-shim.c
+    generates:
+      - vendor/pico8/libsdl_sensor_shim.so
+    cmds:
+      - task: device:sh
+        vars:
+          CMD: >-
+            mkdir -p vendor/pico8 &&
+            cc -shared -fPIC -O2 -o vendor/pico8/libsdl_sensor_shim.so cores/pico8/sdl-sensor-shim.c -ldl
+      - file vendor/pico8/libsdl_sensor_shim.so | grep -q aarch64
+
   cores:device:
-    desc: Build every core the device bundle ships, mGBA, gpSP, Snes9x, Supafaust, pcsx_rearmed, Gambatte and DSperate
-    deps: [core:device, core:gpsp, core:snes9x, core:supafaust, core:pcsx, core:gambatte, core:dsperate]
+    desc: >-
+      Build every core the device bundle ships, mGBA, armGBA, Snes9x, Supafaust, pcsx_rearmed,
+      Gambatte, PicoDrive, Genesis Plus GX, FCEUmm, Nestopia and DSperate
+    deps:
+      - core:device
+      - core:armgba
+      - core:snes9x
+      - core:supafaust
+      - core:pcsx
+      - core:gambatte
+      - core:picodrive
+      - core:gpgx
+      - core:fceumm
+      - core:nestopia
+      - core:dsperate
 
   device:sh:
     desc: >-
@@ -649,7 +817,7 @@ tasks:
 
   dist:device:
     desc: Build the SD2 tree for an H700 device, OUT defaults to ./dist-device
-    deps: [cores:device, build:device, vendor:portmaster]
+    deps: [cores:device, build:device, vendor:portmaster, vendor:pico8]
     vars:
       OUT: '{{.OUT | default "dist-device"}}'
     cmds:
@@ -679,19 +847,17 @@ tasks:
           > {{.OUT}}/Games/PORTS/PortMaster.sh
       - |
         set -eu
+        # PICO-8 is the player's own, in BIOS/; the shim it is run with, and Splore on its shelf
+        cp vendor/pico8/libsdl_sensor_shim.so {{.OUT}}/System/pico8/
+        mkdir -p {{.OUT}}/Games/PICO8
+        : > {{.OUT}}/Games/PICO8/Splore.splore
+      - |
+        set -eu
         for lib in {{.DEVICE_CORES}}; do
           file "vendor/${lib}_libretro.so" | grep -q aarch64
           cp "vendor/${lib}_libretro.so" {{.OUT}}/System/
         done
       - cp -r licenses {{.OUT}}/System/licenses
-      - |
-        set -euo pipefail
-        sha="$(cat vendor/gpsp-src.sha)"
-        cp vendor/gpsp-src.tar.gz "{{.OUT}}/System/licenses/gpsp-${sha}.tar.gz"
-        cp vendor/gpsp-src.meta "{{.OUT}}/System/licenses/gpsp-${sha}.meta"
-        for p in cores/gpsp/*.patch; do
-          cp "$p" "{{.OUT}}/System/licenses/gpsp-$(basename "$p")"
-        done
       - |
         set -euo pipefail
         commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"
@@ -701,8 +867,10 @@ tasks:
         done
       - |
         set -euo pipefail
-        # Supafaust and pcsx_rearmed are GPL-2.0 as gpSP is, and Snes9x holds the LGPL-2.1
-        # snes_ntsc filter: each ships its source archive, build stamp and patches beside it
+        # armGBA is GPL-2.0 as a whole (its own parts MPL-2.0); Supafaust, pcsx_rearmed, Gambatte,
+        # FCEUmm and Nestopia are GPL-2.0, Snes9x
+        # holds the LGPL-2.1 snes_ntsc filter, and PicoDrive and Genesis Plus GX ask for their
+        # source: each ships its source archive, build stamp and patches beside it
         for core in {{.SOURCE_CORES}}; do
           name="${core%%:*}" lib="${core#*:}"
           sha="$(cat "vendor/$name-src.sha")"
@@ -732,7 +900,7 @@ tasks:
 
   deploy:device:
     desc: Build and push onto a device over adb, then restart it. SD defaults to /mnt/sdcard
-    deps: [cores:device, build:device]
+    deps: [cores:device, build:device, vendor:pico8]
     vars:
       SD: '{{.SD | default "/mnt/sdcard"}}'
     cmds:
@@ -746,20 +914,13 @@ tasks:
       - for f in card/System/*; do adb push "$f" '{{.SD}}/System/'; done
       - adb push vendor/dsperate '{{.SD}}/System/dsperate/dsperate'
       - for f in vendor/dsperate-lib/*; do adb push "$f" '{{.SD}}/System/dsperate/lib/'; done
+      - adb push vendor/pico8/libsdl_sensor_shim.so '{{.SD}}/System/pico8/'
       - |
         set -euo pipefail
         for lib in {{.DEVICE_CORES}}; do
           adb push "vendor/${lib}_libretro.so" "{{.SD}}/System/${lib}_libretro.so"
         done
       - adb push licenses '{{.SD}}/System/'
-      - |
-        set -euo pipefail
-        sha="$(cat vendor/gpsp-src.sha)"
-        adb push vendor/gpsp-src.tar.gz "{{.SD}}/System/licenses/gpsp-${sha}.tar.gz"
-        adb push vendor/gpsp-src.meta "{{.SD}}/System/licenses/gpsp-${sha}.meta"
-        for p in cores/gpsp/*.patch; do
-          adb push "$p" "{{.SD}}/System/licenses/gpsp-$(basename "$p")"
-        done
       - |
         set -euo pipefail
         commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"

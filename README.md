@@ -71,8 +71,8 @@ go-task deploy:device        # or straight onto a handheld over adb
   [Brandon T. Kowalski](https://github.com/BrandonKowalski) (GPL-3.0). The code that hosts the
   cores, with their saves, sound and input, is still largely theirs.
 - [BaseOS](https://github.com/pvaibhav/BaseOS) by pvaibhav.
-- Emulation by [mGBA](https://mgba.io) (MPL-2.0) and [gpSP](https://github.com/libretro/gpsp)
-  (GPL-2.0) for the Game Boys; [Snes9x](https://github.com/libretro/snes9x) (free for
+- Emulation by [mGBA](https://mgba.io) (MPL-2.0) and
+  [armGBA](https://github.com/Jacob-Matthew-Cook/armGBA) (GPL-2.0) for the Game Boys; [Snes9x](https://github.com/libretro/snes9x) (free for
   non-commercial use only) and [Supafaust](https://github.com/libretro/supafaust), Mednafen's
   snes_faust (GPL-2.0), for the SNES; and
   [PCSX ReARMed](https://github.com/libretro/pcsx_rearmed) (GPL-2.0) for the PlayStation; and

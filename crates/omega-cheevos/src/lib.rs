@@ -16,6 +16,6 @@ pub use offline::{dorequest_url, Cached, Offline, Sent};
 pub use transport::{Http, Request, Response, Transport};
 
 /// The stack each RetroAchievements thread is given, room for a TLS handshake and a disc's
-/// hash: the default 8 MB each, reserved near a core loaded after them, left gpsp no room
+/// hash: the default 8 MB each, reserved near a core loaded after them, left a recompiler no room
 /// for its JIT cache within the 128 MB its branches reach.
 pub const THREAD_STACK: usize = 512 * 1024;

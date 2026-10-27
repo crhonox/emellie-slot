@@ -1,7 +1,8 @@
 diff --git a/configs/default.ini b/configs/default.ini
+index 8d85ced..4d6fa61 100644
 --- a/configs/default.ini
 +++ b/configs/default.ini
-@@ -362,13 +362,14 @@
+@@ -364,13 +364,14 @@
  # slot_prev = mod+dpleft
  # volume_up = none
  # volume_down = none
@@ -18,6 +19,7 @@ diff --git a/configs/default.ini b/configs/default.ini
  [cheevos]
  # RetroAchievements, Casual mode (formerly Softcore). Hardcore is NOT supported!
 diff --git a/src/frontend/sdl/audio.cpp b/src/frontend/sdl/audio.cpp
+index 72fd4f2..07675d0 100644
 --- a/src/frontend/sdl/audio.cpp
 +++ b/src/frontend/sdl/audio.cpp
 @@ -141,7 +141,8 @@ void Audio::push(NDS& nds, bool drop) {
@@ -31,6 +33,7 @@ diff --git a/src/frontend/sdl/audio.cpp b/src/frontend/sdl/audio.cpp
      }
      SDL_QueueAudio(dev_, out, static_cast<u32>(m * 4));
 diff --git a/src/frontend/sdl/input.cpp b/src/frontend/sdl/input.cpp
+index 1413403..4ea8b57 100644
 --- a/src/frontend/sdl/input.cpp
 +++ b/src/frontend/sdl/input.cpp
 @@ -27,12 +27,15 @@ const char* const kPadDefaults[B::BTN_COUNT] = {"b", "a", "back", "start", "dpri
@@ -128,6 +131,7 @@ diff --git a/src/frontend/sdl/input.cpp b/src/frontend/sdl/input.cpp
    if (dx != 0 || dy != 0 || stylus_down_) stylus_idle_ = 0; else if (stylus_idle_ < (1 << 30)) ++stylus_idle_;
    stylus_fx_ += dx;
 diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
+index ff83f6a..9fdd859 100644
 --- a/src/frontend/sdl/input.h
 +++ b/src/frontend/sdl/input.h
 @@ -17,7 +17,8 @@ class Config;
@@ -149,10 +153,10 @@ diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
 +      pad_mod_used_ = true;
 +      quit_ = true;
 +    }
-     const input::Frame f{static_cast<u16>(buttons_ | pressed_ | stick_ | face_stick_), static_cast<u8>(touch_x_), static_cast<u8>(touch_y_), touching_ || touched_ || stylus_down_ != 0};
-     pressed_ = 0; stick_pressed_ = 0; touched_ = false;
-     menu_fb_pressed_ = 0;   // menu fallback presses die with their frame
-@@ -63,9 +69,12 @@ public:
+     held_back_ &= buttons_ | stick_ | face_stick_;
+     touch_held_back_ = touch_held_back_ && (touching_ || stylus_down_ != 0);
+     const input::Frame f{static_cast<u16>((buttons_ | pressed_ | stick_ | face_stick_) & ~held_back_), static_cast<u8>(touch_x_), static_cast<u8>(touch_y_),
+@@ -66,15 +72,19 @@ public:
    }
    // What is held right now, for the menu's key repeat (unlike the edges above).
    u32 menu_held() const { return buttons_ | stick_ | menu_fb_held_; }
@@ -160,13 +164,19 @@ diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
 +  bool pad_held(int b) const { return b >= 0 && b < 32 && ((held_ >> b) & 1); }
    // While the menu is open only Pause and Quit hotkeys fire, so a hotkey that
    // shares a control with a DS button can't hide that button from the menu.
--  void set_menu_open(bool on) { menu_open_ = on; if (!on) menu_faces_ = 0; }
+   // Closing it, what is still held -- the button that chose Resume, the
+   // finger on it -- stays from the game until let go: a B held on into Golden
+   // Sun's name entry deleted the name and backed out of the screen.
 +  // The pause menu keeps the d-pad even while stylus_toggle has it moving the pen.
-+  void set_menu_open(bool on) { menu_open_ = on; if (!on) menu_faces_ = 0; else if (stylus_toggled_ && !stylus_chord_down_) stylus_dpad_ = 0; }
+   void set_menu_open(bool on) {
+     if (menu_open_ && !on) { held_back_ = buttons_ | stick_ | face_stick_; touch_held_back_ = touching_ || stylus_down_ != 0; }
+     menu_open_ = on;
+     if (!on) menu_faces_ = 0;
++    else if (stylus_toggled_ && !stylus_chord_down_) stylus_dpad_ = 0;
+   }
    // Pad face buttons pressed while the menu is open, by SDL position and
    // regardless of bindings: bit n = SDL_CONTROLLER_BUTTON n (south, east,
-   // west, north). Controls-page actions that must not move when rebound.
-@@ -84,7 +93,7 @@ public:
+@@ -94,7 +104,7 @@ public:
    // the d-pad while the pad.stylus_dpad chord is held.
    void update_stylus();
    bool stylus_visible_binding() const;   // some pad control drives the pen
@@ -175,7 +185,7 @@ diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
    int  stylus_x() const { return static_cast<int>(stylus_fx_); }
    int  stylus_y() const { return static_cast<int>(stylus_fy_); }
    int  stylus_size() const { return stylus_size_; }
-@@ -168,6 +177,7 @@ private:
+@@ -178,6 +188,7 @@ private:
    bool pad_control_free(int sdl_button) const;   // nothing bound to it, so the menu fallback has it
    bool key_control_free(SDL_Keycode k) const;
    void fire(Action a, bool down);
@@ -183,7 +193,7 @@ diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
    bool key_down(SDL_Keycode k, bool down);
    bool pad_down(const Bind& b, bool down);   // a button or axis edge; true if consumed
    void axis(Uint8 which, Sint16 value);
-@@ -209,6 +219,8 @@ private:
+@@ -219,6 +230,8 @@ private:
    Bind pad_hot_[static_cast<int>(Action::Count)][HOT_SLOTS];
    Bind key_mod_, pad_mod_;
    bool key_mod_down_ = false, key_mod_used_ = false, pad_mod_down_ = false, pad_mod_used_ = false;
@@ -192,7 +202,7 @@ diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
    int  key_mod_alone_ = -1, pad_mod_alone_ = -1;   // the action bound to "mod" alone, or -1
    int  pad_mod_button_ = -1;   // the DS button the pad modifier would otherwise be
    bool axis_state_[SDL_CONTROLLER_AXIS_MAX][2] = {};   // per axis: - and + past the threshold
-@@ -225,6 +237,9 @@ private:
+@@ -235,6 +248,9 @@ private:
    u8   stylus_down_ = 0;            // which of them is held, a bit per slot
    Bind stylus_chord_;          // while held, the d-pad moves the pen instead of the game
    bool stylus_chord_down_ = false;
@@ -203,10 +213,11 @@ diff --git a/src/frontend/sdl/input.h b/src/frontend/sdl/input.h
    u32  held_ = 0;              // SDL pad buttons currently down (bit per button)
    int  deadzone_ = 12000;
 diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
+index 37e4e37..670edea 100644
 --- a/src/frontend/sdl/main.cpp
 +++ b/src/frontend/sdl/main.cpp
-@@ -47,6 +47,9 @@
- #include "present_thread.h"
+@@ -48,6 +48,9 @@
+ #include "rt_budget.h"
  
  #include <dirent.h>
 +#include <fcntl.h>
@@ -215,7 +226,7 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
  #include <algorithm>
  #include "mic_alsa.h"
  
-@@ -83,6 +86,57 @@ namespace {
+@@ -85,6 +88,57 @@ namespace {
  // Gates startup chatter and hotkey echoes; errors, refusals and disk-touching
  // confirmations are never gated. DS_VERBOSE=1 enables.
  bool verbose() { static const bool v = std::getenv("DS_VERBOSE") != nullptr; return v; }
@@ -273,7 +284,7 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
  #define VLOG(...) do { if (verbose()) std::fprintf(stderr, __VA_ARGS__); } while (0)
  
  
-@@ -1031,6 +1085,7 @@ static int run(int argc, char** argv) {
+@@ -1044,6 +1098,7 @@ static int run(int argc, char** argv) {
    for (int i = 1; i < argc && !rom_word; ++i) if (looks_like_rom(argv[i])) rom_word = argv[i];
    // Command line is one more settings layer, applied after the files.
    ds::sdl::Config cli;
@@ -281,7 +292,7 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
    for (int i = 1; i < argc; ++i) {
      auto arg = [&](const char* name) { return !std::strcmp(argv[i], name) && i + 1 < argc; };
      auto flag = [&](const char* name) { return !std::strcmp(argv[i], name); };
-@@ -1103,6 +1158,13 @@ static int run(int argc, char** argv) {
+@@ -1116,6 +1171,13 @@ static int run(int argc, char** argv) {
      else if (flag("--no-gpu-present")) cli.set("video.gpu_present", "false");
      else if (flag("--no-audio")) cli.set("audio.enabled", "false");
      else if (arg("--volume")) cli.set("audio.volume", argv[++i]);
@@ -295,7 +306,7 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
      else if (arg("--audio-buffer")) cli.set("audio.buffer_size", argv[++i]);
      else if (arg("--speed")) cli.set("emu.speed", argv[++i]);
      else if (arg("--limiter")) cli.set("emu.limiter", argv[++i]);
-@@ -1157,7 +1219,7 @@ static int run(int argc, char** argv) {
+@@ -1170,7 +1232,7 @@ static int run(int argc, char** argv) {
    }
    auto apply_cli = [&] { for (const char* k : {"paths.bios9", "paths.bios7", "paths.firmware", "paths.saves", "paths.states", "video.scale", "video.dual_window", "video.layout", "video.screen", "video.pip_alpha", "video.screen_gap", "video.dominant_ratio", "video.dominant_threshold", "video.integer_scale",
                                                "video.fullscreen", "video.linear", "video.lcd_grid", "video.chunky", "video.chunky_threshold", "video.chunky_cell", "video.seam", "video.sink", "video.disp", "video.fbdev", "video.gpu_present", "video.vsync", "audio.enabled", "audio.volume",
@@ -304,7 +315,7 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
    apply_cli();
    const std::string bios9 = cfg.str("paths.bios9"), bios7 = cfg.str("paths.bios7");
    const std::string dsi_fw = cfg.str("paths.dsi_firmware");
-@@ -3207,11 +3269,33 @@ sdl_ready:
+@@ -3285,11 +3347,33 @@ sdl_ready:
    // for the ones started lazily.
    ds::place_current_thread(ds::ThreadRole::Emu);
    ds::place_foreign_threads();
@@ -338,7 +349,7 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
      for (ds::sdl::Action a : input.take_actions()) {
        using A = ds::sdl::Action;
        switch (a) {
-@@ -3230,6 +3314,13 @@ sdl_ready:
+@@ -3308,6 +3392,13 @@ sdl_ready:
        case A::VolumeUp: audio.set_volume(audio.volume() + 10); audio.set_muted(false); VLOG("volume %d%%\n", audio.volume()); break;
        case A::VolumeDown: audio.set_volume(audio.volume() - 10); VLOG("volume %d%%\n", audio.volume()); break;
        case A::Mute: audio.set_muted(!audio.muted()); VLOG("%s\n", audio.muted() ? "muted" : "unmuted"); break;
@@ -352,7 +363,7 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
        // Anything moving the screens while paused must recomposite the menu.
        case A::Fullscreen: display.toggle_fullscreen(); if (dual_window) display2.toggle_fullscreen(); menu_dirty = true; break;
        case A::LayoutNext: case A::LayoutPrev: {
-@@ -3931,6 +4022,9 @@ sdl_ready:
+@@ -4011,6 +4102,9 @@ sdl_ready:
    autosave_now();
    flush_save();
    discard_session_cache();
@@ -363,6 +374,7 @@ diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
    if (!fw_override.empty() && nds.firmware_override_dirty() && !nds.dsi) {
      std::string err;
 diff --git a/tests/input_test.cpp b/tests/input_test.cpp
+index 7c2eb79..8f9bef9 100644
 --- a/tests/input_test.cpp
 +++ b/tests/input_test.cpp
 @@ -295,7 +295,7 @@ void test_modifier_alone_is_a_hotkey() {

@@ -100,7 +100,7 @@ fn run(a: &Args) -> Result<(), Box<dyn Error>> {
     }
     if a.frameskip {
         let interval = (a.steps - 1).to_string();
-        for prefix in ["mgba", "gpsp"] {
+        for prefix in ["mgba"] {
             core.set_option(&format!("{prefix}_frameskip"), "fixed_interval");
             core.set_option(&format!("{prefix}_frameskip_interval"), &interval);
         }

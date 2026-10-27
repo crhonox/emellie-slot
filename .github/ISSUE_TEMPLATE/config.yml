@@ -2,4 +2,4 @@ blank_issues_enabled: false
 contact_links:
   - name: BaseOS issues
     url: https://github.com/pvaibhav/BaseOS/issues
-    about: Problems that happen before omega-zero starts (boot, storage expansion, flashing) belong to BaseOS.
+    about: Problems that happen before Emellie Slot starts (boot, storage expansion, flashing) belong to BaseOS.

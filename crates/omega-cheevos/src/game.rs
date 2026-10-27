@@ -4,17 +4,19 @@ use std::path::Path;
 use omega_store::Platform;
 
 /// RetroAchievements' numbers for the consoles omega-zero plays itself (rc_consoles.h).
+pub const MEGA_DRIVE: u32 = 1;
 pub const SNES: u32 = 3;
 pub const GB: u32 = 4;
 pub const GBA: u32 = 5;
 pub const GBC: u32 = 6;
+pub const NES: u32 = 7;
 pub const PS1: u32 = 12;
 
 const CGB_FLAG: usize = 0x143;
 
 /// The console a game of `platform` counts as, `rom` its first bytes at least: a Game Boy cart
 /// that knows the Color is a Color game, wherever it is shelved. None for the DS, whose
-/// emulator keeps its own achievements, nor for ports.
+/// emulator keeps its own achievements, nor for PICO-8 or ports.
 pub fn console_for(platform: Platform, rom: &[u8]) -> Option<u32> {
     match platform {
         Platform::Gba => Some(GBA),
@@ -22,9 +24,11 @@ pub fn console_for(platform: Platform, rom: &[u8]) -> Option<u32> {
             Some(f) if f & 0x80 != 0 => GBC,
             _ => GB,
         }),
+        Platform::Nes => Some(NES),
         Platform::Snes => Some(SNES),
+        Platform::Md => Some(MEGA_DRIVE),
         Platform::Ps1 => Some(PS1),
-        Platform::Nds | Platform::Ports => None,
+        Platform::Nds | Platform::Pico8 | Platform::Ports => None,
     }
 }
 

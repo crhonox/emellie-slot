@@ -149,11 +149,12 @@ impl Plastic {
 }
 
 /// The open cart: the back of its shell, the board in it, the ROM chip marked with the game's
-/// title. A SNES cart opens on a SNES board in its own shell.
+/// title. A SNES cart opens on a SNES board in its own shell, as the NES and Mega Drive carts
+/// standing in its shells do.
 pub fn board_face(cart: &Cart) -> CartFace {
     let plastic = Plastic::of(shell_for(cart).colour);
     let mut face = blank(BOARD_W, BOARD_H);
-    if cart.platform == Platform::Snes {
+    if matches!(cart.platform, Platform::Nes | Platform::Snes | Platform::Md) {
         snes_board(&mut face, &plastic, snes::shell_of(cart));
     } else {
         shell(&mut face, &plastic);
@@ -537,7 +538,7 @@ pub fn lift_of(progress: f32) -> f32 {
     ease(((progress - SLIDE_SHARE) / (1.0 - SLIDE_SHARE)).clamp(0.0, 1.0))
 }
 
-/// The GBA board's sockets' top left corners, mGBA's then gpSP's.
+/// The GBA board's sockets' top left corners, armGBA's then mGBA's.
 pub const SOCKET_U: [f32; 2] = [84.0, 136.0];
 pub const SOCKET_V: f32 = 42.0;
 pub const SOCKET_W: u32 = 32;
@@ -590,7 +591,7 @@ impl Sockets {
     }
 }
 
-/// The GBA board's sockets, mGBA's then gpSP's.
+/// The GBA board's sockets, armGBA's then mGBA's.
 pub const GBA_SOCKETS: Sockets = Sockets {
     u: SOCKET_U,
     v: SOCKET_V,
@@ -600,7 +601,8 @@ pub const GBA_SOCKETS: Sockets = Sockets {
     chip_h: CHIP_H,
 };
 
-/// The SNES board's sockets, Snes9x's then Supafaust's: as tall as the GBA's and a dozen pixels
+/// The SNES board's sockets, Snes9x's then Supafaust's (and the NES's and Mega Drive's cores',
+/// whose carts open on it): as tall as the GBA's and a dozen pixels
 /// wider, so a six-letter name has the room on its chip a four-letter one has on the GBA's,
 /// four pixels before it and three after.
 pub const SNES_SOCKETS: Sockets = Sockets {
@@ -615,12 +617,13 @@ pub const SNES_SOCKETS: Sockets = Sockets {
 /// The sockets on the board of a `platform` cart.
 pub fn sockets_for(platform: Platform) -> Sockets {
     match platform {
-        Platform::Snes => SNES_SOCKETS,
+        Platform::Nes | Platform::Snes | Platform::Md => SNES_SOCKETS,
         Platform::Gba
         | Platform::Gb
         | Platform::Gbc
         | Platform::Ps1
         | Platform::Nds
+        | Platform::Pico8
         | Platform::Ports => GBA_SOCKETS,
     }
 }
@@ -628,12 +631,18 @@ pub fn sockets_for(platform: Platform) -> Sockets {
 /// The sockets `core` is seated among: those of the first system it runs.
 pub fn sockets_of(core: Core) -> Sockets {
     match core {
-        Core::Snes9x | Core::Supafaust => SNES_SOCKETS,
+        Core::Snes9x
+        | Core::Supafaust
+        | Core::Picodrive
+        | Core::GenesisPlusGx
+        | Core::Fceumm
+        | Core::Nestopia => SNES_SOCKETS,
         Core::Mgba
-        | Core::Gpsp
+        | Core::Armgba
         | Core::PcsxRearmed
         | Core::Dsperate
         | Core::Gambatte
+        | Core::Pico8
         | Core::PortMaster => GBA_SOCKETS,
     }
 }

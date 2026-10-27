@@ -59,7 +59,7 @@ Todos son PNG con transparencia (RGBA). Se dibujan a su tamaño real, sin escala
 | `font.ttf` | Fuente de los nombres bajo los íconos | — |
 | `menu.ini` | Ajustes (ver abajo) | — |
 
-**Nombres de consola:** `gba`, `gb`, `gbc`, `sfc` (SNES), `ps` (PlayStation), `nds`, `ports`.
+**Nombres de consola:** `gba`, `gb`, `gbc`, `fc` (NES), `sfc` (SNES), `md` (Mega Drive), `ps` (PlayStation), `nds`, `pico` (PICO-8), `ports`.
 
 **Nombres de entrada:** `recent`, `favorite`, `collection`, `game`, `setting`.
 

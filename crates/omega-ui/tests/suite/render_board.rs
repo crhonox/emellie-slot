@@ -170,7 +170,7 @@ fn render_board() {
         let mut f = socketed(&red);
         over(
             &mut f,
-            &chip_face(Some(Core::Gpsp)),
+            &chip_face(Some(Core::Armgba)),
             CHIP_U[1] as i32,
             CHIP_V as i32,
         );

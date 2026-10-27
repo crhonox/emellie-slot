@@ -167,7 +167,7 @@ pub fn wants<'a>(root: Option<&Path>, carts: impl IntoIterator<Item = &'a Cart>)
 /// What a sync looks up of `cart`: as [`wants`] does, or with `again`, the cart and every disc
 /// whether labelled or not, for a label fetched for one game to replace the one it has.
 pub fn cart_wants(root: Option<&Path>, cart: &Cart, again: bool) -> Vec<Want> {
-    if cart.platform == Platform::Ports {
+    if !cart.platform.scraped() {
         return Vec::new();
     }
     if cart.platform != Platform::Ps1 {
@@ -214,11 +214,13 @@ pub fn system_id(platform: Platform) -> u32 {
         Platform::Gba => 12,
         Platform::Gb => 9,
         Platform::Gbc => 10,
+        Platform::Nes => 3,
         Platform::Snes => 4,
+        Platform::Md => 1,
         Platform::Ps1 => 57,
         Platform::Nds => 15,
         // never looked up, see wants
-        Platform::Ports => 0,
+        Platform::Pico8 | Platform::Ports => 0,
     }
 }
 
@@ -330,7 +332,9 @@ pub fn label_regions(want: &Want) -> Vec<&'static str> {
         Platform::Gba | Platform::Gb | Platform::Gbc | Platform::Nds => {
             return regions(&want.stem, &want.code)
         }
-        Platform::Ports => return out,
+        Platform::Pico8 | Platform::Ports => return out,
+        // the regions its file name names, then a world release and the three big ones
+        Platform::Nes | Platform::Md => out.extend(["wor", "us", "eu", "jp"]),
         Platform::Snes => {
             let region = omega_store::snes::region(&want.rom, &want.stem);
             out.extend(region.and_then(region_code));
@@ -419,11 +423,15 @@ const CUE_MAX: u64 = 64 * 1024;
 /// number of KiB.
 const COPIER: u64 = 512;
 
+/// The 16-byte header an iNES or fwNES dump starts with, which No-Intro's CRCs leave out.
+const NES_HEADER: usize = 16;
+
 /// The ways `want` is asked about, tried in turn while ScreenScraper knows none of them.
 ///
 /// A cart is asked about by the CRC of all of it, its name and size; a SNES dump with a copier
 /// header in front, which ScreenScraper keeps both with and without, also by the CRC and size
-/// of the ROM after it. A PlayStation disc is never read whole, hundreds of megabytes taking
+/// of the ROM after it, as a NES dump with its iNES (or a Famicom Disk System one with its
+/// fwNES) header is. A PlayStation disc is never read whole, hundreds of megabytes taking
 /// far too long on the console: it is asked about by its cue sheet's CRC (ScreenScraper keeps
 /// the cue sheets of the discs it knows, a few hundred bytes each), then by the serial printed
 /// on it, then by its file's name and size alone, which ScreenScraper matches as best it can.
@@ -451,8 +459,15 @@ pub fn lookups(want: &Want) -> Vec<Lookup> {
             serial: None,
         };
         let mut out = vec![whole.clone()];
-        if want.platform == Platform::Snes && whole.size % 1024 == COPIER {
-            let rom = &bytes[COPIER as usize..];
+        let headed = match want.platform {
+            Platform::Snes if whole.size % 1024 == COPIER => COPIER as usize,
+            Platform::Nes if bytes.starts_with(b"NES\x1a") || bytes.starts_with(b"FDS\x1a") => {
+                NES_HEADER
+            }
+            _ => 0,
+        };
+        if headed > 0 && bytes.len() > headed {
+            let rom = &bytes[headed..];
             out.push(Lookup {
                 crc: Some(crc32(rom)),
                 size: rom.len() as u64,

@@ -1,0 +1,23 @@
+#!/bin/sh
+# wget for PICO-8, through curl. PICO-8 fetches carts with wget (use_wget 1, as BaseOS has no
+# libcurl for it), and BaseOS's wget is BusyBox's, which cannot do TLS: every cart is https.
+# BaseOS's curl has its own TLS. PICO-8 runs it only as
+#   wget URL -q -O FILE [--post-file=FILE]
+url= out= post=
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-O) out="$2"; shift ;;
+	-O*) out="${1#-O}" ;;
+	--post-file=*) post="${1#--post-file=}" ;;
+	--post-file) post="$2"; shift ;;
+	-*) ;;
+	*) [ -z "$url" ] && url="$1" ;;
+	esac
+	shift
+done
+[ -n "$url" ] || exit 1
+# -f: an HTTP error is a failure and no file, as with wget, not an error page kept as a cart
+set -- -sLf
+[ -n "$out" ] && set -- "$@" -o "$out"
+[ -n "$post" ] && set -- "$@" --data-binary "@$post"
+exec curl "$@" "$url"

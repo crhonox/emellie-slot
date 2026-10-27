@@ -68,7 +68,7 @@ pub fn labels_hints(legend: &[LegendHint]) -> Vec<Hint<'static>> {
 impl App {
     pub(crate) fn labels_input(&mut self, action: Action) {
         let root = self.root.clone();
-        let scopes = self.scope_choices(|p| p != Platform::Ports);
+        let scopes = self.scope_choices(Platform::scraped);
         let Phase::Labels(screen) = &mut self.phase else {
             return;
         };

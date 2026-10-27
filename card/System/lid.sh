@@ -13,6 +13,11 @@ RUN="${AGS_RUN:-/run}"
 HALL="${AGS_HALL:-/sys/class/power_supply/axp2202-battery/hallkey}"
 RTC="${AGS_RTC:-/sys/class/rtc}"
 POWER_STATE="${AGS_POWER_STATE:-/sys/power/state}"
+# Only the clamshells' kernels (RG35XX SP, RG34XX SP, RG SP) have it. BaseOS writes 16 to it at
+# boot, stock's Super Standby, which leaves the hall sensor out of what wakes the handheld: the
+# lid opened, nothing, only POWER. 0 puts the sensor back, at 5-6 times the drain asleep, which
+# LID_OFF_S bounds. As spruceOS's xx_lid_wake.sh; any nonzero value is Super Standby to it.
+OS_SLEEP="${AGS_OS_SLEEP:-/sys/class/power_supply/axp2202-battery/os_sleep}"
 POWEROFF="${AGS_POWEROFF:-poweroff}"
 # spruce's own default for "shutdown from sleep"
 LID_OFF_S="${LID_OFF_S:-900}"
@@ -71,6 +76,15 @@ switch_off() {
 	exit 0
 }
 
+# lid_wakes on|off: whether opening the lid wakes the kernel. A failed write costs the lid's wake,
+# never the sleep; POWER still wakes it.
+lid_wakes() {
+	[ -w "$OS_SLEEP" ] || return 0
+	policy=16
+	[ "$1" = on ] && policy=0
+	{ printf '%s' "$policy" > "$OS_SLEEP"; } 2>/dev/null || log "could not write $policy to $OS_SLEEP"
+}
+
 # Suspended until the lid opens or the alarm switches the handheld off; a wake with the lid still
 # shut and the alarm not yet come (the power key) goes back to sleep.
 sleep_shut() {
@@ -83,6 +97,7 @@ sleep_shut() {
 	fi
 	start="$(date +%s)"
 	sleep "$SETTLE_S"
+	lid_wakes on
 	log "shut, sleeping"
 	while :; do
 		[ "$(lid_open)" = 1 ] && break
@@ -96,6 +111,8 @@ sleep_shut() {
 		sleep "$POLL_S"
 	done
 	[ -n "$armed" ] && echo 0 > "$alarm" 2>/dev/null
+	# BaseOS's own while awake, for a sleep this did not start
+	lid_wakes off
 	log "open"
 }
 

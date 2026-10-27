@@ -1,12 +1,12 @@
 name: Device report
-description: Tell us how omega-zero runs on your handheld, with a hardware probe attached.
+description: Tell us how Emellie Slot runs on your handheld, with a hardware probe attached.
 labels: [device-report]
 body:
   - type: markdown
     attributes:
       value: |
         Thanks for testing on your device! To make a probe report, create an empty file named
-        `RUN_PROBE` at the root of the card omega-zero runs from and boot. omega-zero writes
+        `RUN_PROBE` at the root of the card Emellie Slot runs from and boot. Emellie Slot writes
         `probe-<device>-<date>.txt` next to it and deletes `RUN_PROBE`. Over SSH you can
         also run `sh /mnt/sdcard/System/probe.sh` directly.
   - type: input
@@ -19,8 +19,8 @@ body:
   - type: input
     id: versions
     attributes:
-      label: omega-zero and BaseOS versions
-      placeholder: omega-zero v0.1.0, BaseOS v1.3.0
+      label: Emellie Slot and BaseOS versions
+      placeholder: Emellie Slot v0.1.0, BaseOS v1.3.0
     validations:
       required: true
   - type: checkboxes

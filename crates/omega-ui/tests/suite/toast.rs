@@ -43,12 +43,12 @@ fn saving_and_loading_say_which_one_happened() {
 
 #[test]
 fn the_link_shortcut_on_the_wrong_core_says_to_switch() {
-    assert_eq!(Toast::NeedsGpsp.text(), "Please switch to gpSP");
-    assert_eq!(Toast::NeedsGpsp.label(), "LINK");
+    assert_eq!(Toast::NeedsArmgba.text(), "Please switch to armGBA");
+    assert_eq!(Toast::NeedsArmgba.label(), "LINK");
 }
 
 #[test]
-fn a_cart_gpsp_cannot_link_says_there_is_no_link() {
+fn a_cart_with_no_link_says_there_is_no_link() {
     assert_eq!(Toast::NoLink.text(), "No link support");
     assert_eq!(Toast::NoLink.label(), "LINK");
 }
@@ -64,7 +64,7 @@ fn colour_correction_says_whether_it_is_on() {
 #[test]
 fn every_link_toast_is_said_under_link() {
     for t in [
-        Toast::NeedsGpsp,
+        Toast::NeedsArmgba,
         Toast::NoLink,
         Toast::LinkEnded,
         Toast::PeerEnded,
@@ -81,7 +81,7 @@ fn the_banner_says_what_happened_and_never_what_is_on_screen() {
         [
             Toast::StateSaved,
             Toast::StateLoaded,
-            Toast::NeedsGpsp,
+            Toast::NeedsArmgba,
             Toast::NoLink,
             Toast::LinkEnded,
             Toast::PeerEnded,

@@ -1095,3 +1095,28 @@ fn a_game_guessed_from_another_carts_name_is_not_saved_and_each_cart_is_logged()
         ]
     );
 }
+
+#[test]
+fn a_nes_dump_is_asked_about_with_its_ines_header_and_without() {
+    let root = tempfile::tempdir().unwrap();
+    let rom: Vec<u8> = (0..0x8000u32).map(|i| (i * 13) as u8).collect();
+    let mut headed = b"NES\x1a\x02\x01".to_vec();
+    headed.resize(16, 0);
+    headed.extend_from_slice(&rom);
+    let path = root.path().join("Games/FC/Super Mario Bros. (World).nes");
+    touch(&path, &headed);
+    let asked = lookups(&Want::cart(&cart(
+        Platform::Nes,
+        "Super Mario Bros. (World)",
+        path,
+        None,
+    )));
+    let crcs: Vec<_> = asked.iter().map(|l| (l.system, l.crc, l.size)).collect();
+    assert_eq!(
+        crcs,
+        [
+            (3, Some(crc32(&headed)), headed.len() as u64),
+            (3, Some(crc32(&rom)), rom.len() as u64)
+        ]
+    );
+}

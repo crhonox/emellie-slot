@@ -26,9 +26,12 @@ pub fn icon_file(platform: Platform) -> &'static str {
         Platform::Gba => "gba",
         Platform::Gb => "gb",
         Platform::Gbc => "gbc",
+        Platform::Nes => "fc",
         Platform::Snes => "sfc",
+        Platform::Md => "md",
         Platform::Ps1 => "ps",
         Platform::Nds => "nds",
+        Platform::Pico8 => "pico",
         Platform::Ports => "ports",
     }
 }

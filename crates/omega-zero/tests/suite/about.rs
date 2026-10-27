@@ -162,7 +162,7 @@ fn every_credit_is_kept_and_slot_is_not_named() {
     let all = CREDITS.join("\n");
     for owed in [
         "mGBA (MPL-2.0)",
-        "gpSP (GPL-2.0)",
+        "armGBA (GPL-2.0)",
         "Snes9x (no commercial use)",
         "Mednafen's\nSupafaust",
         "PCSX-ReARMed (both GPL-2.0)",

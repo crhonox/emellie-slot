@@ -7,39 +7,56 @@ pub const SELECTED_CORE_FILE: &str = "Config/selected_core.ini";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Core {
+    /// The GBA's default, in the place gpSP had.
     #[default]
+    Armgba,
     Mgba,
-    Gpsp,
     Snes9x,
     Supafaust,
     PcsxRearmed,
     Dsperate,
     Gambatte,
+    Picodrive,
+    GenesisPlusGx,
+    Fceumm,
+    Nestopia,
+    /// The player's own PICO-8, handed over to `System/pico8.sh`.
+    Pico8,
     /// What runs ports: PortMaster's scripts, handed over to `System/ports.sh`.
     PortMaster,
 }
 
 impl Core {
-    pub const ALL: [Core; 8] = [
+    pub const ALL: [Core; 13] = [
+        Core::Armgba,
         Core::Mgba,
-        Core::Gpsp,
         Core::Snes9x,
         Core::Supafaust,
         Core::PcsxRearmed,
         Core::Dsperate,
         Core::Gambatte,
+        Core::Picodrive,
+        Core::GenesisPlusGx,
+        Core::Fceumm,
+        Core::Nestopia,
+        Core::Pico8,
         Core::PortMaster,
     ];
 
     pub fn as_str(&self) -> &'static str {
         match self {
             Core::Mgba => "mgba",
-            Core::Gpsp => "gpsp",
+            Core::Armgba => "armgba",
             Core::Snes9x => "snes9x",
             Core::Supafaust => "supafaust",
             Core::PcsxRearmed => "pcsx_rearmed",
             Core::Dsperate => "dsperate",
             Core::Gambatte => "gambatte",
+            Core::Picodrive => "picodrive",
+            Core::GenesisPlusGx => "genesis_plus_gx",
+            Core::Fceumm => "fceumm",
+            Core::Nestopia => "nestopia",
+            Core::Pico8 => "pico8",
             Core::PortMaster => "portmaster",
         }
     }
@@ -55,7 +72,7 @@ impl Core {
     /// Whether it is an emulator of its own that the handheld is handed over to, not a
     /// libretro core omega-zero loads.
     pub fn external(self) -> bool {
-        matches!(self, Core::Dsperate | Core::PortMaster)
+        matches!(self, Core::Dsperate | Core::Pico8 | Core::PortMaster)
     }
 
     pub fn index(self) -> usize {
@@ -67,12 +84,17 @@ impl Core {
     pub fn text(self) -> &'static str {
         match self {
             Core::Mgba => "mGBA",
-            Core::Gpsp => "gpSP",
+            Core::Armgba => "arm",
             Core::Snes9x => "Snes9x",
             Core::Supafaust => "Faust",
             Core::PcsxRearmed => "PCSX",
             Core::Dsperate => "DSpr",
             Core::Gambatte => "Gamb",
+            Core::Picodrive => "PicoDr",
+            Core::GenesisPlusGx => "GPGX",
+            Core::Fceumm => "FCEUmm",
+            Core::Nestopia => "Nesto",
+            Core::Pico8 => "PICO",
             Core::PortMaster => "Port",
         }
     }
@@ -81,12 +103,17 @@ impl Core {
     pub fn name(self) -> &'static str {
         match self {
             Core::Mgba => "mGBA",
-            Core::Gpsp => "gpSP",
+            Core::Armgba => "armGBA",
             Core::Snes9x => "Snes9x",
             Core::Supafaust => "Supafaust",
             Core::PcsxRearmed => "PCSX-ReARMed",
             Core::Dsperate => "DSperate",
             Core::Gambatte => "Gambatte",
+            Core::Picodrive => "PicoDrive",
+            Core::GenesisPlusGx => "Genesis Plus GX",
+            Core::Fceumm => "FCEUmm",
+            Core::Nestopia => "Nestopia UE",
+            Core::Pico8 => "PICO-8",
             Core::PortMaster => "PortMaster",
         }
     }
@@ -94,12 +121,18 @@ impl Core {
     pub fn parse(s: &str) -> Option<Core> {
         match s.trim().to_ascii_lowercase().as_str() {
             "mgba" => Some(Core::Mgba),
-            "gpsp" => Some(Core::Gpsp),
+            // gpSP was the GBA's other core before armGBA took its place
+            "armgba" | "gpsp" => Some(Core::Armgba),
             "snes9x" => Some(Core::Snes9x),
             "supafaust" => Some(Core::Supafaust),
             "pcsx_rearmed" => Some(Core::PcsxRearmed),
             "dsperate" => Some(Core::Dsperate),
             "gambatte" => Some(Core::Gambatte),
+            "picodrive" => Some(Core::Picodrive),
+            "genesis_plus_gx" => Some(Core::GenesisPlusGx),
+            "fceumm" => Some(Core::Fceumm),
+            "nestopia" => Some(Core::Nestopia),
+            "pico8" => Some(Core::Pico8),
             "portmaster" => Some(Core::PortMaster),
             _ => None,
         }
@@ -113,12 +146,15 @@ impl Core {
     /// sockets show them.
     pub fn for_platform(platform: Platform) -> &'static [Core] {
         match platform {
-            Platform::Gba => &[Core::Mgba, Core::Gpsp],
-            // Gambatte, in the palette it is set to; mGBA for a Game Boy link cable
-            Platform::Gb | Platform::Gbc => &[Core::Gambatte, Core::Mgba],
+            Platform::Gba => &[Core::Armgba, Core::Mgba],
+            // Gambatte, in the palette it is set to; armGBA, which runs them on Gambatte too
+            Platform::Gb | Platform::Gbc => &[Core::Gambatte, Core::Armgba],
+            Platform::Nes => &[Core::Fceumm, Core::Nestopia],
             Platform::Snes => &[Core::Snes9x, Core::Supafaust],
+            Platform::Md => &[Core::Picodrive, Core::GenesisPlusGx],
             Platform::Ps1 => &[Core::PcsxRearmed],
             Platform::Nds => &[Core::Dsperate],
+            Platform::Pico8 => &[Core::Pico8],
             Platform::Ports => &[Core::PortMaster],
         }
     }

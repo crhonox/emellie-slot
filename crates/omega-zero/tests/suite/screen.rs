@@ -171,6 +171,60 @@ fn a_snes_game_is_twice_its_size_where_its_width_does_not_fit_and_fills_720x720_
 }
 
 #[test]
+fn a_nes_or_mega_drive_game_keeps_square_pixels_as_a_snes_game_does() {
+    for (platform, frame, c, rect) in [
+        (
+            Platform::Nes,
+            (256, 240),
+            Canvas::FOUR_THREE,
+            [64.0, 0.0, 512.0, 480.0],
+        ),
+        (
+            Platform::Nes,
+            (256, 240),
+            Canvas::WIDE,
+            [104.0, 0.0, 512.0, 480.0],
+        ),
+        (
+            Platform::Nes,
+            (256, 240),
+            Canvas::SQUARE,
+            [0.0, 23.0, 720.0, 675.0],
+        ),
+        (
+            Platform::Md,
+            (320, 224),
+            Canvas::FOUR_THREE,
+            [0.0, 16.0, 640.0, 448.0],
+        ),
+        (
+            Platform::Md,
+            (320, 224),
+            Canvas::WIDE,
+            [40.0, 16.0, 640.0, 448.0],
+        ),
+        (
+            Platform::Md,
+            (320, 224),
+            Canvas::SQUARE,
+            [0.0, 108.0, 720.0, 504.0],
+        ),
+        // the Mega Drive's 256-pixel mode, stretched across its 320 as a television does
+        (
+            Platform::Md,
+            (256, 224),
+            Canvas::FOUR_THREE,
+            [0.0, 16.0, 640.0, 448.0],
+        ),
+    ] {
+        let s = screen_on_frame(c, platform, VideoMode::Actual, frame);
+        assert_eq!(s.view.rect, rect, "{platform:?} {frame:?} on {c:?}");
+        assert_eq!(s.view.uv, WHOLE_TEXTURE);
+        assert_eq!(s.view.filter, Filter::Sharp);
+    }
+}
+
+#[test]
 fn a_hi_res_or_interlaced_snes_frame_fills_the_same_rect() {
     for c in Canvas::ALL {
         let low = screen_on_frame(c, Platform::Snes, VideoMode::Actual, (256, 224)).view;

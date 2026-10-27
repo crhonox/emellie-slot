@@ -19,7 +19,11 @@ fn main() {
                 eprintln!("omega-zero: --volume-keys needs the card");
                 std::process::exit(2);
             };
-            omega_zero::volume_keys::run(std::path::Path::new(&dir));
+            let menu_quits = match args.next().as_deref() {
+                Some("--menu-quits") => args.next().and_then(|pid| pid.parse().ok()),
+                _ => None,
+            };
+            omega_zero::volume_keys::run(std::path::Path::new(&dir), menu_quits);
             return;
         }
         Some("--progress") => {

@@ -92,6 +92,28 @@ fn a_opens_the_picked_systems_shelf_and_b_comes_back_to_it() {
 }
 
 #[test]
+fn b_in_the_core_picker_closes_it_and_stays_on_the_shelf() {
+    let d = card();
+    let mut a = boot(d.path());
+    common::into_grid(&mut a);
+    tap(&mut a, Btn::A);
+    settle(&mut a);
+    assert_eq!(a.selected_stem(), Some("Emerald"));
+
+    tap(&mut a, Btn::X);
+    assert!(a.core_picker().is_some(), "X opened no picker");
+    tap(&mut a, Btn::B);
+    settle(&mut a);
+    assert_eq!(a.core_picker(), None, "B left the picker up");
+    assert!(on_shelf(&a), "B went past the picker to {:?}", a.phase());
+
+    // with the picker gone, B goes back to the grid as before
+    tap(&mut a, Btn::B);
+    settle(&mut a);
+    assert_eq!(grid_at(&a), Some(0));
+}
+
+#[test]
 fn the_grid_goes_round_across_and_stops_at_its_ends_down() {
     let d = card();
     let mut a = boot(d.path());

@@ -79,7 +79,9 @@ pub fn scan(root: &Path) -> Result<Vec<Cart>, StoreError> {
                     crate::nds::title(&rom).unwrap_or_default(),
                     crate::nds::code(&rom).unwrap_or_default(),
                 ),
-                Platform::Ports => (String::new(), String::new()),
+                Platform::Nes | Platform::Md | Platform::Pico8 | Platform::Ports => {
+                    (String::new(), String::new())
+                }
             };
             carts.push(Cart {
                 platform,
@@ -110,6 +112,11 @@ fn flat(dir: &Path, platform: Platform) -> std::io::Result<Vec<(String, PathBuf)
             continue;
         }
         if let Some(stem) = rom.file_stem().and_then(|s| s.to_str()) {
+            // a PICO-8 cart as its picture is cart.p8.png
+            let stem = match platform {
+                Platform::Pico8 => stem.strip_suffix(".p8").unwrap_or(stem),
+                _ => stem,
+            };
             found.push((stem.to_string(), rom));
         }
     }

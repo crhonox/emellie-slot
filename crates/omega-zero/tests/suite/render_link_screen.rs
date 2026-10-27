@@ -344,7 +344,7 @@ fn playing(title: &str, code: &str) -> (App, tempfile::TempDir) {
     common::write_retail_header(&d, "Cart", title, code);
     let mut app = common::boot(d.path());
     app.apply(Action::Insert);
-    app.set_core(Core::Gpsp);
+    app.set_core(Core::Armgba);
     app.on_core_ready();
     for _ in 0..120 {
         app.update(1.0 / 60.0);
@@ -503,31 +503,7 @@ fn banner_ink(t: Toast) -> usize {
 }
 
 #[test]
-fn a_cart_nothing_can_link_reads_no_link_support_on_the_glass() {
-    let px = banner_pixels(Core::Gpsp, "APOTRIS", "2ATE", "banner-apotris-gpsp");
-    assert!(
-        ink(&px) > 0,
-        "the refusal put no banner on the frame at all"
-    );
-    assert_eq!(
-        ink(&px),
-        banner_ink(Toast::NoLink),
-        "the banner is not the NO LINK SUPPORT line"
-    );
-    assert_ne!(
-        banner_ink(Toast::NoLink),
-        banner_ink(Toast::NeedsGpsp),
-        "the two sentences carry the same ink, so this frame proves nothing"
-    );
-    let (first, last) = inked_rows(&px);
-    assert!(
-        last < out_h() as usize / 4,
-        "the banner is not up in the plate band: rows {first}..{last}"
-    );
-}
-
-#[test]
-fn a_cart_gpsp_can_link_reads_please_switch_to_gpsp() {
+fn an_adapter_cart_on_mgba_reads_please_switch_to_armgba_on_the_glass() {
     let px = banner_pixels(Core::Mgba, "POKEMON EMER", "BPEE", "banner-emerald-mgba");
     assert!(
         ink(&px) > 0,
@@ -535,8 +511,18 @@ fn a_cart_gpsp_can_link_reads_please_switch_to_gpsp() {
     );
     assert_eq!(
         ink(&px),
-        banner_ink(Toast::NeedsGpsp),
-        "the banner is not the PLEASE SWITCH TO GPSP line"
+        banner_ink(Toast::NeedsArmgba),
+        "the banner is not the PLEASE SWITCH TO ARMGBA line"
+    );
+    assert_ne!(
+        banner_ink(Toast::NoLink),
+        banner_ink(Toast::NeedsArmgba),
+        "the two sentences carry the same ink, so this frame proves nothing"
+    );
+    let (first, last) = inked_rows(&px);
+    assert!(
+        last < out_h() as usize / 4,
+        "the banner is not up in the plate band: rows {first}..{last}"
     );
 }
 

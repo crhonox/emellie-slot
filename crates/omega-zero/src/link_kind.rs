@@ -38,24 +38,18 @@ pub fn link_kind(code: &str, title: &str, clean: bool) -> LinkKind {
     }
 }
 
-pub fn serial_option(chosen: LinkKind, auto: LinkKind, code: &str, title: &str) -> &'static str {
-    if chosen == auto {
-        return "auto";
-    }
+/// What armGBA's GBA Link Port is set to for `chosen`: the Link Cable, or the Wireless Adapter.
+pub fn armgba_port(chosen: LinkKind) -> &'static str {
     match chosen {
-        LinkKind::Wireless => "rfu",
-        LinkKind::Cable if pokemon(code, title) => "mul_poke",
-        LinkKind::Cable if code.starts_with("AWR") => "mul_aw1",
-        LinkKind::Cable if code.starts_with("AW2") => "mul_aw2",
-        LinkKind::Cable => "auto",
+        LinkKind::Cable => "cable",
+        LinkKind::Wireless => "wireless",
     }
 }
 
-pub fn link_carried(code: &str, title: &str) -> bool {
-    WIRELESS.contains(&code)
-        || pokemon(code, title)
-        || code.starts_with("AWR")
-        || code.starts_with("AW2")
+/// Whether a game links both ways, on the cable and on the Wireless Adapter, so the link screen
+/// lets the player pick: Pokemon's, whose newer games have both. Any other links one way only.
+pub fn both_ports(code: &str, title: &str) -> bool {
+    pokemon(code, title)
 }
 
 fn pokemon(code: &str, title: &str) -> bool {

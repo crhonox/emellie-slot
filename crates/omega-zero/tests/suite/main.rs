@@ -37,7 +37,7 @@ mod fastforward;
 mod flush;
 mod frame_size;
 mod frames;
-mod gpsp;
+mod armgba;
 mod handoff;
 mod headphones;
 mod home;

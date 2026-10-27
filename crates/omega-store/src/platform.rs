@@ -6,21 +6,31 @@ pub enum Platform {
     Gba,
     Gb,
     Gbc,
+    /// The NES and the Famicom, in Games/FC as spruceOS keeps them.
+    Nes,
     Snes,
+    /// The Mega Drive and the Genesis, in Games/MD as spruceOS keeps them.
+    Md,
     Ps1,
     Nds,
+    /// PICO-8 carts, run by the player's own PICO-8 (`System/pico8.sh`), which needs the
+    /// Raspberry Pi build's files in BIOS/.
+    Pico8,
     /// Ports from PortMaster: their scripts, run by `System/ports.sh`.
     Ports,
 }
 
 impl Platform {
-    pub const ALL: [Platform; 7] = [
+    pub const ALL: [Platform; 10] = [
         Platform::Gba,
         Platform::Gb,
         Platform::Gbc,
+        Platform::Nes,
         Platform::Snes,
+        Platform::Md,
         Platform::Ps1,
         Platform::Nds,
+        Platform::Pico8,
         Platform::Ports,
     ];
 
@@ -29,9 +39,12 @@ impl Platform {
             Platform::Gba => "Game Boy Advance",
             Platform::Gb => "Game Boy",
             Platform::Gbc => "Game Boy Color",
+            Platform::Nes => "Nintendo",
             Platform::Snes => "Super Nintendo",
+            Platform::Md => "Mega Drive",
             Platform::Ps1 => "PlayStation",
             Platform::Nds => "Nintendo DS",
+            Platform::Pico8 => "PICO-8",
             Platform::Ports => "Ports",
         }
     }
@@ -41,9 +54,12 @@ impl Platform {
             Platform::Gba => "GBA",
             Platform::Gb => "GB",
             Platform::Gbc => "GBC",
+            Platform::Nes => "FC",
             Platform::Snes => "SNES",
+            Platform::Md => "MD",
             Platform::Ps1 => "PS1",
             Platform::Nds => "NDS",
+            Platform::Pico8 => "PICO8",
             Platform::Ports => "PORTS",
         }
     }
@@ -52,9 +68,13 @@ impl Platform {
         match self {
             Platform::Gba => &["gba"],
             Platform::Gb | Platform::Gbc => &["gb", "gbc"],
+            Platform::Nes => &["nes", "fds", "unf", "unif"],
             Platform::Snes => &["sfc", "smc"],
+            Platform::Md => &["md", "gen", "smd", "bin"],
             Platform::Ps1 => &["cue", "chd", "pbp", "m3u"],
             Platform::Nds => &["nds"],
+            // a cart as text or as its picture, cart.p8.png; Splore.splore is PICO-8's own browser
+            Platform::Pico8 => &["p8", "png", "splore"],
             Platform::Ports => &["sh"],
         }
     }
@@ -63,10 +83,13 @@ impl Platform {
         match self {
             Platform::Gba => (240, 160),
             Platform::Gb | Platform::Gbc => (160, 144),
+            Platform::Nes => (256, 240),
             Platform::Snes => (256, 224),
+            Platform::Md => (320, 224),
             Platform::Ps1 => (320, 240),
             // both screens, stacked
             Platform::Nds => (256, 384),
+            Platform::Pico8 => (128, 128),
             // each port draws to the whole panel itself
             Platform::Ports => (640, 480),
         }
@@ -90,13 +113,21 @@ impl Platform {
 
     /// Whether L2/R2 belong to the game rather than to rewind and fast-forward.
     pub fn game_owns_l2_r2(self) -> bool {
-        matches!(self, Platform::Ps1 | Platform::Nds | Platform::Ports)
+        matches!(
+            self,
+            Platform::Ps1 | Platform::Nds | Platform::Pico8 | Platform::Ports
+        )
     }
 
     /// Whether its games run in an emulator of their own, which omega-zero hands the
     /// handheld over to and is started again after, rather than in a libretro core.
     pub fn external(self) -> bool {
-        matches!(self, Platform::Nds | Platform::Ports)
+        matches!(self, Platform::Nds | Platform::Pico8 | Platform::Ports)
+    }
+
+    /// Whether its labels are looked up on ScreenScraper: a port's and a PICO-8 cart's are not.
+    pub fn scraped(self) -> bool {
+        !matches!(self, Platform::Pico8 | Platform::Ports)
     }
 
     pub fn accepts(self, path: &Path) -> bool {

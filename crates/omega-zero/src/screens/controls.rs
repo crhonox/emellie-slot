@@ -2,8 +2,8 @@
 //! on the shelf and in a game of the shelf's system, as `App::apply` and the gestures in
 //! omega-input do it. A PlayStation game has L2 and R2 of its own, so it fast-forwards on
 //! SELECT+R2 and swaps discs on SELECT+MENU; only the GBA and the Game Boys link and have a
-//! colour correction; only the PlayStation and the DS have no core to pick; the handhelds play X
-//! and Y as B and A, and the Game Boys L1 and R1 as A and B.
+//! colour correction; only the PlayStation and the DS have no core to pick; the handhelds and
+//! the NES play X and Y as B and A, and the Game Boys L1 and R1 as A and B.
 //!
 //! It is a lone panel, as flow.html's `#screen=controls`: SHELF and IN GAME side by side, each a
 //! heading and then a line a button, the buttons in the frame's bright colour and what they do
@@ -65,11 +65,20 @@ impl ControlsView {
 
         let mut game = Vec::new();
         match platform {
-            Platform::Gba => game.extend([("X Y", "B A")]),
+            Platform::Gba | Platform::Nes => game.extend([("X Y", "B A")]),
             Platform::Gb | Platform::Gbc => game.extend([("X Y", "B A"), ("L1 R1", "A B")]),
-            Platform::Snes | Platform::Ps1 | Platform::Nds | Platform::Ports => {}
+            Platform::Md => game.extend([("Y B A", "A B C"), ("L1 X R1", "X Y Z")]),
+            Platform::Snes | Platform::Ps1 | Platform::Nds | Platform::Pico8 | Platform::Ports => {}
         }
-        if platform == Platform::Ports {
+        if platform == Platform::Pico8 {
+            // by position, as System/pico8.sh maps the pad: B is PICO-8's O, A its X
+            game.extend([
+                ("B A", "O X"),
+                ("START", "PAUSE MENU"),
+                ("HOLD MENU", "BACK TO SHELF"),
+                ("VOL+ VOL-", "VOLUME"),
+            ]);
+        } else if platform == Platform::Ports {
             // gptokeyb's own, which PortMaster's ports start
             game.push(("SELECT+START", "BACK TO SHELF"));
         } else if platform.external() {
@@ -119,7 +128,12 @@ impl ControlsView {
             match platform {
                 Platform::Gba | Platform::Gb | Platform::Gbc => game.push(("SELECT+MENU", "LINK")),
                 Platform::Ps1 => game.push(("SELECT+MENU", "DISC")),
-                Platform::Snes | Platform::Nds | Platform::Ports => {}
+                Platform::Nes
+                | Platform::Snes
+                | Platform::Md
+                | Platform::Nds
+                | Platform::Pico8
+                | Platform::Ports => {}
             }
             game.extend([("SELECT+▲▼", "BRIGHTNESS"), ("SELECT+◀▶", "BLUE LIGHT")]);
             if platform.colour_correction() {

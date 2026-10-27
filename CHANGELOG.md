@@ -12,7 +12,9 @@ omega-zero is now **Emellie Slot**, a personal fork of it.
   spruceOS does on the Anbernic XX line: `System/lid.sh` reads the hall sensor and suspends the
   kernel, CPU and panel asleep. Opened, the game goes on where it was; left shut 15 minutes
   (`LID_OFF_S`), the RTC wakes the handheld, the game in play leaves with its save, and the
-  handheld switches off.
+  handheld switches off. On the clamshells (RG35XX SP and kin) opening the lid wakes it: BaseOS
+  keeps their kernels in Super Standby, which only POWER wakes, so `lid.sh` writes 0 to the
+  battery's `os_sleep` for the sleep and gives back 16 once awake, as spruceOS's lid wake.
 - On a handheld with sticks (RG CubeXX, RG40XX V) the left stick works the d-pad in every
   system the frontend runs, PS1 included, as well as the d-pad itself: pushed over half its
   reach it holds the direction, and lets go back under a third.
@@ -23,6 +25,49 @@ omega-zero is now **Emellie Slot**, a personal fork of it.
 - No opening at boot: the shelf comes straight up after the boot logo. A game that took the
   frontend down is still named over the shelf at the next boot.
 - The boot logo is EMELLIE SLOT in Pixel Code, for each panel.
+
+armGBA takes gpSP's place, and is the GBA's default core; mGBA stays on X as the other.
+
+- armGBA, Jacob Cook's recompiling GBA core that spruceOS ships, built from its source at
+  `9847d41`, which ships beside it in `System/licenses/`. It boots a real `BIOS/gba_bios.bin`
+  through its intro, or its own BIOS straight into the game.
+- A cart left on gpSP in `Config/selected_core.ini` runs on armGBA; its old resume states, in
+  `States/GBA/gpsp/`, are not loaded.
+- The GBA link (SELECT + MENU) runs on armGBA for every GBA game, on the cable or the Wireless
+  Adapter: Pokemon's games switch between them with SELECT, others link the way they do on
+  hardware. mGBA still links by cable. Both handhelds need this build.
+- The Game Boy and Game Boy Color have armGBA as their other core, in mGBA's place: X on the
+  shelf picks it over Gambatte. A Game Boy game shows on it as the Game Boy Pocket's screen.
+  The Game Boys' link cable runs on armGBA; on Gambatte, SELECT + MENU says to switch.
+- In the core picker, B closes the picker; it no longer took the shelf back to the console grid
+  with the picker left on the screen.
+- DSperate is at `e04b806`, with the hotkeys patch brought onto it.
+
+The NES, the Mega Drive and PICO-8 join the shelf, as spruceOS runs them.
+
+- NES and Famicom games go in `Games/FC` (`.nes`, `.fds`, `.unf`, `.unif`), Mega Drive and
+  Genesis games in `Games/MD` (`.md`, `.gen`, `.smd`, `.bin`), the folders spruceOS keeps them
+  in. The NES plays on FCEUmm and the Mega Drive on PicoDrive, as in spruceOS; X on the shelf
+  picks Nestopia UE or Genesis Plus GX instead. A Famicom Disk System game wants
+  `BIOS/disksys.rom`.
+- A NES game takes X and Y as B and A, as the GBA does. A Mega Drive game's A, B and C are Y, B
+  and A, and a six-button game's X, Y and Z are L1, X and R1.
+- Both keep square pixels as the SNES does: the NES 512x480 on 640x480 and 720x675 across the
+  RG CubeXX's 720x720, the Mega Drive 640x448 and 720x504.
+- Their carts stand in the SNES's shells for now, a NES cart in the Famicom's in grey, a Mega
+  Drive cart in the American one in black. Labels come from ScreenScraper, a NES dump looked up
+  with and without its iNES header; RetroAchievements counts both.
+- PICO-8 carts go in `Games/PICO8` (`.p8`, `.p8.png`), and run in the player's own PICO-8: the
+  Raspberry Pi build's `pico8_64` and `pico8.dat` in `BIOS/`, which Emellie Slot cannot ship.
+  `Games/PICO8/Splore.splore` opens Splore, PICO-8's own cart browser, over Wi-Fi. As a DS game
+  is, a cart is handed over to `System/pico8.sh`; MENU held a second goes back to the shelf,
+  the volume keys step the volume, and B and A are PICO-8's O and X. Its settings and the carts'
+  saves are in `Saves/PICO8`. PICO-8 carts stand as DS cards with their titles.
+- The console grid has spruceOS's icons for the three, and a card's own menu theme can give
+  them as `fc`, `md` and `pico`.
+- `task core:picodrive`, `core:gpgx`, `core:fceumm` and `core:nestopia` build the four cores
+  from their pinned sources, and `task vendor:pico8` the shim PICO-8 is run with; their
+  sources and licences ship in `System/licenses`.
 
 The DS joins the shelf: its games run in DSperate, which omega-zero hands the handheld over to.
 

@@ -121,8 +121,8 @@ it for about 2.2 s, then the system rises back. It is gone while the core picker
 
 ## Pages around the menus
 
-The last five components are for pages about omega-zero rather than its screens: the site
-(`site/`) is drawn with them and the rest of the kit. Each holds the page's own element, so the
+The last five components are for pages about omega-zero rather than its screens, from the site
+upstream draws with them and the rest of the kit (Emellie Slot has none). Each holds the page's own element, so the
 words, links, headings and alt text stay real HTML: `<omega-button>` a link or button in the
 bar's pill, lit on hover and focus, with a ring for keyboard focus; `<omega-screen>` a screenshot
 in a handheld's bezel, 2×2 art pixels kept 2×2 at its own size; `<omega-card>` a feature, its icon
@@ -140,10 +140,6 @@ pressed. With `hash` the URL's hash follows the tab shown, none for the first, a
 follows the hash, so `index.html#install` opens on INSTALL, the back button goes back a tab, and a
 link to something inside a part shows its tab and scrolls to it. Each change sends `omega-tab`.
 With scripts off the links stay links and every part shows, one under the other.
-
-`site/kit` is a link to this folder (and `site/logo` to `assets/logo`), so `site/index.html`
-opens from disk like the storybook; `.github/workflows/pages.yml` copies `site/` with the links
-followed, and that copy is what GitHub Pages serves, the storybook at `kit/storybook.html`.
 
 ## Screens and slides
 

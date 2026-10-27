@@ -103,6 +103,12 @@ const RIM: u32 = 6;
 /// The shell `cart` comes in: the one `cart_shell.ini` names, else the American cart for a game
 /// from the USA and the Super Famicom's for any other, or one from nowhere it can tell.
 pub fn shell_of(cart: &Cart) -> SnesShell {
+    // a NES cart in the Famicom's shape, a Mega Drive cart in the American one
+    match cart.platform {
+        omega_store::Platform::Nes => return SnesShell::Famicom,
+        omega_store::Platform::Md => return SnesShell::Ntsc,
+        _ => {}
+    }
     match cart.shell.map(|c| c.outline) {
         Some(Outline::Ntsc) => SnesShell::Ntsc,
         Some(Outline::Sfc) => SnesShell::Famicom,

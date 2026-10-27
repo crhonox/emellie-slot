@@ -150,7 +150,7 @@ fn a_sidecar_is_not_listed_as_a_state() {
 fn each_core_keeps_its_own_states() {
     let d = tempdir().unwrap();
     let mgba = StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald");
-    let gpsp = StateRing::new(d.path(), Platform::Gba, Core::Gpsp, "Emerald");
+    let gpsp = StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald");
 
     mgba.push(&[1u8; 64], b"png", "2026-08-21_00-00-01")
         .unwrap();
@@ -172,7 +172,7 @@ fn resume_is_core_private_too() {
         .write_resume(&[9u8; 16])
         .unwrap();
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Gpsp, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
             .read_resume()
             .unwrap()
             .is_none()

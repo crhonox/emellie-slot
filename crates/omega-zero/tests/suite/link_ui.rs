@@ -72,7 +72,7 @@ fn settle(app: &mut App) {
 
 #[test]
 fn select_and_menu_open_the_link_screen_on_host() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     assert_eq!(app.game_menu(), Some(GameMenu::Pick(LinkRow::Host)));
     assert!(matches!(app.phase(), Phase::Playing { .. }));
@@ -95,8 +95,8 @@ fn the_link_screen_opens_under_mgba_on_its_own_cable() {
 }
 
 #[test]
-fn the_link_screen_on_gpsp_says_nothing_in_the_banner() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+fn the_link_screen_on_armgba_says_nothing_in_the_banner() {
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     assert!(app.game_menu_open());
     assert_eq!(app.toast(), None);
@@ -104,7 +104,7 @@ fn the_link_screen_on_gpsp_says_nothing_in_the_banner() {
 
 #[test]
 fn left_and_right_swap_host_and_join_and_the_screen_remembers() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     app.apply(Action::GbaDown(Btn::Right));
     assert_eq!(app.game_menu(), Some(GameMenu::Pick(LinkRow::Join)));
@@ -123,7 +123,7 @@ fn left_and_right_swap_host_and_join_and_the_screen_remembers() {
 
 #[test]
 fn b_on_pick_hands_the_game_back() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     app.apply(Action::GbaDown(Btn::B));
     assert!(!app.game_menu_open());
@@ -157,7 +157,7 @@ fn the_host_is_client_zero_and_the_joiner_client_one() {
 
 #[test]
 fn a_on_pick_starts_the_link_in_the_picked_role() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     app.apply(Action::GbaDown(Btn::Right));
     app.apply(Action::GbaDown(Btn::A));
@@ -183,7 +183,7 @@ fn each_failure_says_which_one_it_was() {
         (io::ErrorKind::TimedOut, LinkFail::NobodyCame),
         (io::ErrorKind::ConnectionRefused, LinkFail::PeerVanished),
     ] {
-        let (mut app, _d) = playing_on(Core::Gpsp);
+        let (mut app, _d) = playing_on(Core::Armgba);
         app.apply(Action::GameMenu);
         app.start_link(fake_starter(move |_, _| Err(io_err(kind))), 0);
         settle(&mut app);
@@ -206,7 +206,7 @@ fn each_failure_says_which_one_it_was() {
 
 #[test]
 fn b_on_a_failure_puts_the_player_back_in_the_game() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     app.start_link(fake_starter(|_, _| Err(io_err(io::ErrorKind::TimedOut))), 0);
     settle(&mut app);
@@ -228,7 +228,7 @@ fn b_on_a_failure_puts_the_player_back_in_the_game() {
 
 #[test]
 fn a_cancelled_link_says_nothing_and_returns_to_the_game() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     app.start_link(
         fake_starter(|_, cancel: &Cancel| {
@@ -249,7 +249,7 @@ fn a_cancelled_link_says_nothing_and_returns_to_the_game() {
 
 #[test]
 fn a_link_that_comes_up_holds_linked_for_a_second_then_hands_the_game_back() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     let port = common::free_port();
     let far = std::thread::spawn(move || TcpLink::host("127.0.0.1", port).expect("host"));
@@ -298,7 +298,7 @@ fn a_link_that_comes_up_holds_linked_for_a_second_then_hands_the_game_back() {
 
 #[test]
 fn a_peer_lost_during_the_hold_closes_the_screen_and_breaks_the_badge() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     let port = common::free_port();
     let far = std::thread::spawn(move || TcpLink::host("127.0.0.1", port).expect("host"));
@@ -320,7 +320,7 @@ fn a_peer_lost_during_the_hold_closes_the_screen_and_breaks_the_badge() {
 
 #[test]
 fn b_during_the_radio_step_does_not_hand_the_game_back_early() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     let (release, held) = channel::<()>();
     app.start_link(
@@ -360,7 +360,7 @@ fn b_during_the_radio_step_does_not_hand_the_game_back_early() {
 
 #[test]
 fn a_shut_lid_cancels_the_link_it_interrupted() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     let cancelled = Arc::new(AtomicBool::new(false));
     let seen = cancelled.clone();
@@ -393,7 +393,7 @@ fn a_shut_lid_cancels_the_link_it_interrupted() {
 
 #[test]
 fn the_shortcut_opens_the_connected_screen_over_a_live_session() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     let log = watched(&mut app);
     app.begin_link(0);
     app.apply(Action::GameMenu);
@@ -411,7 +411,7 @@ fn the_shortcut_opens_the_connected_screen_over_a_live_session() {
 
 #[test]
 fn b_leaves_the_session_running() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.begin_link(0);
     app.apply(Action::GameMenu);
     let log = watched(&mut app);
@@ -426,7 +426,7 @@ fn b_leaves_the_session_running() {
 
 #[test]
 fn a_ends_the_session_and_says_so() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.begin_link(0);
     app.apply(Action::GameMenu);
     let log = watched(&mut app);
@@ -447,7 +447,7 @@ fn a_ends_the_session_and_says_so() {
 
 #[test]
 fn a_peer_ending_the_link_unplugs_on_this_device_too() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.begin_link(0);
     assert!(!app.game_menu_open(), "nothing should be on screen yet");
 
@@ -475,7 +475,7 @@ fn a_peer_ending_the_link_unplugs_on_this_device_too() {
 
 #[test]
 fn the_link_screen_draws_its_panel_over_the_backdrop_in_place_of_the_game() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     let panel = Lone {
         tex: TexId::from_raw(700),
         w: 200,
@@ -525,10 +525,10 @@ fn the_link_screen_draws_its_panel_over_the_backdrop_in_place_of_the_game() {
     );
 }
 
-fn session_playing_on_gpsp() -> (Session, TempDir, Millis) {
+fn session_playing_on_armgba() -> (Session, TempDir, Millis) {
     let d = common::tmp_root_with_carts(&["Emerald"]);
     common::write_retail_header(&d, "Emerald", "POKEMON RUBY", "AXVE");
-    omega_store::write_selected_core(d.path(), "Emerald", Core::Gpsp).expect("write core");
+    omega_store::write_selected_core(d.path(), "Emerald", Core::Armgba).expect("write core");
     write_app_state(
         d.path(),
         &AppState {
@@ -570,7 +570,7 @@ fn runs_at(s: &mut Session, now: &mut Millis, want: Speed) -> bool {
 
 #[test]
 fn the_open_menu_pauses_the_game_underneath_it() {
-    let (mut s, _d, mut now) = session_playing_on_gpsp();
+    let (mut s, _d, mut now) = session_playing_on_armgba();
     assert!(
         runs_at(&mut s, &mut now, Speed::Normal),
         "the game never started running, so pausing it proves nothing"
@@ -592,7 +592,7 @@ fn the_open_menu_pauses_the_game_underneath_it() {
 
 #[test]
 fn a_started_link_reaches_the_emulator_thread_with_its_transport() {
-    let (mut s, _d, mut now) = session_playing_on_gpsp();
+    let (mut s, _d, mut now) = session_playing_on_armgba();
     let port = common::free_port();
     let far = std::thread::spawn(move || TcpLink::host("127.0.0.1", port).expect("host"));
     std::thread::sleep(Duration::from_millis(150));
@@ -622,7 +622,7 @@ fn a_started_link_reaches_the_emulator_thread_with_its_transport() {
 
 #[test]
 fn a_button_the_menu_is_using_never_reaches_the_game() {
-    let (mut s, _d, mut now) = session_playing_on_gpsp();
+    let (mut s, _d, mut now) = session_playing_on_armgba();
     step(
         &mut s,
         &mut now,
@@ -639,7 +639,7 @@ fn a_button_the_menu_is_using_never_reaches_the_game() {
 
 #[test]
 fn a_dropped_peer_breaks_the_badge_and_ends_the_session_end_to_end() {
-    let (mut s, _d, mut now) = session_playing_on_gpsp();
+    let (mut s, _d, mut now) = session_playing_on_armgba();
     let port = common::free_port();
     let far = std::thread::spawn(move || TcpLink::host("127.0.0.1", port).expect("host"));
     std::thread::sleep(Duration::from_millis(150));
@@ -693,7 +693,7 @@ fn a_dropped_peer_breaks_the_badge_and_ends_the_session_end_to_end() {
 
 #[test]
 fn a_peer_that_ends_the_link_ends_this_session_without_waiting_out_the_timeout() {
-    let (mut s, _d, mut now) = session_playing_on_gpsp();
+    let (mut s, _d, mut now) = session_playing_on_armgba();
     let port = common::free_port();
     let far = std::thread::spawn(move || TcpLink::host("127.0.0.1", port).expect("host"));
     std::thread::sleep(Duration::from_millis(150));
@@ -781,8 +781,8 @@ fn fake_link_sprites() -> omega_zero::link_screen::LinkSprites {
     }
 }
 
-fn seated_on_gpsp(d: &TempDir) -> App {
-    seated_on(d, Core::Gpsp)
+fn seated_on_armgba(d: &TempDir) -> App {
+    seated_on(d, Core::Armgba)
 }
 
 fn seated_on(d: &TempDir, core: Core) -> App {
@@ -804,7 +804,7 @@ fn seated_on_platform(d: &TempDir, core: Core, platform: Platform) -> App {
 }
 
 fn open_link_screen(d: &TempDir) -> Vec<Draw> {
-    let mut app = seated_on_gpsp(d);
+    let mut app = seated_on_armgba(d);
     app.apply(Action::GameMenu);
     let mut out = Vec::new();
     app.draw(&mut out);
@@ -897,7 +897,7 @@ fn idle(app: &mut App, ms: u64) {
 }
 
 fn switched_and_picked() -> (App, TempDir) {
-    let (mut app, d) = playing_on(Core::Gpsp);
+    let (mut app, d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     app.apply(Action::GbaDown(Btn::Right));
     select(&mut app);
@@ -907,7 +907,7 @@ fn switched_and_picked() -> (App, TempDir) {
 
 #[test]
 fn select_on_pick_switches_the_hardware_and_the_cart_keeps_it() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.set_link_sprites(fake_link_sprites());
     app.apply(Action::GameMenu);
     assert_eq!(
@@ -944,7 +944,7 @@ fn select_on_pick_switches_the_hardware_and_the_cart_keeps_it() {
 #[test]
 fn a_in_the_mode_the_game_already_runs_starts_the_link_straight_away() {
     let _link = common::link_port_lock();
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     app.apply(Action::GbaDown(Btn::Right));
     select(&mut app);
@@ -966,7 +966,7 @@ fn a_in_a_switched_mode_asks_for_the_game_to_reload_first() {
     let (mut app, _d) = switched_and_picked();
     assert_eq!(
         app.take_link_reload(),
-        Some(("Emerald".to_string(), "rfu")),
+        Some(("Emerald".to_string(), "wireless")),
         "no reload asked for, or the wrong one"
     );
     assert_eq!(
@@ -1050,11 +1050,11 @@ fn a_reload_that_fails_goes_back_to_the_mode_the_game_came_from() {
     let _link = common::link_port_lock();
     let (mut app, _d) = switched_and_picked();
     app.set_link_sprites(fake_link_sprites());
-    assert_eq!(app.take_link_reload(), Some(("Emerald".to_string(), "rfu")));
+    assert_eq!(app.take_link_reload(), Some(("Emerald".to_string(), "wireless")));
     app.link_reload_failed();
     assert_eq!(
         app.take_link_reload(),
-        Some(("Emerald".to_string(), "auto")),
+        Some(("Emerald".to_string(), "cable")),
         "the reload that failed did not go back to the mode the game came from"
     );
     assert!(
@@ -1117,7 +1117,7 @@ fn a_lid_shut_over_a_game_that_loads_in_neither_mode_opens_onto_the_shelf() {
     app.link_reload_failed();
     assert_eq!(
         app.take_link_reload(),
-        Some(("Emerald".to_string(), "auto")),
+        Some(("Emerald".to_string(), "cable")),
         "the shut lid dropped the way back"
     );
     app.link_reload_failed();
@@ -1130,11 +1130,11 @@ fn a_lid_shut_over_a_game_that_loads_in_neither_mode_opens_onto_the_shelf() {
 }
 
 #[test]
-fn select_is_refused_where_gpsp_would_link_the_same_either_way() {
+fn select_is_refused_where_the_game_links_one_way_only() {
     let _link = common::link_port_lock();
     let d = common::tmp_root_with_carts(&["Zzz"]);
     common::write_retail_header(&d, "Mario Golf", "MARIO GOLF", "BMGE");
-    let mut app = seated_on_gpsp(&d);
+    let mut app = seated_on_armgba(&d);
     app.apply(Action::GameMenu);
     assert_eq!(drawn_hardware(&app), LinkKind::Wireless);
     app.apply(Action::GbaDown(Btn::Right));
@@ -1143,14 +1143,14 @@ fn select_is_refused_where_gpsp_would_link_the_same_either_way() {
     assert_eq!(
         drawn_hardware(&app),
         LinkKind::Wireless,
-        "a plug drawn over a game gpSP links by adapter"
+        "a plug drawn over a game that links by adapter only"
     );
     assert_eq!(app.game_menu(), Some(GameMenu::Pick(LinkRow::Join)));
     app.apply(Action::GbaDown(Btn::A));
     assert_eq!(
         app.take_link_reload(),
         None,
-        "a reload for a mode gpSP would not change"
+        "a reload for a port the game cannot switch"
     );
     assert!(reaches_waiting(&mut app), "A started no link");
     app.apply(Action::GbaDown(Btn::B));
@@ -1160,8 +1160,8 @@ fn select_is_refused_where_gpsp_would_link_the_same_either_way() {
 #[test]
 fn a_reloads_only_for_a_serial_the_core_was_not_loaded_with() {
     let _link = common::link_port_lock();
-    let (mut app, _d) = playing_on(Core::Gpsp);
-    app.set_link_loaded("rfu");
+    let (mut app, _d) = playing_on(Core::Armgba);
+    app.set_link_loaded("wireless");
     app.apply(Action::GameMenu);
     app.apply(Action::GbaDown(Btn::Right));
     select(&mut app);
@@ -1169,7 +1169,7 @@ fn a_reloads_only_for_a_serial_the_core_was_not_loaded_with() {
     assert_eq!(
         app.take_link_reload(),
         None,
-        "the adapter, picked over a core loaded on rfu, asked for a reload"
+        "the adapter, picked over a core loaded on the adapter, asked for a reload"
     );
     assert!(reaches_waiting(&mut app), "A started no link");
     app.apply(Action::GbaDown(Btn::B));
@@ -1181,8 +1181,8 @@ fn a_reloads_only_for_a_serial_the_core_was_not_loaded_with() {
     app.apply(Action::GbaDown(Btn::A));
     assert_eq!(
         app.take_link_reload(),
-        Some(("Emerald".to_string(), "auto")),
-        "the cable, picked over a core loaded on rfu, linked without a reload \
+        Some(("Emerald".to_string(), "cable")),
+        "the cable, picked over a core loaded on the adapter, linked without a reload \
          (after the cancel: {after_cancel:?}, picking: {picking:?})"
     );
 }
@@ -1212,7 +1212,7 @@ impl Snapshot for RefusedResume {
 #[test]
 fn a_switch_is_refused_over_a_resume_the_core_would_not_take() {
     let _link = common::link_port_lock();
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.set_snapshot(Box::new(RefusedResume));
     app.apply(Action::GameMenu);
     app.apply(Action::GbaDown(Btn::Right));
@@ -1241,7 +1241,7 @@ fn a_switch_is_refused_over_a_resume_the_core_would_not_take() {
 
 #[test]
 fn pick_offers_return_and_link_with_mode_and_swap_between_them() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     assert_eq!(app.link_bar_shown(), Some((LinkActions::Pick, 0)));
     assert_eq!(LinkActions::Pick.action(Side::Left), ("RETURN", "B"));
@@ -1313,7 +1313,7 @@ fn counter(s: &Session) -> u64 {
 
 #[test]
 fn a_link_in_a_switched_mode_reloads_the_game_and_then_starts_the_link() {
-    let (mut s, _d, mut now) = session_playing_on_gpsp();
+    let (mut s, _d, mut now) = session_playing_on_armgba();
     assert!(
         runs_at(&mut s, &mut now, Speed::Normal),
         "the game never started running, so a fresh core would look the same"
@@ -1392,14 +1392,14 @@ fn session_on_a_real_core() -> Option<(Session, TempDir, Millis)> {
     let core = common::vendored_core()?;
     let d = common::tmp_root_with_real_carts(&["Emerald"]);
     common::write_real_cart_as(&d, "Emerald", "POKEMON RUBY", "AXVE");
-    omega_store::write_selected_core(d.path(), "Emerald", Core::Gpsp).expect("write core");
+    omega_store::write_selected_core(d.path(), "Emerald", Core::Armgba).expect("write core");
     std::fs::copy(
         &core,
         d.path()
             .join("System")
-            .join(omega_zero::core::dylib_name(Core::Gpsp)),
+            .join(omega_zero::core::dylib_name(Core::Armgba)),
     )
-    .expect("plant a core under gpSP's name");
+    .expect("plant a core under armGBA's name");
     write_app_state(
         d.path(),
         &AppState {
@@ -1466,7 +1466,7 @@ fn a_game_that_will_not_load_again_comes_back_out_of_the_slot() {
         "the cart came out without the alert"
     );
     assert!(
-        persist::read_resume(d.path(), Platform::Gba, Core::Gpsp, "Emerald").is_some(),
+        persist::read_resume(d.path(), Platform::Gba, Core::Armgba, "Emerald").is_some(),
         "the state flushed before the reload is gone"
     );
     let deadline = Instant::now() + BAIL;
@@ -1481,33 +1481,20 @@ fn a_game_that_will_not_load_again_comes_back_out_of_the_slot() {
 }
 
 #[test]
-fn a_cart_gpsp_cannot_carry_is_refused_the_link_screen_and_told_why() {
+fn any_gba_cart_opens_the_link_screen_on_armgba() {
     let d = common::tmp_root_with_carts(&["Apotris", "Zzz"]);
     common::write_retail_header(&d, "Apotris", "APOTRIS", "2ATE");
-    let mut app = seated_on_gpsp(&d);
+    let mut app = seated_on_armgba(&d);
     app.apply(Action::GameMenu);
     assert!(
-        !app.game_menu_open(),
-        "a cart gpSP has no protocol for was offered a link screen"
+        app.game_menu_open(),
+        "a cart with no link protocol of its own was refused armGBA's cable"
     );
-    assert_eq!(
-        app.toast(),
-        Some(omega_ui::Toast::NoLink),
-        "the press did nothing and said nothing"
-    );
-    assert!(
-        matches!(app.phase(), Phase::Playing { .. }),
-        "the refusal took the game away: {:?}",
-        app.phase()
-    );
-    assert!(
-        !app.link_active(),
-        "a session started for a cart gpSP will not link"
-    );
+    assert_eq!(app.toast(), None);
 }
 
 #[test]
-fn a_cart_gpsp_carries_still_opens_the_link_screen() {
+fn the_link_games_open_the_link_screen_on_armgba() {
     for (stem, title, code) in [
         ("Mario Golf", "MARIO GOLF", "BMGE"),
         ("Emerald", "POKEMON EMER", "BPEE"),
@@ -1515,7 +1502,7 @@ fn a_cart_gpsp_carries_still_opens_the_link_screen() {
     ] {
         let d = common::tmp_root_with_carts(&["Zzz"]);
         common::write_retail_header(&d, stem, title, code);
-        let mut app = seated_on_gpsp(&d);
+        let mut app = seated_on_armgba(&d);
         app.apply(Action::GameMenu);
         assert!(app.game_menu_open(), "{code} was refused its link screen");
         assert_eq!(
@@ -1527,25 +1514,20 @@ fn a_cart_gpsp_carries_still_opens_the_link_screen() {
 }
 
 #[test]
-fn a_cart_gpsp_cannot_link_is_refused_on_gpsp_and_carried_by_mgbas_cable() {
-    let refused = |core, open: bool| {
+fn a_cart_with_no_link_protocol_links_on_either_core() {
+    let opens = |core| {
         let d = common::tmp_root_with_carts(&["Apotris", "Zzz"]);
         common::write_retail_header(&d, "Apotris", "APOTRIS", "2ATE");
         let mut app = seated_on(&d, core);
         app.apply(Action::GameMenu);
-        assert_eq!(
-            app.game_menu_open(),
-            open,
-            "{core:?} answered Apotris with the wrong screen"
-        );
-        app.toast()
+        (app.game_menu_open(), app.toast())
     };
-    assert_eq!(refused(Core::Gpsp, false), Some(Toast::NoLink));
-    assert_eq!(refused(Core::Mgba, true), None);
+    assert_eq!(opens(Core::Armgba), (true, None));
+    assert_eq!(opens(Core::Mgba), (true, None));
 }
 
 #[test]
-fn a_wireless_adapter_cart_on_mgba_still_says_to_switch_to_gpsp() {
+fn a_wireless_adapter_cart_on_mgba_says_to_switch_to_armgba() {
     let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
     common::write_retail_header(&d, "Emerald", "POKEMON EMER", "BPEE");
     let mut app = seated_on(&d, Core::Mgba);
@@ -1556,50 +1538,49 @@ fn a_wireless_adapter_cart_on_mgba_still_says_to_switch_to_gpsp() {
     );
     assert_eq!(
         app.toast(),
-        Some(Toast::NeedsGpsp),
-        "a cart gpSP can carry was told there is no link support for it"
+        Some(Toast::NeedsArmgba),
+        "a cart armGBA can carry was told there is no link support for it"
     );
 }
 
 #[test]
-fn a_game_boy_cart_links_on_mgba_and_is_refused_on_gpsp() {
-    for (core, open) in [(Core::Mgba, true), (Core::Gpsp, false)] {
+fn a_game_boy_cart_links_by_cable_on_armgba_and_gambatte_says_to_switch() {
+    for platform in [Platform::Gb, Platform::Gbc] {
         let d = common::tmp_root_with_gb_carts(&["Pokemon Red", "Zzz"]);
-        let mut app = seated_on_platform(&d, core, Platform::Gb);
+        let mut app = seated_on_platform(&d, Core::Armgba, platform);
         app.apply(Action::GameMenu);
-        assert_eq!(
+        assert!(
             app.game_menu_open(),
-            open,
-            "{core:?} answered a Game Boy cart with the wrong screen"
+            "armGBA refused a {platform:?} cart its link screen"
         );
-        assert_ne!(
-            app.toast(),
-            Some(Toast::NeedsGpsp),
-            "{core:?} told a Game Boy cart to switch to gpSP, which cannot run it at all"
-        );
-        if open {
-            continue;
-        }
+        assert_eq!(app.toast(), None);
         assert_eq!(
-            app.toast(),
-            Some(Toast::NoLink),
-            "{core:?} answered a Game Boy cart with the wrong banner"
+            drawn_hardware(&app),
+            LinkKind::Cable,
+            "a Game Boy game was offered the GBA's Wireless Adapter"
         );
+        assert!(
+            !app.link_hints().contains(&MODE),
+            "a Game Boy game was offered SELECT to switch to the Wireless Adapter"
+        );
+
+        let d = common::tmp_root_with_gb_carts(&["Pokemon Red", "Zzz"]);
+        let mut app = seated_on_platform(&d, Core::Gambatte, platform);
+        app.apply(Action::GameMenu);
+        assert!(!app.game_menu_open(), "Gambatte opened a link screen");
+        assert_eq!(app.toast(), Some(Toast::NeedsArmgba));
         assert!(
             matches!(app.phase(), Phase::Playing { .. }),
-            "{core:?}: the refusal took the game away: {:?}",
+            "the refusal took the game away: {:?}",
             app.phase()
         );
-        assert!(
-            !app.link_active(),
-            "{core:?} started a link session for a Game Boy cart"
-        );
+        assert!(!app.link_active());
     }
 }
 
 #[test]
 fn the_pick_bar_names_mode_only_where_the_hardware_can_be_switched() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     assert!(
         app.link_hints().contains(&MODE),
@@ -1608,12 +1589,12 @@ fn the_pick_bar_names_mode_only_where_the_hardware_can_be_switched() {
 
     let d = common::tmp_root_with_carts(&["Zzz"]);
     common::write_retail_header(&d, "Mario Golf", "MARIO GOLF", "BMGE");
-    let mut app = seated_on_gpsp(&d);
+    let mut app = seated_on_armgba(&d);
     app.apply(Action::GameMenu);
     assert_eq!(
         app.link_hints(),
         vec![SWAP],
-        "the screen offered SELECT over a game gpSP links the same either way"
+        "the screen offered SELECT over a game that links one way only"
     );
     assert_eq!(app.link_bar_shown(), Some((LinkActions::Pick, 0)));
 }
@@ -1645,7 +1626,7 @@ fn watched(app: &mut App) -> RadioLog {
 
 #[test]
 fn opening_the_link_screen_warms_the_radio() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     let log = watched(&mut app);
     app.apply(Action::GameMenu);
     assert_eq!(log.jobs(), vec![RadioJob::Warm]);
@@ -1653,7 +1634,7 @@ fn opening_the_link_screen_warms_the_radio() {
 
 #[test]
 fn leaving_the_link_screen_without_a_session_cools_it() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     let log = watched(&mut app);
     app.apply(Action::GameMenu);
     app.apply(Action::GbaDown(Btn::B));
@@ -1662,7 +1643,7 @@ fn leaving_the_link_screen_without_a_session_cools_it() {
 
 #[test]
 fn a_screen_that_closes_over_a_live_session_leaves_the_radio_alone() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     let log = watched(&mut app);
     app.begin_link(0);
@@ -1675,7 +1656,7 @@ fn a_screen_that_closes_over_a_live_session_leaves_the_radio_alone() {
 
 #[test]
 fn the_shortcut_still_opens_the_screen_when_nothing_is_linked() {
-    let (mut app, _d) = playing_on(Core::Gpsp);
+    let (mut app, _d) = playing_on(Core::Armgba);
     app.apply(Action::GameMenu);
     assert!(app.game_menu_open());
     assert_eq!(app.toast(), None);

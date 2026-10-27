@@ -91,7 +91,14 @@ pub(crate) struct Board {
 
 pub fn gb_shell_of(cart: &Cart) -> Option<GbShell> {
     match cart.platform {
-        Platform::Gba | Platform::Snes | Platform::Ps1 | Platform::Nds | Platform::Ports => None,
+        Platform::Gba
+        | Platform::Nes
+        | Platform::Snes
+        | Platform::Md
+        | Platform::Ps1
+        | Platform::Nds
+        | Platform::Pico8
+        | Platform::Ports => None,
         Platform::Gb | Platform::Gbc => Some(match cart.shell.map(|c| c.outline) {
             Some(Outline::Notched) => GbShell::Notched,
             Some(Outline::Rounded) => GbShell::Rounded,
@@ -103,15 +110,16 @@ pub fn gb_shell_of(cart: &Cart) -> Option<GbShell> {
     }
 }
 
-/// The model `cart` stands on the shelf as. A port is a game card, as a DS game is.
+/// The model `cart` stands on the shelf as. A port or a PICO-8 cart is a game card, as a DS
+/// game is; a NES or Mega Drive cart stands in a SNES shell, the Famicom's or the American one.
 pub fn model_of(cart: &Cart) -> CartModel {
     match cart.platform {
         Platform::Gba => CartModel::Gba,
-        Platform::Nds | Platform::Ports => CartModel::Nds,
+        Platform::Nds | Platform::Pico8 | Platform::Ports => CartModel::Nds,
         Platform::Gb | Platform::Gbc => {
             CartModel::Gb(gb_shell_of(cart).unwrap_or(GbShell::Notched))
         }
-        Platform::Snes => CartModel::Snes(snes::shell_of(cart)),
+        Platform::Nes | Platform::Snes | Platform::Md => CartModel::Snes(snes::shell_of(cart)),
         Platform::Ps1 => CartModel::Disc,
     }
 }
@@ -179,12 +187,12 @@ const GB_SEATED_H: u32 = 259;
 pub fn seated_box(platform: Platform) -> (u32, u32) {
     match platform {
         Platform::Gba => (SEATED_W, SEATED_H),
-        Platform::Nds | Platform::Ports => {
+        Platform::Nds | Platform::Pico8 | Platform::Ports => {
             let (_, (w, h)) = crate::spin::outline(CartModel::Nds);
             (w.round() as u32, h.round() as u32)
         }
         Platform::Gb | Platform::Gbc => (SEATED_W, GB_SEATED_H),
-        Platform::Snes => {
+        Platform::Nes | Platform::Snes | Platform::Md => {
             let (_, (w, h)) = snes::outline(SnesShell::Famicom);
             (w.round() as u32, h.round() as u32)
         }
@@ -199,9 +207,9 @@ pub fn seated_box(platform: Platform) -> (u32, u32) {
 pub fn cart_box(platform: Platform) -> (u32, u32) {
     model_box(match platform {
         Platform::Gba => CartModel::Gba,
-        Platform::Nds | Platform::Ports => CartModel::Nds,
+        Platform::Nds | Platform::Pico8 | Platform::Ports => CartModel::Nds,
         Platform::Gb | Platform::Gbc => CartModel::Gb(GbShell::Notched),
-        Platform::Snes => CartModel::Snes(SnesShell::Famicom),
+        Platform::Nes | Platform::Snes | Platform::Md => CartModel::Snes(SnesShell::Famicom),
         Platform::Ps1 => CartModel::Disc,
     })
 }
@@ -239,9 +247,13 @@ pub fn face_labels(platform: Platform) -> Vec<(u32, u32)> {
         .into_iter()
         .filter(|model| match model {
             CartModel::Gba => platform == Platform::Gba,
-            CartModel::Nds => matches!(platform, Platform::Nds | Platform::Ports),
+            CartModel::Nds => {
+                matches!(platform, Platform::Nds | Platform::Pico8 | Platform::Ports)
+            }
             CartModel::Gb(_) => matches!(platform, Platform::Gb | Platform::Gbc),
-            CartModel::Snes(_) => platform == Platform::Snes,
+            CartModel::Snes(_) => {
+                matches!(platform, Platform::Nes | Platform::Snes | Platform::Md)
+            }
             CartModel::Disc => platform == Platform::Ps1,
         })
         .map(|model| match model {

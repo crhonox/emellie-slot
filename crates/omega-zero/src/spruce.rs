@@ -54,12 +54,28 @@ macro_rules! icons {
                     "/icons/sel/gbc.png"
                 ))[..],
             ),
+            Platform::Nes => (
+                &include_bytes!(concat!("../../../assets/spruce/", $dir, "/icons/fc.png"))[..],
+                &include_bytes!(concat!(
+                    "../../../assets/spruce/",
+                    $dir,
+                    "/icons/sel/fc.png"
+                ))[..],
+            ),
             Platform::Snes => (
                 &include_bytes!(concat!("../../../assets/spruce/", $dir, "/icons/sfc.png"))[..],
                 &include_bytes!(concat!(
                     "../../../assets/spruce/",
                     $dir,
                     "/icons/sel/sfc.png"
+                ))[..],
+            ),
+            Platform::Md => (
+                &include_bytes!(concat!("../../../assets/spruce/", $dir, "/icons/md.png"))[..],
+                &include_bytes!(concat!(
+                    "../../../assets/spruce/",
+                    $dir,
+                    "/icons/sel/md.png"
                 ))[..],
             ),
             Platform::Ps1 => (
@@ -76,6 +92,14 @@ macro_rules! icons {
                     "../../../assets/spruce/",
                     $dir,
                     "/icons/sel/nds.png"
+                ))[..],
+            ),
+            Platform::Pico8 => (
+                &include_bytes!(concat!("../../../assets/spruce/", $dir, "/icons/pico.png"))[..],
+                &include_bytes!(concat!(
+                    "../../../assets/spruce/",
+                    $dir,
+                    "/icons/sel/pico.png"
                 ))[..],
             ),
             Platform::Ports => (
@@ -123,9 +147,12 @@ pub fn system_name(platform: Platform) -> &'static str {
         Platform::Gba => "GBA",
         Platform::Gb => "Game Boy",
         Platform::Gbc => "GB Color",
+        Platform::Nes => "NES",
         Platform::Snes => "SNES",
+        Platform::Md => "Mega Drive",
         Platform::Ps1 => "PlayStation",
         Platform::Nds => "DS",
+        Platform::Pico8 => "PICO-8",
         Platform::Ports => "Ports",
     }
 }

@@ -9,7 +9,7 @@ use crate::plate::UndoFace;
 pub enum Toast {
     StateSaved,
     StateLoaded,
-    NeedsGpsp,
+    NeedsArmgba,
     NoLink,
     LinkEnded,
     PeerEnded,
@@ -52,7 +52,7 @@ impl Toast {
     pub const ALL: [Toast; 18] = [
         Toast::StateSaved,
         Toast::StateLoaded,
-        Toast::NeedsGpsp,
+        Toast::NeedsArmgba,
         Toast::NoLink,
         Toast::LinkEnded,
         Toast::PeerEnded,
@@ -75,7 +75,7 @@ impl Toast {
         match self {
             Toast::StateSaved => 0,
             Toast::StateLoaded => 1,
-            Toast::NeedsGpsp => 2,
+            Toast::NeedsArmgba => 2,
             Toast::NoLink => 3,
             Toast::LinkEnded => 4,
             Toast::PeerEnded => 5,
@@ -98,7 +98,7 @@ impl Toast {
     pub fn label(self) -> &'static str {
         match self {
             Toast::StateSaved | Toast::StateLoaded => "SAVE STATE",
-            Toast::NeedsGpsp
+            Toast::NeedsArmgba
             | Toast::NoLink
             | Toast::LinkEnded
             | Toast::PeerEnded
@@ -118,7 +118,7 @@ impl Toast {
         match self {
             Toast::StateSaved => "State saved",
             Toast::StateLoaded => "State loaded",
-            Toast::NeedsGpsp => "Please switch to gpSP",
+            Toast::NeedsArmgba => "Please switch to armGBA",
             Toast::NoLink => "No link support",
             Toast::LinkEnded => "Link ended",
             Toast::PeerEnded => "Link was ended",

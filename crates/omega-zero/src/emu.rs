@@ -127,13 +127,20 @@ impl Rules {
 }
 
 /// The handhelds' games have no X or Y: X is B and Y is A, and the Game Boys', with no
-/// shoulders either, take L1 as A and R1 as B.
+/// shoulders either, take L1 as A and R1 as B. A NES game has no X or Y either, and takes them
+/// as the GBA does; a Mega Drive game's A, B and C are already Y, B and A, its X, Y and Z L1, X
+/// and R1.
 fn remap(platform: Platform) -> &'static [(u16, u16)] {
     use ButtonMask as M;
     match platform {
-        Platform::Gba => &[(M::X, M::B), (M::Y, M::A)],
+        Platform::Gba | Platform::Nes => &[(M::X, M::B), (M::Y, M::A)],
         Platform::Gb | Platform::Gbc => &[(M::X, M::B), (M::Y, M::A), (M::L, M::A), (M::R, M::B)],
-        Platform::Snes | Platform::Ps1 | Platform::Nds | Platform::Ports => &[],
+        Platform::Snes
+        | Platform::Md
+        | Platform::Ps1
+        | Platform::Nds
+        | Platform::Pico8
+        | Platform::Ports => &[],
     }
 }
 
@@ -1519,12 +1526,15 @@ mod tests {
     }
 
     #[test]
-    fn only_the_handhelds_remap_and_nothing_rewinds() {
+    fn only_the_handhelds_and_the_nes_remap_and_nothing_rewinds() {
         for platform in Platform::ALL {
             let rules = Rules::of(platform);
             assert_eq!(
                 !rules.remap.is_empty(),
-                matches!(platform, Platform::Gba | Platform::Gb | Platform::Gbc),
+                matches!(
+                    platform,
+                    Platform::Gba | Platform::Gb | Platform::Gbc | Platform::Nes
+                ),
                 "{platform:?}"
             );
             assert!(!rules.rewinds, "{platform:?}");

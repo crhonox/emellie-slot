@@ -46,7 +46,7 @@ pub(crate) fn label_art(scan: &Path, w: u32, h: u32, platform: Platform) -> Opti
 /// its art, the card's own band being drawn over it.
 fn cover(scan: &Path, w: u32, h: u32, platform: Platform) -> Option<Vec<u8>> {
     match platform {
-        Platform::Nds | Platform::Ports => {
+        Platform::Nds | Platform::Pico8 | Platform::Ports => {
             art::cover_rows(scan, w, h, crate::models::nds::art_rows)
         }
         _ => art::cover(scan, w, h),

@@ -1,6 +1,6 @@
 //! The core picker on the systems beyond the GBA: a SNES cart opens over a board with a socket
 //! each for Snes9x and Supafaust, wider than the GBA's for their names, and picks between them as
-//! a GBA cart picks between mGBA and gpSP; a PlayStation game has one core, and X opens nothing.
+//! a GBA cart picks between armGBA and mGBA; a PlayStation game has one core, and X opens nothing.
 
 use crate::keys::root_with_games;
 
@@ -95,7 +95,7 @@ fn x_on_a_snes_cart_opens_a_socket_for_snes9x_and_one_for_supafaust() {
             "{core:?}'s socket at {at:?}"
         );
     }
-    for core in [Core::Mgba, Core::Gpsp, Core::PcsxRearmed] {
+    for core in [Core::Mgba, Core::Armgba, Core::PcsxRearmed] {
         assert_eq!(
             tex_at(&out, id(SOCKET + core.index())),
             None,

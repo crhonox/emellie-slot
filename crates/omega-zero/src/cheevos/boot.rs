@@ -24,6 +24,12 @@ fn boot_rom(root: &Path, platform: Platform) -> bool {
             let dir = root::bios_dir(root);
             GB_BOOT_ROMS.iter().any(|f| dir.join(f).is_file())
         }
-        Platform::Snes | Platform::Ps1 | Platform::Nds | Platform::Ports => false,
+        Platform::Nes
+        | Platform::Snes
+        | Platform::Md
+        | Platform::Ps1
+        | Platform::Nds
+        | Platform::Pico8
+        | Platform::Ports => false,
     }
 }

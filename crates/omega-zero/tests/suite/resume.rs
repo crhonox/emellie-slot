@@ -39,14 +39,14 @@ fn read_resume_finds_what_a_flush_wrote() {
     persist::flush(
         d.path(),
         Platform::Gba,
-        omega_store::Core::Mgba,
+        omega_store::Core::Armgba,
         "Emerald",
         Some(&[7u8; 64]),
         None,
     )
     .unwrap();
     assert_eq!(
-        persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Mgba, "Emerald"),
+        persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Armgba, "Emerald"),
         Some(vec![7u8; 64])
     );
 }
@@ -58,7 +58,7 @@ fn flush_routes_by_the_core_it_is_given() {
     persist::flush(
         d.path(),
         Platform::Gba,
-        omega_store::Core::Gpsp,
+        omega_store::Core::Mgba,
         "Emerald",
         Some(&[7u8; 64]),
         None,
@@ -67,11 +67,11 @@ fn flush_routes_by_the_core_it_is_given() {
 
     assert!(d
         .path()
-        .join("States/GBA/gpsp/Emerald/resume.state")
+        .join("States/GBA/mgba/Emerald/resume.state")
         .exists());
     assert!(!d
         .path()
-        .join("States/GBA/mgba/Emerald/resume.state")
+        .join("States/GBA/armgba/Emerald/resume.state")
         .exists());
 }
 
@@ -98,7 +98,7 @@ fn srm_bytes_on_disk_reach_the_cores_save_ram() {
         d.path().join("Games/GBA/Emerald.gba"),
         StubSink::new().ring(),
         persist::read_sav(d.path(), Platform::Gba, "Emerald"),
-        persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Mgba, "Emerald"),
+        persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Armgba, "Emerald"),
     );
     wait_ready(&emu);
     let got = emu.snapshot().save_ram().expect("the core has no save ram");
@@ -152,7 +152,7 @@ fn a_power_press_does_not_let_a_refusing_mock_overwrite_a_real_save() {
     persist::flush(
         d.path(),
         Platform::Gba,
-        omega_store::Core::Mgba,
+        omega_store::Core::Armgba,
         "Emerald",
         Some(&real_resume),
         None,
@@ -160,7 +160,7 @@ fn a_power_press_does_not_let_a_refusing_mock_overwrite_a_real_save() {
     .unwrap();
 
     let sav = persist::read_sav(d.path(), Platform::Gba, "Emerald");
-    let resume = persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Mgba, "Emerald");
+    let resume = persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Armgba, "Emerald");
     let emu = EmuHandle::spawn(
         Box::new(MockCore::new()),
         d.path().join("Games/GBA/Emerald.gba"),
@@ -179,7 +179,7 @@ fn a_power_press_does_not_let_a_refusing_mock_overwrite_a_real_save() {
         "the mock's own save ram overwrote the real one"
     );
     assert_eq!(
-        persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Mgba, "Emerald").unwrap(),
+        persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Armgba, "Emerald").unwrap(),
         real_resume,
         "the mock's own resume overwrote the real one"
     );
@@ -195,7 +195,7 @@ fn an_eject_does_not_let_a_refusing_mock_overwrite_a_real_save() {
     persist::flush(
         d.path(),
         Platform::Gba,
-        omega_store::Core::Mgba,
+        omega_store::Core::Armgba,
         "Emerald",
         Some(&real_resume),
         None,
@@ -203,7 +203,7 @@ fn an_eject_does_not_let_a_refusing_mock_overwrite_a_real_save() {
     .unwrap();
 
     let sav = persist::read_sav(d.path(), Platform::Gba, "Emerald");
-    let resume = persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Mgba, "Emerald");
+    let resume = persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Armgba, "Emerald");
     let emu = EmuHandle::spawn(
         Box::new(MockCore::new()),
         d.path().join("Games/GBA/Emerald.gba"),
@@ -222,7 +222,7 @@ fn an_eject_does_not_let_a_refusing_mock_overwrite_a_real_save() {
         "the mock's own save ram overwrote the real one on eject"
     );
     assert_eq!(
-        persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Mgba, "Emerald").unwrap(),
+        persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Armgba, "Emerald").unwrap(),
         real_resume,
         "the mock's own resume overwrote the real one on eject"
     );
@@ -235,7 +235,7 @@ fn a_refusing_mock_does_not_evict_a_real_ring_entry_on_manual_save() {
     let real_resume = vec![0xA5u8; 262_144];
 
     let ring =
-        omega_store::StateRing::new(d.path(), Platform::Gba, omega_store::Core::Mgba, "Emerald");
+        omega_store::StateRing::new(d.path(), Platform::Gba, omega_store::Core::Armgba, "Emerald");
     for i in 0..omega_store::RING_MAX {
         let stamp = format!("2026-01-01_00-00-{i:02}");
         ring.push(&vec![i as u8; 200_000], b"png", &stamp)
@@ -305,7 +305,7 @@ fn seated_with_named_core(
 }
 
 fn a_core_that_refuses(root: &Path, stem: &str) -> EmuHandle {
-    let resume = persist::read_resume(root, Platform::Gba, omega_store::Core::Mgba, stem);
+    let resume = persist::read_resume(root, Platform::Gba, omega_store::Core::Armgba, stem);
     assert!(
         resume.is_some(),
         "there is no resume on the card, so nothing can be refused"
@@ -326,7 +326,7 @@ fn a_core_that_refuses(root: &Path, stem: &str) -> EmuHandle {
 }
 
 fn retired_states(root: &Path, stem: &str) -> Vec<PathBuf> {
-    let dir = root.join("States/GBA/mgba").join(stem);
+    let dir = root.join("States/GBA/armgba").join(stem);
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return Vec::new();
     };
@@ -349,7 +349,7 @@ fn a_refused_resume_is_not_offered_to_the_core_a_second_time() {
     persist::flush(
         d.path(),
         Platform::Gba,
-        omega_store::Core::Mgba,
+        omega_store::Core::Armgba,
         "Emerald",
         Some(&real_resume),
         None,
@@ -360,7 +360,7 @@ fn a_refused_resume_is_not_offered_to_the_core_a_second_time() {
     let _a = seated_with_named_core(d.path(), "Emerald", Box::new(emu.snapshot()), true);
 
     assert_eq!(
-        persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Mgba, "Emerald"),
+        persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Armgba, "Emerald"),
         None,
         "the refused state is still where the next open will find it and be refused again"
     );
@@ -378,7 +378,7 @@ fn a_refused_resume_is_not_offered_to_the_core_a_second_time() {
     );
 
     let ring =
-        omega_store::StateRing::new(d.path(), Platform::Gba, omega_store::Core::Mgba, "Emerald");
+        omega_store::StateRing::new(d.path(), Platform::Gba, omega_store::Core::Armgba, "Emerald");
     assert!(
         ring.list().expect("list").is_empty(),
         "the retired state came back as a ring entry"
@@ -392,7 +392,7 @@ fn a_stand_in_core_refusing_a_resume_leaves_it_alone() {
     persist::flush(
         d.path(),
         Platform::Gba,
-        omega_store::Core::Mgba,
+        omega_store::Core::Armgba,
         "Emerald",
         Some(&real_resume),
         None,
@@ -403,7 +403,7 @@ fn a_stand_in_core_refusing_a_resume_leaves_it_alone() {
     let _a = seated_with_named_core(d.path(), "Emerald", Box::new(emu.snapshot()), false);
 
     assert_eq!(
-        persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Mgba, "Emerald"),
+        persist::read_resume(d.path(), Platform::Gba, omega_store::Core::Armgba, "Emerald"),
         Some(real_resume),
         "a missing core cost the player the session it could not read"
     );

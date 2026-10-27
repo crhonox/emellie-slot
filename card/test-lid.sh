@@ -32,6 +32,7 @@ setup() {
 	cp "$HERE/System/lid.sh" "$TMP/card/System/"
 	echo 1 > "$TMP/sys/hallkey"
 	: > "$TMP/sys/state"
+	echo 16 > "$TMP/sys/os_sleep"
 	echo rtc-other > "$TMP/sys/rtc/rtc0/name"
 	: > "$TMP/sys/rtc/rtc0/wakealarm"
 	echo sunxi-rtc > "$TMP/sys/rtc/rtc1/name"
@@ -42,7 +43,7 @@ setup() {
 		> "$TMP/card/System/emellie-slot"
 	sh "$TMP/card/System/emellie-slot" &
 	OMEGA_ROOT="$TMP/card" AGS_RUN="$TMP/run" AGS_HALL="$TMP/sys/hallkey" AGS_RTC="$TMP/sys/rtc" \
-		AGS_POWER_STATE="$TMP/sys/state" AGS_POWEROFF="sh $TMP/poweroff" AGS_LID_SETTLE_S=0 \
+		AGS_OS_SLEEP="$TMP/sys/os_sleep" AGS_POWER_STATE="$TMP/sys/state" AGS_POWEROFF="sh $TMP/poweroff" AGS_LID_SETTLE_S=0 \
 		AGS_LID_POLL_S=0.1 LID_OFF_S="$1" sh "$TMP/card/System/lid.sh" &
 	sleep 0.3
 }
@@ -53,11 +54,13 @@ echo 0 > "$TMP/sys/hallkey"
 until_true 'grep -q mem "$TMP/sys/state"' || fail "a shut lid did not sleep the kernel"
 grep -qx '+900' "$TMP/sys/rtc/rtc1/wakealarm" || fail "the sunxi-rtc alarm was not set: [$(cat "$TMP/sys/rtc/rtc1/wakealarm")]"
 [ -s "$TMP/sys/rtc/rtc0/wakealarm" ] && fail "the other RTC's alarm was set"
+[ "$(cat "$TMP/sys/os_sleep")" = 0 ] || fail "the kernel slept with the lid out of its wake set: os_sleep $(cat "$TMP/sys/os_sleep")"
 echo 1 > "$TMP/sys/hallkey"
 until_true 'grep -q "lid: open" "$TMP/card/emellie-slot-session.log"' || fail "the open lid was not seen"
 grep -qx 0 "$TMP/sys/rtc/rtc1/wakealarm" || fail "the alarm was left set with the lid open"
 [ -f "$TMP/poweroff.log" ] && fail "an opened lid switched the handheld off"
 [ -f "$TMP/term" ] && fail "an opened lid stopped the game"
+[ "$(cat "$TMP/sys/os_sleep")" = 16 ] || fail "BaseOS's Super Standby was not given back awake: os_sleep $(cat "$TMP/sys/os_sleep")"
 
 # --- shut until the alarm comes: the game left, then the handheld off
 setup 900
@@ -76,6 +79,13 @@ until_true 'grep -q mem "$TMP/sys/state"' || fail "a shut lid did not sleep the 
 : > "$TMP/sys/state"
 until_true 'grep -q mem "$TMP/sys/state"' || fail "a wake with the lid shut did not sleep again"
 [ -f "$TMP/poweroff.log" ] && fail "a wake before the alarm switched the handheld off"
+
+# --- no os_sleep (the Cube, a slab): the lid sleeps the kernel all the same
+setup 900
+rm -f "$TMP/sys/os_sleep"
+echo 0 > "$TMP/sys/hallkey"
+until_true 'grep -q mem "$TMP/sys/state"' || fail "with no os_sleep a shut lid did not sleep the kernel"
+[ -e "$TMP/sys/os_sleep" ] && fail "os_sleep was made where the kernel has none"
 
 # --- a lid shut when the watchdog starts is not a close
 pkill -f "$TMP/card/System/" 2>/dev/null || true
