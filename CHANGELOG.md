@@ -1,5 +1,12 @@
 # Changelog
 
+## es-1.0.6 (2026-11-05)
+
+- A DS frame round the screen in DSperate's single-screen layout with integer scale on, where the
+  screen is shown at twice its size (spruceOS's DS background, `System/dsperate/bg_s0.bmp`).
+  `cores/dsperate/emellie-single-bezel.patch` paints it into the letterbox as it is cleared, so
+  it costs no frame anything; any other layout or scale leaves the letterbox black as before.
+
 ## es-1.0.5 (2026-11-05)
 
 - The main menu's Collections icon is named "Colls.", so its name fits its column on 640x480.
