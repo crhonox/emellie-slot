@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs the Debian packages named, those not there already, in the bullseye box the device
-# build runs in. Bullseye has left the Debian mirrors, so apt is pointed at the snapshot of it
-# the image names (commented out in its sources.list) whenever the mirrors refuse it.
+# build runs in. Bullseye has left the Debian mirrors, so apt is pointed at archive.debian.org
+# whenever the mirrors refuse it (snapshot.debian.org throttles CI runners).
 set -eu
 
 missing=
@@ -17,12 +17,8 @@ fi
 
 list=/etc/apt/sources.list
 if ! apt-get update -qq 2>/dev/null || ! apt-get install -y -qq --no-install-recommends $missing >/dev/null 2>&1; then
-	if grep -q '^# deb http://snapshot.debian.org' "$list" 2>/dev/null; then
-		sed -i -e 's|^deb |# &|' -e 's|^# deb http://snapshot|deb [check-valid-until=no] http://snapshot|' "$list"
-	else
-		sed -i -e 's|deb.debian.org/debian-security|archive.debian.org/debian-security|' \
-			-e 's|deb.debian.org/debian|archive.debian.org/debian|' "$list"
-	fi
+	sed -i -e 's|deb.debian.org/debian-security|archive.debian.org/debian-security|' \
+		-e 's|deb.debian.org/debian|archive.debian.org/debian|' "$list"
 	apt-get -o Acquire::Check-Valid-Until=false update -qq
 	DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $missing >/dev/null
 fi
