@@ -1,7 +1,8 @@
 #!/bin/sh
 # Installs the Debian packages named, those not there already, in the bullseye box the device
-# build runs in. Bullseye has left the Debian mirrors, so apt is pointed at archive.debian.org
-# whenever the mirrors refuse it (snapshot.debian.org throttles CI runners).
+# build runs in. Bullseye has left the Debian mirrors, so apt is pointed at archive.debian.org,
+# security included: the image ships packages from bullseye-security, and without it their -dev
+# packages (libudev-dev under libsdl2-dev) cannot be installed.
 set -eu
 
 missing=
@@ -15,10 +16,11 @@ if [ "$(id -u)" != 0 ]; then
 	exit 1
 fi
 
-list=/etc/apt/sources.list
-if ! apt-get update -qq 2>/dev/null || ! apt-get install -y -qq --no-install-recommends $missing >/dev/null 2>&1; then
-	sed -i -e 's|deb.debian.org/debian-security|archive.debian.org/debian-security|' \
-		-e 's|deb.debian.org/debian|archive.debian.org/debian|' "$list"
-	apt-get -o Acquire::Check-Valid-Until=false update -qq
-	DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $missing >/dev/null
-fi
+cat >/etc/apt/sources.list <<SOURCES
+deb http://archive.debian.org/debian bullseye main
+deb http://archive.debian.org/debian bullseye-updates main
+deb http://archive.debian.org/debian-security bullseye-security main
+SOURCES
+apt-get -o Acquire::Check-Valid-Until=false update -qq
+# shellcheck disable=SC2086
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $missing >/dev/null

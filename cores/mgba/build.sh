@@ -31,9 +31,7 @@ build() {
 
 	if ! command -v cmake >/dev/null 2>&1; then
 		if command -v apt-get >/dev/null 2>&1; then
-			sed -i '/bullseye-security/d' /etc/apt/sources.list
-			apt-get -o Acquire::Check-Valid-Until=false update -qq
-			apt-get install -y -qq --no-install-recommends cmake >/dev/null
+			sh "$here/../dsperate/apt.sh" cmake
 		else
 			echo "building mGBA needs cmake: brew install cmake" >&2
 			exit 1

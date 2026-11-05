@@ -90,9 +90,7 @@ jobs:
       - name: Install zip, cmake, 7-Zip and Task
         run: |
           set -eu
-          sed -i '/bullseye-security/d' /etc/apt/sources.list
-          apt-get -o Acquire::Check-Valid-Until=false update
-          apt-get install -y --no-install-recommends zip cmake p7zip-full file binutils
+          sh cores/dsperate/apt.sh zip cmake p7zip-full file binutils
           curl -fsSL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
 
       - name: Name the tree
