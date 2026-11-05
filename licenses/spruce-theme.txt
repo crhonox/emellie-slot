@@ -1,6 +1,5 @@
-The console grid's background, icons and selection frame (assets/spruce), and the DS's frame
-round a single screen (System/dsperate/bg_s0.bmp, spruce's Emu/NDS/resources/bg/640x480/6/bg_s0.png),
-are from spruceOS's SPRUCE theme
+The console grid's background, icons and selection frame (assets/spruce) are from spruceOS's
+SPRUCE theme
 by tenlevels and the spruceUI team: https://github.com/spruceUI/spruceOS
 Used non-commercially under its licence, which follows.
 

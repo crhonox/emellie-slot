@@ -1,5 +1,11 @@
 # Changelog
 
+## es-1.0.7 (2026-11-05)
+
+- The single-screen DS frame (`System/dsperate/bg_s0.bmp`) is now steward-fu's DraStic Advanced
+  background, edited, as packaged in Bright-04/muos-nds-overlay; its window is exactly the 2x
+  screen. It is no longer credited to spruceOS.
+
 ## es-1.0.6 (2026-11-05)
 
 - A DS frame round the screen in DSperate's single-screen layout with integer scale on, where the
