@@ -1,12 +1,10 @@
 //! The menu's look when the card has none of its own (menu_theme.rs): from spruceOS's SPRUCE
-//! theme (licenses/spruce-theme.txt), each system's icon and lit icon, the frame behind the one
-//! picked, and its font, cut down to Latin letters, over omega-zero's own background. Each
+//! theme (licenses/spruce-theme.txt), each system's icon and lit icon and the frame behind the one
+//! picked, over omega-zero's own background, the names written in Pixel Code as the rest is. Each
 //! panel size has its own set, as the theme has; the grid is laid out the way spruce's PyUI
 //! lays its system grid out.
 
-use std::sync::OnceLock;
-
-use fontdue::{Font, FontSettings};
+use fontdue::Font;
 use omega_store::Platform;
 
 /// The pictures for one panel size, as PNG bytes.
@@ -127,7 +125,7 @@ const SQUARE: Set = Set {
     frame: include_bytes!("../../../assets/spruce/720x720/bg-game-item-f.png"),
     cols: 4,
     rows: 3,
-    text_px: 20.0,
+    text_px: 18.0,
     icons: icons!("720x720"),
 };
 
@@ -197,13 +195,9 @@ pub fn decode(png_bytes: &[u8]) -> Option<Picture> {
     })
 }
 
-const FONT_TTF: &[u8] = include_bytes!("../../../assets/spruce/nunwen-latin.ttf");
-
-/// The theme's font when the card gives none.
+/// The theme's font when the card gives none: Pixel Code, the face the rest of the UI is set in.
 pub fn font() -> Option<&'static Font> {
-    static FONT: OnceLock<Option<Font>> = OnceLock::new();
-    FONT.get_or_init(|| Font::from_bytes(FONT_TTF, FontSettings::default()).ok())
-        .as_ref()
+    omega_ui::text::label_font()
 }
 
 /// How tall a line of the theme's font is at `px`, as PyUI makes room for a name.

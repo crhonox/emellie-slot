@@ -1,5 +1,4 @@
-The console grid's background, icons and selection frame (assets/spruce), and the subset of
-its font nunwen.ttf (nunwen-latin.ttf, Latin letters only), are from spruceOS's SPRUCE theme
+The console grid's background, icons and selection frame (assets/spruce) are from spruceOS's SPRUCE theme
 by tenlevels and the spruceUI team: https://github.com/spruceUI/spruceOS
 Used non-commercially under its licence, which follows.
 

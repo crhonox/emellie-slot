@@ -156,12 +156,8 @@ pub fn home_cell(i: usize, w: f32, h: f32) -> (f32, f32, f32) {
     let col_w = (w - 2.0 * pad) / cols;
     let x = pad + i as f32 * col_w + col_w / 2.0;
     let middle = TOP_BAR_H + (h - TOP_BAR_H - BAR_H) / 2.0;
-    // spruce's icons, 140 or 156 tall, and a name's line under them
-    let (half, line) = if h >= 600.0 {
-        (78.0, 34.0)
-    } else {
-        (70.0, 30.0)
-    };
+    // the icons, 96 tall, and a name's line under them
+    let (half, line) = (48.0, 30.0);
     let icon_y = middle - line / 2.0;
     (x, icon_y, icon_y + half + 14.0 + line)
 }
@@ -577,50 +573,30 @@ impl App {
     }
 }
 
-/// The main menu's icons for a canvas `w` by `h`, as PNG bytes: each entry's, plain and lit.
+/// The main menu's icons, as PNG bytes: each entry's, plain and lit. One set, 96 pixels square,
+/// for every canvas.
 pub fn home_icon(entry: Entry, w: u32, h: u32) -> (&'static [u8], &'static [u8]) {
     macro_rules! pair {
-        ($dir:literal, $name:literal) => {
+        ($name:literal) => {
             (
-                &include_bytes!(concat!(
-                    "../../../../assets/spruce/",
-                    $dir,
-                    "/ic-",
-                    $name,
-                    "-n.png"
-                ))[..],
-                &include_bytes!(concat!(
-                    "../../../../assets/spruce/",
-                    $dir,
-                    "/ic-",
-                    $name,
-                    "-f.png"
-                ))[..],
+                &include_bytes!(concat!("../../../../assets/spruce/ic-", $name, "-n.png"))[..],
+                &include_bytes!(concat!("../../../../assets/spruce/ic-", $name, "-f.png"))[..],
             )
         };
     }
-    let square = h >= 600;
-    let _ = w;
-    match (entry, square) {
-        (Entry::Recents, false) => pair!("640x480", "recent"),
-        (Entry::Favorites, false) => pair!("640x480", "favorite"),
-        (Entry::Collections, false) => pair!("640x480", "collection"),
-        (Entry::Games, false) => pair!("640x480", "game"),
-        (Entry::Settings, false) => pair!("640x480", "setting"),
-        (Entry::Recents, true) => pair!("720x720", "recent"),
-        (Entry::Favorites, true) => pair!("720x720", "favorite"),
-        (Entry::Collections, true) => pair!("720x720", "collection"),
-        (Entry::Games, true) => pair!("720x720", "game"),
-        (Entry::Settings, true) => pair!("720x720", "setting"),
+    let _ = (w, h);
+    match entry {
+        Entry::Recents => pair!("recent"),
+        Entry::Favorites => pair!("favorite"),
+        Entry::Collections => pair!("collection"),
+        Entry::Games => pair!("game"),
+        Entry::Settings => pair!("setting"),
     }
 }
 
-/// The size the main menu's names are written at on a canvas `h` tall, spruce's grid1x4.
+/// The size the main menu's names are written at on a canvas `h` tall: Pixel Code at two screen
+/// pixels to a face pixel (`omega_ui::text::FONT_GRID`), so it stays sharp.
 pub fn home_text_px(h: u32) -> f32 {
-    // spruce writes them at 25 and 28 with four to a row; five are a little smaller
-    if h >= 600 {
-        24.0
-    } else {
-        21.0
-    }
+    let _ = h;
+    omega_ui::text::FONT_GRID
 }

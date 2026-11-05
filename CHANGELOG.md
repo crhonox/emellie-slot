@@ -1,5 +1,17 @@
 # Changelog
 
+## es-1.0.4 (2026-11-05)
+
+A new look for the menus and the boot.
+
+- New icons for the main menu's Recents, Favorites, Collections, Games and Settings: one set,
+  96x96, for every screen (also in `System/menu-template`).
+- The main menu's and the console grid's names are written in Pixel Code, as the rest of Emellie
+  Slot is, in place of spruce's font; at 18 px on every screen so they stay sharp. The menu
+  template's `font.ttf` is Pixel Code too.
+- A new boot logo, on a dithered grey: drawn for 640x480 and laid out again on the same pattern
+  for 720x480 and 720x720 (`examples/bootlogos.rs` now repeats a 2x2 background).
+
 ## es-1.0.3 (2026-11-05)
 
 armGBA is back as the GBA's third core, to try games on: single-player only.

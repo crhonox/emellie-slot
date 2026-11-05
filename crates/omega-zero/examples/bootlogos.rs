@@ -1,8 +1,9 @@
 //! Lays the slot mark from one boot logo out again on every panel size slot runs on.
 //!
-//! `bootlogos SRC OUT_DIR` reads SRC, a 24-bit bmp on a flat background, and writes
-//! OUT_DIR/bootlogo-<w>x<h>.bmp for each panel with the mark centred at its original size. The
-//! panel SRC was drawn for gets SRC itself, untouched.
+//! `bootlogos SRC OUT_DIR` reads SRC, a 24-bit bmp on a background that is flat or a pattern
+//! repeating every two pixels both ways (as its top left 2x2 has it), and writes
+//! OUT_DIR/bootlogo-<w>x<h>.bmp for each panel with the mark centred at its original size, on the
+//! same background. The panel SRC was drawn for gets SRC itself, untouched.
 
 use std::path::{Path, PathBuf};
 
@@ -35,11 +36,14 @@ impl Bmp {
         Bmp { w, h, rows }
     }
 
-    fn blank(w: usize, h: usize, fill: [u8; 3]) -> Bmp {
+    /// A bmp `w` by `h` with `tile` repeated over it.
+    fn blank(w: usize, h: usize, tile: [[[u8; 3]; 2]; 2]) -> Bmp {
         Bmp {
             w,
             h,
-            rows: vec![vec![fill; w]; h],
+            rows: (0..h)
+                .map(|y| (0..w).map(|x| tile[y % 2][x % 2]).collect())
+                .collect(),
         }
     }
 
@@ -74,8 +78,11 @@ fn main() {
         std::process::exit(2);
     };
     let logo = Bmp::read(src);
-    let background = logo.rows[0][0];
-    let inked = |x: usize, y: usize| logo.rows[y][x] != background;
+    let tile = [
+        [logo.rows[0][0], logo.rows[0][1]],
+        [logo.rows[1][0], logo.rows[1][1]],
+    ];
+    let inked = |x: usize, y: usize| logo.rows[y][x] != tile[y % 2][x % 2];
     let xs: Vec<usize> = (0..logo.w)
         .filter(|&x| (0..logo.h).any(|y| inked(x, y)))
         .collect();
@@ -85,7 +92,7 @@ fn main() {
     let (Some(&x0), Some(&x1), Some(&y0), Some(&y1)) =
         (xs.first(), xs.last(), ys.first(), ys.last())
     else {
-        panic!("the source logo is one flat colour");
+        panic!("the source logo is all background");
     };
     let (mark_w, mark_h) = (x1 - x0 + 1, y1 - y0 + 1);
     eprintln!("bootlogos: a {mark_w}x{mark_h} mark at ({x0}, {y0})");
@@ -101,8 +108,13 @@ fn main() {
             continue;
         }
         assert!(mark_w <= w && mark_h <= h, "the mark does not fit {w}x{h}");
-        let mut panel = Bmp::blank(w, h, background);
-        let (left, top) = ((w - mark_w) / 2, (h - mark_h) / 2);
+        let mut panel = Bmp::blank(w, h, tile);
+        // as odd or even as in SRC, so the mark keeps its place in the pattern
+        let even = |n: usize| n - n % 2;
+        let (left, top) = (
+            even((w - mark_w) / 2) + x0 % 2,
+            even((h - mark_h) / 2) + y0 % 2,
+        );
         for y in 0..mark_h {
             panel.rows[top + y][left..left + mark_w]
                 .copy_from_slice(&logo.rows[y0 + y][x0..x0 + mark_w]);
