@@ -61,7 +61,7 @@ impl<'a> Setup<'a> {
                 link,
                 ..
             } => (serial, colour, link),
-            Setup::Console => ("cable", false, None),
+            Setup::Console => ("auto", false, None),
         }
     }
 }
@@ -86,7 +86,7 @@ pub fn open(root: &Path, core: Core, setup: Setup) -> Opened {
 /// picture, so a SNES or PlayStation game without its core is still laid out as one.
 fn stand_in(core: Core) -> MockCore {
     match core {
-        Core::Mgba | Core::Armgba | Core::Gambatte => MockCore::new(),
+        Core::Mgba | Core::Gpsp | Core::Armgba | Core::Gambatte => MockCore::new(),
         Core::Snes9x | Core::Supafaust => MockCore::sized(256, 224),
         Core::Fceumm | Core::Nestopia => MockCore::sized(256, 240),
         Core::Picodrive | Core::GenesisPlusGx => MockCore::sized(320, 224),
@@ -182,24 +182,23 @@ fn report_missing(core: Core, paths: &[PathBuf]) {
     );
 }
 
-/// How `which` is told colour correction is `on`: an option or two, as many as it has. armGBA
-/// keeps one for the GBA and one for the Game Boys.
-pub fn colour_options(which: Core, on: bool) -> &'static [(&'static str, &'static str)] {
-    match (which, on) {
-        (Core::Mgba, true) => &[("mgba_color_correction", "Auto")],
-        (Core::Mgba, false) => &[("mgba_color_correction", "OFF")],
-        (Core::Armgba, true) => &[
-            ("armgba_color_correction", "enabled"),
-            ("armgba_gb_color_correction", "enabled"),
-        ],
-        (Core::Armgba, false) => &[
-            ("armgba_color_correction", "disabled"),
-            ("armgba_gb_color_correction", "disabled"),
-        ],
-        (Core::Gambatte, true) => &[("gambatte_gbc_color_correction", "GBC only")],
-        (Core::Gambatte, false) => &[("gambatte_gbc_color_correction", "disabled")],
-        (
-            Core::Snes9x
+pub fn colour_option(which: Core, on: bool) -> Option<(&'static str, &'static str)> {
+    match which {
+        Core::Mgba => Some(("mgba_color_correction", if on { "Auto" } else { "OFF" })),
+        Core::Gpsp => Some((
+            "gpsp_color_correction",
+            if on { "enabled" } else { "disabled" },
+        )),
+        // cores/armgba/emellie-gba-colours.patch darkens it to mGBA's
+        Core::Armgba => Some((
+            "armgba_color_correction",
+            if on { "enabled" } else { "disabled" },
+        )),
+        Core::Gambatte => Some((
+            "gambatte_gbc_color_correction",
+            if on { "GBC only" } else { "disabled" },
+        )),
+        Core::Snes9x
         | Core::Supafaust
         | Core::PcsxRearmed
         | Core::Dsperate
@@ -208,17 +207,14 @@ pub fn colour_options(which: Core, on: bool) -> &'static [(&'static str, &'stati
         | Core::Fceumm
         | Core::Nestopia
         | Core::Pico8
-        | Core::PortMaster,
-            _,
-        ) => &[],
+        | Core::PortMaster => None,
     }
 }
 
 /// What a Game Boy game, one of Games/GB, is played with over the handhelds' options: mGBA plays
 /// it as the original Game Boy, never as the Super Game Boy whose colours a game such as Kirby's
 /// Dream Land 2 sends it, in Gambatte's TI-83 Legacy palette, which
-/// cores/mgba/ti83-legacy-palette.patch adds; armGBA in the Game Boy Pocket's screen, as measured
-/// from one. A Game Boy Color game keeps its own colours.
+/// cores/mgba/ti83-legacy-palette.patch adds. A Game Boy Color game keeps its own colours.
 pub fn game_boy_options(which: Core, game_boy: bool) -> &'static [(&'static str, &'static str)] {
     match which {
         Core::Mgba if game_boy => &[
@@ -226,7 +222,6 @@ pub fn game_boy_options(which: Core, game_boy: bool) -> &'static [(&'static str,
             ("mgba_gb_colors_preset", "0"),
             ("mgba_gb_colors", "TI-83 Legacy"),
         ],
-        Core::Armgba if game_boy => &[("armgba_gb_screen", "pocket measured")],
         _ => &[],
     }
 }
@@ -256,7 +251,7 @@ pub fn apply_core_options(
 /// declares it. `serial`, the BIOS and `colour` only reach the handhelds' cores.
 ///
 /// Frame skipping is asked for wherever the core has it, so fast-forward can skip frames by
-/// reporting an underrun: mGBA names it `_frameskip` (armGBA has none), pcsx_rearmed
+/// reporting an underrun: mGBA and gpSP name it `_frameskip`, pcsx_rearmed
 /// `_frameskip_type`; Snes9x has none and skips a frame the frontend says not to draw, and
 /// Supafaust skips none. The SNES picture is kept to its 224 lines rather than the 239 a few
 /// games show, so it is exactly twice that on every canvas. Supafaust is left to run its
@@ -268,8 +263,8 @@ pub fn apply_core_options(
 /// built-in one otherwise, and keeps memory card 1 as the game's save, in Saves/PS1; the
 /// second card, which pcsx_rearmed would keep in a file of its own in Saves, is left out.
 /// PicoDrive and Genesis Plus GX skip frames as mGBA does; FCEUmm and Nestopia have no skipping.
-/// armGBA is always in its Separate link mode, on the port `serial` names, `cable` or
-/// `wireless`; it boots a real BIOS through its intro, else its own BIOS straight into the game.
+/// armGBA has no frame skipping and no link here: its link mode is off, so `serial` never reaches
+/// it; it boots a real BIOS through its intro, else its own BIOS straight into the game.
 pub fn core_options(
     which: Core,
     serial: &str,
@@ -285,13 +280,20 @@ pub fn core_options(
             put("mgba_gb_colors_preset", "1");
             put("mgba_gb_colors", "GBC Dark Green →A");
         }
+        Core::Gpsp => {
+            put("gpsp_frameskip", "auto");
+            put("gpsp_serial", serial);
+            if bios {
+                put("gpsp_boot_mode", "bios");
+            }
+        }
         Core::Armgba => {
-            // Separate: the netpacket link is offered from the start, so a link needs no reload
-            // unless the port changes; the port applies on load
-            put("armgba_link_mode", "separate");
-            put("armgba_link_port", serial);
+            put("armgba_link_mode", "off");
             put("armgba_bios", if bios { "nintendo" } else { "open-source" });
-            put("armgba_skip_bios", if bios { "disabled" } else { "enabled" });
+            put(
+                "armgba_skip_bios",
+                if bios { "disabled" } else { "enabled" },
+            );
             // L + R + START held is no restart here
             put("armgba_restart_buttons", "off");
         }
@@ -314,7 +316,7 @@ pub fn core_options(
         Core::GenesisPlusGx => put("genesis_plus_gx_frameskip", "auto"),
         Core::Fceumm | Core::Nestopia | Core::Dsperate | Core::Pico8 | Core::PortMaster => {}
     }
-    for (key, value) in colour_options(which, colour) {
+    if let Some((key, value)) = colour_option(which, colour) {
         put(key, value);
     }
     set
@@ -334,12 +336,7 @@ mod tests {
         assert!(options.contains(&("mgba_gb_colors_preset", "0")));
         assert!(options.contains(&("mgba_gb_colors", "TI-83 Legacy")));
         assert!(game_boy_options(Core::Mgba, false).is_empty());
-        assert_eq!(
-            game_boy_options(Core::Armgba, true),
-            [("armgba_gb_screen", "pocket measured")]
-        );
-        assert!(game_boy_options(Core::Armgba, false).is_empty());
-        for core in [Core::Gambatte, Core::Snes9x, Core::PcsxRearmed] {
+        for core in [Core::Gpsp, Core::Snes9x, Core::PcsxRearmed] {
             assert!(game_boy_options(core, true).is_empty(), "{core:?}");
         }
     }
@@ -347,32 +344,41 @@ mod tests {
     #[test]
     fn each_core_spells_colour_correction_its_own_way() {
         assert_eq!(
-            colour_options(Core::Mgba, true),
-            [("mgba_color_correction", "Auto")]
+            colour_option(Core::Mgba, true),
+            Some(("mgba_color_correction", "Auto"))
         );
         assert_eq!(
-            colour_options(Core::Mgba, false),
-            [("mgba_color_correction", "OFF")]
+            colour_option(Core::Mgba, false),
+            Some(("mgba_color_correction", "OFF"))
         );
         assert_eq!(
-            colour_options(Core::Armgba, true),
-            [
-                ("armgba_color_correction", "enabled"),
-                ("armgba_gb_color_correction", "enabled")
-            ]
+            colour_option(Core::Gpsp, true),
+            Some(("gpsp_color_correction", "enabled"))
         );
         assert_eq!(
-            colour_options(Core::Armgba, false),
-            [
-                ("armgba_color_correction", "disabled"),
-                ("armgba_gb_color_correction", "disabled")
-            ]
+            colour_option(Core::Gpsp, false),
+            Some(("gpsp_color_correction", "disabled"))
         );
-        assert!(colour_options(Core::Snes9x, true).is_empty());
+        assert_eq!(
+            colour_option(Core::Armgba, true),
+            Some(("armgba_color_correction", "enabled"))
+        );
+    }
+
+    #[test]
+    fn armgba_has_its_link_off_whatever_the_serial_mode() {
+        for serial in ["auto", "cable", "wireless"] {
+            let set = core_options(Core::Armgba, serial, false, true);
+            assert!(set.contains(&("armgba_link_mode", "off".into())), "{set:?}");
+            assert!(
+                !set.iter().any(|(k, _)| *k == "armgba_link_port"),
+                "{set:?}"
+            );
+        }
     }
 
     fn keys(which: Core) -> Vec<&'static str> {
-        core_options(which, "cable", true, true)
+        core_options(which, "auto", true, true)
             .into_iter()
             .map(|(k, _)| k)
             .collect()
@@ -391,12 +397,12 @@ mod tests {
     #[test]
     fn frame_skipping_is_asked_for_by_each_core_s_own_name_for_it() {
         let skip = |which| {
-            core_options(which, "cable", false, false)
+            core_options(which, "auto", false, false)
                 .into_iter()
                 .find(|(k, _)| k.contains("frameskip"))
         };
         assert_eq!(skip(Core::Mgba), Some(("mgba_frameskip", "auto".into())));
-        assert_eq!(skip(Core::Armgba), None, "armGBA has no frame skipping");
+        assert_eq!(skip(Core::Gpsp), Some(("gpsp_frameskip", "auto".into())));
         assert_eq!(
             skip(Core::PcsxRearmed),
             Some(("pcsx_rearmed_frameskip_type", "auto".into())),
@@ -414,12 +420,12 @@ mod tests {
     fn the_consoles_take_no_handheld_options() {
         for which in [Core::Snes9x, Core::Supafaust, Core::PcsxRearmed] {
             assert_eq!(
-                core_options(which, "wireless", true, true),
-                core_options(which, "cable", false, false),
+                core_options(which, "rfu", true, true),
+                core_options(which, "auto", false, false),
                 "{which:?} took a serial mode, a BIOS boot or colour correction"
             );
         }
-        assert!(core_options(Core::PcsxRearmed, "cable", false, false)
+        assert!(core_options(Core::PcsxRearmed, "auto", false, false)
             .contains(&("pcsx_rearmed_memcard1", "libretro".into())));
     }
 
@@ -442,17 +448,17 @@ mod tests {
 
         let root = Path::new("/root");
         let mgba = candidates(root, Core::Mgba);
-        let armgba = candidates(root, Core::Armgba);
-        assert_ne!(mgba, armgba, "the two cores searched the same paths");
+        let gpsp = candidates(root, Core::Gpsp);
+        assert_ne!(mgba, gpsp, "the two cores searched the same paths");
         assert!(!mgba.is_empty());
-        assert!(!armgba.is_empty());
+        assert!(!gpsp.is_empty());
         for path in &mgba {
             let name = path.file_name().unwrap().to_str().unwrap();
             assert!(name.starts_with("mgba_libretro"), "{name} is not mGBA's");
         }
-        for path in &armgba {
+        for path in &gpsp {
             let name = path.file_name().unwrap().to_str().unwrap();
-            assert!(name.starts_with("armgba_libretro"), "{name} is not armGBA's");
+            assert!(name.starts_with("gpsp_libretro"), "{name} is not gpSP's");
         }
     }
 
@@ -462,8 +468,8 @@ mod tests {
         std::env::remove_var(CORE_ENV);
         let root = Path::new("/some/content/root");
         assert_eq!(
-            candidates(root, Core::Armgba)[0],
-            root.join("System").join(dylib_name(Core::Armgba)),
+            candidates(root, Core::Gpsp)[0],
+            root.join("System").join(dylib_name(Core::Gpsp)),
         );
     }
 
@@ -473,11 +479,11 @@ mod tests {
         std::env::set_var(CORE_ENV, "/dev/null/named-core");
         let root = Path::new("/root");
         let mgba = candidates(root, Core::Mgba);
-        let armgba = candidates(root, Core::Armgba);
+        let gpsp = candidates(root, Core::Gpsp);
         std::env::remove_var(CORE_ENV);
         assert_eq!(mgba, vec![PathBuf::from("/dev/null/named-core")]);
         assert_eq!(
-            mgba, armgba,
+            mgba, gpsp,
             "the override stopped winning for one of the cores"
         );
     }

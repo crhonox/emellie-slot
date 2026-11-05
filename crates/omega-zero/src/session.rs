@@ -241,8 +241,8 @@ impl Session {
             }
         }
         if let Some(on) = self.app.take_colour_correction() {
-            if let Some(emu) = &self.emu {
-                for (key, value) in crate::core::colour_options(self.app.core(), on) {
+            if let Some((key, value)) = crate::core::colour_option(self.app.core(), on) {
+                if let Some(emu) = &self.emu {
                     emu.set_option(key, value);
                 }
             }
@@ -495,7 +495,7 @@ impl Session {
     }
 
     fn reload_for_link(&mut self, stem: &str, serial: &'static str) {
-        eprintln!("omega-zero: link: loading {stem} again on armGBA's {serial} port");
+        eprintln!("omega-zero: link: loading {stem} again with gpsp_serial={serial}");
         if self.emu.is_some() {
             self.app.flush_resume();
         }

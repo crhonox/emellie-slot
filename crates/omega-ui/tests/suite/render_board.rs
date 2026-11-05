@@ -76,7 +76,8 @@ fn render_board() {
             w: board.w,
             h: board.h,
         };
-        for (i, core) in Core::for_platform(Platform::Gba).iter().enumerate() {
+        // the board's two sockets, as the picker first shows the GBA's cores
+        for (i, core) in Core::for_platform(Platform::Gba).iter().take(2).enumerate() {
             over(
                 &mut f,
                 &socket_face(*core),
@@ -170,7 +171,7 @@ fn render_board() {
         let mut f = socketed(&red);
         over(
             &mut f,
-            &chip_face(Some(Core::Armgba)),
+            &chip_face(Some(Core::Gpsp)),
             CHIP_U[1] as i32,
             CHIP_V as i32,
         );

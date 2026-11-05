@@ -1,11 +1,13 @@
 name: release
 
 # The card tree, as `task dist:device` makes it on a PC, built on an arm64 runner and zipped. A
-# tag (v*) publishes it as a GitHub release; a run by hand only keeps the zip as an artifact.
+# tag es-x.y.z, the version in crates/omega-zero/Cargo.toml, publishes it as a GitHub release with
+# the zip's SHA-256 beside it: the release Emellie Slot finds and installs over the air
+# (src/update.rs). A run by hand only keeps the zip as an artifact.
 
 on:
   push:
-    tags: ['v*']
+    tags: ['es-*']
   workflow_dispatch:
 
 permissions:
@@ -25,6 +27,17 @@ jobs:
       zip: ${{ steps.package.outputs.zip }}
     steps:
       - uses: actions/checkout@v7
+
+      - name: Check the tag is the version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -eu
+          # a release whose binary says another version would be offered over the air forever
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' crates/omega-zero/Cargo.toml | head -n 1)"
+          if [ "$GITHUB_REF_NAME" != "es-$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME is not es-$version, crates/omega-zero/Cargo.toml's version"
+            exit 1
+          fi
 
       - uses: actions/checkout@v7
         with:
@@ -101,7 +114,7 @@ jobs:
           file "$out/System/emellie-slot" | grep -q aarch64
           test -x "$out/System/emellie-slot"
           # each core an aarch64 library a frontend can open: retro_init and retro_run exported
-          for lib in mgba armgba snes9x mednafen_supafaust pcsx_rearmed gambatte picodrive \
+          for lib in mgba gpsp armgba snes9x mednafen_supafaust pcsx_rearmed gambatte picodrive \
             genesis_plus_gx fceumm nestopia; do
             so="$out/System/${lib}_libretro.so"
             file "$so" | grep -q aarch64
@@ -115,9 +128,15 @@ jobs:
           for size in 640x480 720x480 720x720; do
             test -f "$out/System/bootlogo-$size.bmp"
           done
-          for script in launch_frontend.sh probe.sh wifi.sh bluetooth.sh lid.sh nds.sh ports.sh \
+          for script in launch_frontend.sh probe.sh wifi.sh bluetooth.sh nds.sh ports.sh \
             pico8.sh; do
             test -f "$out/System/$script"
+          done
+          gpsp_src_sha="$(cat vendor/gpsp-src.sha)"
+          test -f "$out/System/licenses/gpsp-${gpsp_src_sha}.tar.gz"
+          test -f "$out/System/licenses/gpsp-${gpsp_src_sha}.meta"
+          for p in cores/gpsp/*.patch; do
+            test -f "$out/System/licenses/gpsp-$(basename "$p")"
           done
           mgba_src_commit="$(grep '^commit=' vendor/mgba_libretro.so.meta | cut -d= -f2)"
           test -f "$out/System/licenses/mgba-${mgba_src_commit}.meta"
@@ -131,7 +150,7 @@ jobs:
             test -f "$out/System/licenses/$name-${src_sha}.tar.gz"
             test -f "$out/System/licenses/$name-${src_sha}.meta"
           done
-          for licence in armgba-GPL-2.0 snes9x-non-commercial snes9x-snes_ntsc-LGPL-2.1 \
+          for licence in gpsp-GPL-2.0 armgba-GPL-2.0 snes9x-non-commercial snes9x-snes_ntsc-LGPL-2.1 \
             supafaust-GPL-2.0 pcsx_rearmed-GPL-2.0 gambatte-GPL-2.0 picodrive-non-commercial \
             genesis_plus_gx-non-commercial fceumm-GPL-2.0 nestopia-GPL-2.0 DSperate-GPL-3.0; do
             test -f "$out/System/licenses/$licence.txt"
@@ -144,12 +163,15 @@ jobs:
           out="$TREE"
           zip="$out-h700.zip"
           zip -qry "$zip" "$out"
+          sha256sum "$zip" > "$zip.sha256"
           echo "zip=$zip" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.package.outputs.zip }}
-          path: ${{ steps.package.outputs.zip }}
+          path: |
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.zip }}.sha256
           if-no-files-found: error
 
   publish:
@@ -173,9 +195,9 @@ jobs:
           cat > notes.md <<NOTES
           Emellie Slot, a personal fork of [omega-zero](https://github.com/oauramos/omega-zero), for Anbernic H700 handhelds running [BaseOS](https://github.com/pvaibhav/BaseOS): made for the RG35XX SP and the RG CubeXX. Other BaseOS devices are untested.
 
-          Unzip and copy the contents of \`emellie-slot-${GITHUB_REF_NAME}/\` to the root of the BaseOS card. See the [README](https://github.com/${GITHUB_REPOSITORY}#readme) and the [changelog](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md).
+          On a card already running Emellie Slot: Settings > About, then A, installs it over Wi-Fi (a boot to the shelf with Wi-Fi on also looks for it). For a new card: unzip and copy the contents of \`emellie-slot-${GITHUB_REF_NAME}/\` to the root of the BaseOS card. See the [README](https://github.com/${GITHUB_REPOSITORY}#readme) and the [changelog](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md).
 
-          Emulation by armGBA (GPL-2.0) and mGBA (MPL-2.0) for the GBA, Gambatte (GPL-2.0) for the Game Boys, Snes9x (free for non-commercial use only) and Supafaust (GPL-2.0) for the SNES, PCSX ReARMed (GPL-2.0) for the PlayStation, PicoDrive and Genesis Plus GX (non-commercial) for the Mega Drive, FCEUmm and Nestopia (GPL-2.0) for the NES, and DSperate (GPL-3.0) for the DS. Their licences, patches and source (mGBA's aside) are in \`System/licenses/\`. Emellie Slot is free software under the GPL-3.0-or-later; its credits are in the README.
+          Emulation by mGBA (MPL-2.0), gpSP (GPL-2.0) and armGBA (GPL-2.0) for the GBA, Gambatte (GPL-2.0) for the Game Boys, Snes9x (free for non-commercial use only) and Supafaust (GPL-2.0) for the SNES, PCSX ReARMed (GPL-2.0) for the PlayStation, PicoDrive and Genesis Plus GX (non-commercial) for the Mega Drive, FCEUmm and Nestopia (GPL-2.0) for the NES, and DSperate (GPL-3.0) for the DS. Their licences, patches and source (mGBA's aside) are in \`System/licenses/\`. Emellie Slot is free software under the GPL-3.0-or-later; its credits are in the README.
           NOTES
-          gh release create "$GITHUB_REF_NAME" "$ZIP" --repo "$GITHUB_REPOSITORY" \
+          gh release create "$GITHUB_REF_NAME" "$ZIP" "$ZIP.sha256" --repo "$GITHUB_REPOSITORY" \
             --title "Emellie Slot $GITHUB_REF_NAME" --notes-file notes.md

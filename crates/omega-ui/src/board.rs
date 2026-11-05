@@ -538,7 +538,7 @@ pub fn lift_of(progress: f32) -> f32 {
     ease(((progress - SLIDE_SHARE) / (1.0 - SLIDE_SHARE)).clamp(0.0, 1.0))
 }
 
-/// The GBA board's sockets' top left corners, armGBA's then mGBA's.
+/// The GBA board's sockets' top left corners, mGBA's then gpSP's.
 pub const SOCKET_U: [f32; 2] = [84.0, 136.0];
 pub const SOCKET_V: f32 = 42.0;
 pub const SOCKET_W: u32 = 32;
@@ -591,7 +591,7 @@ impl Sockets {
     }
 }
 
-/// The GBA board's sockets, armGBA's then mGBA's.
+/// The GBA board's sockets, mGBA's then gpSP's.
 pub const GBA_SOCKETS: Sockets = Sockets {
     u: SOCKET_U,
     v: SOCKET_V,
@@ -638,6 +638,7 @@ pub fn sockets_of(core: Core) -> Sockets {
         | Core::Fceumm
         | Core::Nestopia => SNES_SOCKETS,
         Core::Mgba
+        | Core::Gpsp
         | Core::Armgba
         | Core::PcsxRearmed
         | Core::Dsperate

@@ -8,85 +8,118 @@ fn dylib_for(core: Core) -> std::path::PathBuf {
         .join(omega_zero::core::dylib_name(core))
 }
 
-fn armgba() -> Option<omega_retro::LibretroCore> {
-    let path = dylib_for(Core::Armgba);
-    if !path.exists() {
-        eprintln!("no armGBA dylib on this host, skipping");
-        return None;
-    }
-    Some(omega_retro::LibretroCore::open(&path).expect("open armgba"))
-}
-
 #[test]
 fn each_core_resolves_to_its_own_dylib() {
     assert_ne!(
         omega_zero::core::dylib_name(Core::Mgba),
-        omega_zero::core::dylib_name(Core::Armgba)
+        omega_zero::core::dylib_name(Core::Gpsp)
     );
-    assert!(omega_zero::core::dylib_name(Core::Armgba).starts_with("armgba_libretro"));
-    assert!(dylib_for(Core::Armgba)
+    assert!(omega_zero::core::dylib_name(Core::Gpsp).starts_with("gpsp_libretro"));
+    assert!(dylib_for(Core::Gpsp)
         .file_name()
         .unwrap()
         .to_str()
         .unwrap()
-        .starts_with("armgba_libretro"));
+        .starts_with("gpsp_libretro"));
 }
 
 #[test]
-fn armgba_is_always_in_its_separate_link_mode_on_the_port_it_is_handed() {
-    let _g = common::core_lock();
-    let Some(mut core) = armgba() else {
+fn gpsp_loads_and_runs_a_frame() {
+    let path = dylib_for(Core::Gpsp);
+    if !path.exists() {
+        eprintln!("no gpSP dylib on this host, skipping");
         return;
-    };
-    for port in ["cable", "wireless"] {
-        omega_zero::core::apply_core_options(&mut core, Core::Armgba, port, false, false);
-        assert_eq!(core.option("armgba_link_mode").as_deref(), Some("separate"));
+    }
+    let _g = common::core_lock();
+    let mut core = omega_retro::LibretroCore::open(&path).expect("open gpsp");
+    core.set_option("gpsp_serial", "rfu");
+    assert_eq!(core.option("gpsp_serial"), Some("rfu".to_string()));
+}
+
+#[test]
+fn gpsp_is_told_its_serial_mode_before_load() {
+    let path = dylib_for(Core::Gpsp);
+    if !path.exists() {
+        eprintln!("no gpSP dylib on this host, skipping");
+        return;
+    }
+    let _g = common::core_lock();
+    let mut core = omega_retro::LibretroCore::open(&path).expect("open gpsp");
+    omega_zero::core::apply_core_options(&mut core, Core::Gpsp, "auto", false, false);
+    assert_eq!(
+        core.option("gpsp_serial"),
+        Some("auto".to_string()),
+        "auto resolves per ROM, so both devices agree without being told"
+    );
+}
+
+#[test]
+fn gpsp_is_told_the_serial_mode_it_is_handed() {
+    let path = dylib_for(Core::Gpsp);
+    if !path.exists() {
+        eprintln!("no gpSP dylib on this host, skipping");
+        return;
+    }
+    let _g = common::core_lock();
+    let mut core = omega_retro::LibretroCore::open(&path).expect("open gpsp");
+    for serial in ["rfu", "mul_poke", "mul_aw1", "mul_aw2"] {
+        omega_zero::core::apply_core_options(&mut core, Core::Gpsp, serial, false, false);
         assert_eq!(
-            core.option("armgba_link_port").as_deref(),
-            Some(port),
-            "armGBA was not put on the port the link screen asked for"
+            core.option("gpsp_serial"),
+            Some(serial.to_string()),
+            "gpSP was not handed the mode the link screen asked for"
         );
     }
 }
 
 #[test]
-fn armgba_boots_through_the_bios_when_the_card_carries_one() {
-    let _g = common::core_lock();
-    let Some(mut core) = armgba() else {
+fn gpsp_boots_through_the_bios_when_the_card_carries_one() {
+    let path = dylib_for(Core::Gpsp);
+    if !path.exists() {
+        eprintln!("no gpSP dylib on this host, skipping");
         return;
-    };
-    omega_zero::core::apply_core_options(&mut core, Core::Armgba, "cable", true, false);
-    assert_eq!(core.option("armgba_bios").as_deref(), Some("nintendo"));
+    }
+    let _g = common::core_lock();
+    let mut core = omega_retro::LibretroCore::open(&path).expect("open gpsp");
+    omega_zero::core::apply_core_options(&mut core, Core::Gpsp, "auto", true, false);
     assert_eq!(
-        core.option("armgba_skip_bios").as_deref(),
-        Some("disabled"),
-        "a real BIOS on the card and armGBA still told to skip it"
+        core.option("gpsp_boot_mode"),
+        Some("bios".to_string()),
+        "a real BIOS on the card and gpSP still told to skip it"
+    );
+    assert_eq!(
+        core.option("gpsp_bios"),
+        None,
+        "gpsp_bios was named: auto already picks the official image up, and official only \
+         adds an on-screen warning when it cannot"
+    );
+    assert_eq!(
+        core.option("gpsp_serial"),
+        Some("auto".to_string()),
+        "the link mode stopped getting through once the boot mode joined it"
     );
 }
 
 #[test]
-fn armgba_runs_its_own_bios_straight_into_the_game_when_the_card_has_none() {
-    let _g = common::core_lock();
-    let Some(mut core) = armgba() else {
+fn gpsp_is_left_on_its_own_boot_default_when_the_card_has_no_bios() {
+    let path = dylib_for(Core::Gpsp);
+    if !path.exists() {
+        eprintln!("no gpSP dylib on this host, skipping");
         return;
-    };
-    omega_zero::core::apply_core_options(&mut core, Core::Armgba, "cable", false, false);
-    assert_eq!(core.option("armgba_bios").as_deref(), Some("open-source"));
-    assert_eq!(core.option("armgba_skip_bios").as_deref(), Some("enabled"));
+    }
+    let _g = common::core_lock();
+    let mut core = omega_retro::LibretroCore::open(&path).expect("open gpsp");
+    omega_zero::core::apply_core_options(&mut core, Core::Gpsp, "auto", false, false);
+    assert_eq!(
+        core.option("gpsp_boot_mode"),
+        None,
+        "gpSP was sent through a BIOS the card does not have, which is its built-in one: \
+         seconds of blank screen where the logo was promised"
+    );
 }
 
 #[test]
-fn armgba_never_restarts_on_a_held_combo() {
-    let _g = common::core_lock();
-    let Some(mut core) = armgba() else {
-        return;
-    };
-    omega_zero::core::apply_core_options(&mut core, Core::Armgba, "cable", false, false);
-    assert_eq!(core.option("armgba_restart_buttons").as_deref(), Some("off"));
-}
-
-#[test]
-fn mgba_is_given_its_own_frameskip_and_none_of_armgbas_options() {
+fn mgba_is_given_its_own_frameskip_and_none_of_gpsps() {
     let path = dylib_for(Core::Mgba);
     if !path.exists() {
         eprintln!("no mGBA dylib on this host, skipping");
@@ -94,14 +127,26 @@ fn mgba_is_given_its_own_frameskip_and_none_of_armgbas_options() {
     }
     let _g = common::core_lock();
     let mut core = omega_retro::LibretroCore::open(&path).expect("open mgba");
-    omega_zero::core::apply_core_options(&mut core, Core::Mgba, "wireless", true, false);
-    for key in ["armgba_link_port", "armgba_link_mode", "armgba_skip_bios"] {
-        assert_eq!(core.option(key), None, "{key} reached mGBA");
-    }
+    omega_zero::core::apply_core_options(&mut core, Core::Mgba, "rfu", true, false);
+    assert_eq!(
+        core.option("gpsp_serial"),
+        None,
+        "mGBA has no such option and must not be handed one"
+    );
+    assert_eq!(
+        core.option("gpsp_boot_mode"),
+        None,
+        "gpSP's boot switch reached mGBA, which spells its own mgba_skip_bios"
+    );
     assert_eq!(
         core.option("mgba_frameskip").as_deref(),
         Some("auto"),
         "mGBA was never put on auto frameskip, so nothing can tell it which frame to draw"
+    );
+    assert_eq!(
+        core.option("gpsp_frameskip"),
+        None,
+        "gpSP's frameskip key reached mGBA, which reads only its own prefix"
     );
 }
 
@@ -109,7 +154,7 @@ fn mgba_is_given_its_own_frameskip_and_none_of_armgbas_options() {
 fn both_cores_are_told_about_colour_correction_in_their_own_words() {
     for (which, key, on, off) in [
         (Core::Mgba, "mgba_color_correction", "Auto", "OFF"),
-        (Core::Armgba, "armgba_color_correction", "enabled", "disabled"),
+        (Core::Gpsp, "gpsp_color_correction", "enabled", "disabled"),
     ] {
         let path = dylib_for(which);
         if !path.exists() {
@@ -119,7 +164,7 @@ fn both_cores_are_told_about_colour_correction_in_their_own_words() {
         let _g = common::core_lock();
         let mut core = omega_retro::LibretroCore::open(&path).expect("open the core");
         for (colour, want) in [(true, on), (false, off)] {
-            omega_zero::core::apply_core_options(&mut core, which, "cable", false, colour);
+            omega_zero::core::apply_core_options(&mut core, which, "auto", false, colour);
             assert_eq!(
                 core.option(key).as_deref(),
                 Some(want),
@@ -128,8 +173,8 @@ fn both_cores_are_told_about_colour_correction_in_their_own_words() {
             );
         }
         let theirs = match which {
-            Core::Mgba => "armgba_color_correction",
-            Core::Armgba => "mgba_color_correction",
+            Core::Mgba => "gpsp_color_correction",
+            Core::Gpsp => "mgba_color_correction",
             other => unreachable!("{other:?} has no colour correction"),
         };
         assert_eq!(
@@ -139,6 +184,28 @@ fn both_cores_are_told_about_colour_correction_in_their_own_words() {
             which.as_str()
         );
     }
+}
+
+#[test]
+fn gpsp_is_put_on_auto_frameskip() {
+    let path = dylib_for(Core::Gpsp);
+    if !path.exists() {
+        eprintln!("no gpSP dylib on this host, skipping");
+        return;
+    }
+    let _g = common::core_lock();
+    let mut core = omega_retro::LibretroCore::open(&path).expect("open gpsp");
+    omega_zero::core::apply_core_options(&mut core, Core::Gpsp, "auto", false, false);
+    assert_eq!(
+        core.option("gpsp_frameskip").as_deref(),
+        Some("auto"),
+        "gpSP was never put on auto frameskip, so nothing can tell it which frame to draw"
+    );
+    assert_eq!(
+        core.option("mgba_frameskip"),
+        None,
+        "mGBA's frameskip key reached gpSP, which reads only its own prefix"
+    );
 }
 
 fn root_with_bios_and_logo_cart() -> Option<(tempfile::TempDir, std::path::PathBuf)> {
@@ -153,8 +220,8 @@ fn root_with_bios_and_logo_cart() -> Option<(tempfile::TempDir, std::path::PathB
 fn splash_plays(root: &std::path::Path, rom: &std::path::Path) -> bool {
     use omega_retro::ButtonMask;
     let mut core =
-        omega_zero::core::open_core_for(root, Core::Armgba, "cable", false, &[dylib_for(Core::Armgba)]);
-    core.load(rom).expect("armGBA refused the logo rom");
+        omega_zero::core::open_core_for(root, Core::Gpsp, "auto", false, &[dylib_for(Core::Gpsp)]);
+    core.load(rom).expect("gpSP refused the logo rom");
     (0..150).any(|_| {
         core.run_frame(ButtonMask::default());
         common::mostly_lit(core.video_xrgb8888())
@@ -163,8 +230,8 @@ fn splash_plays(root: &std::path::Path, rom: &std::path::Path) -> bool {
 
 #[test]
 fn a_cart_boots_through_a_real_bios_and_the_splash_reaches_the_screen() {
-    if !dylib_for(Core::Armgba).exists() {
-        eprintln!("no armGBA dylib on this host, skipping");
+    if !dylib_for(Core::Gpsp).exists() {
+        eprintln!("no gpSP dylib on this host, skipping");
         return;
     }
     let Some((d, rom)) = root_with_bios_and_logo_cart() else {
@@ -180,8 +247,8 @@ fn a_cart_boots_through_a_real_bios_and_the_splash_reaches_the_screen() {
 
 #[test]
 fn a_cart_goes_straight_to_the_game_when_the_card_has_no_bios() {
-    if !dylib_for(Core::Armgba).exists() {
-        eprintln!("no armGBA dylib on this host, skipping");
+    if !dylib_for(Core::Gpsp).exists() {
+        eprintln!("no gpSP dylib on this host, skipping");
         return;
     }
     let Some((d, rom)) = root_with_bios_and_logo_cart() else {
@@ -214,7 +281,7 @@ fn a_published_frame_is_the_splash(
     });
 
     let emu = EmuHandle::spawn(
-        omega_zero::core::open_core_for(root, Core::Armgba, "cable", false, &[dylib_for(Core::Armgba)]),
+        omega_zero::core::open_core_for(root, Core::Gpsp, "auto", false, &[dylib_for(Core::Gpsp)]),
         rom.to_path_buf(),
         sink.ring(),
         None,
@@ -240,8 +307,8 @@ fn a_published_frame_is_the_splash(
 
 #[test]
 fn the_splash_plays_on_a_fresh_start_and_never_over_a_resume() {
-    if !dylib_for(Core::Armgba).exists() {
-        eprintln!("no armGBA dylib on this host, skipping");
+    if !dylib_for(Core::Gpsp).exists() {
+        eprintln!("no gpSP dylib on this host, skipping");
         return;
     }
     let Some((d, rom)) = root_with_bios_and_logo_cart() else {
@@ -254,12 +321,12 @@ fn the_splash_plays_on_a_fresh_start_and_never_over_a_resume() {
         use omega_retro::ButtonMask;
         let mut core = omega_zero::core::open_core_for(
             d.path(),
-            Core::Armgba,
-            "cable",
+            Core::Gpsp,
+            "auto",
             false,
-            &[dylib_for(Core::Armgba)],
+            &[dylib_for(Core::Gpsp)],
         );
-        core.load(&rom).expect("armGBA refused the logo rom");
+        core.load(&rom).expect("gpSP refused the logo rom");
         for _ in 0..480 {
             core.run_frame(ButtonMask::default());
         }
@@ -268,7 +335,7 @@ fn the_splash_plays_on_a_fresh_start_and_never_over_a_resume() {
             "the state standing in for a resume is itself a frame of the boot splash, so the \
              half below would fail no matter what the resume did"
         );
-        core.serialize().expect("armGBA gave up no state")
+        core.serialize().expect("gpSP gave up no state")
     };
 
     assert!(
@@ -282,7 +349,7 @@ fn the_splash_plays_on_a_fresh_start_and_never_over_a_resume() {
 }
 
 #[test]
-fn an_armgba_carts_resume_is_read_from_its_own_core_directory_through_the_session() {
+fn a_gpsp_carts_resume_is_read_from_its_own_core_directory_through_the_session() {
     use omega_input::{Btn, RawEvent};
     use omega_store::{StateRing, SELECTED_CORE_FILE};
     use omega_zero::app::Phase;
@@ -291,9 +358,9 @@ fn an_armgba_carts_resume_is_read_from_its_own_core_directory_through_the_sessio
     use std::time::{Duration, Instant};
 
     let d = common::tmp_root_with_carts(&["Emerald", "Fusion"]);
-    std::fs::write(d.path().join(SELECTED_CORE_FILE), "Emerald = armgba\n").unwrap();
+    std::fs::write(d.path().join(SELECTED_CORE_FILE), "Emerald = gpsp\n").unwrap();
 
-    StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
+    StateRing::new(d.path(), Platform::Gba, Core::Gpsp, "Emerald")
         .write_resume(&700_000u64.to_le_bytes())
         .unwrap();
     StateRing::new(d.path(), Platform::Gba, Core::Mgba, "Emerald")
@@ -318,7 +385,7 @@ fn an_armgba_carts_resume_is_read_from_its_own_core_directory_through_the_sessio
     s.app_mut().tick_ms(60_000);
     s.app_mut().settle_saves();
 
-    let state = persist::read_resume(d.path(), Platform::Gba, Core::Armgba, "Emerald")
+    let state = persist::read_resume(d.path(), Platform::Gba, Core::Gpsp, "Emerald")
         .expect("nothing resumed");
     let n = u64::from_le_bytes(state.try_into().expect("mock state is 8 bytes"));
     assert!(
@@ -328,7 +395,7 @@ fn an_armgba_carts_resume_is_read_from_its_own_core_directory_through_the_sessio
 }
 
 #[test]
-fn an_armgba_cart_runs_the_dylib_planted_under_its_own_name_through_the_session() {
+fn a_gpsp_cart_runs_the_dylib_planted_under_its_own_name_through_the_session() {
     use omega_input::{Btn, RawEvent};
     use omega_store::SELECTED_CORE_FILE;
     use omega_zero::app::Phase;
@@ -343,12 +410,12 @@ fn an_armgba_cart_runs_the_dylib_planted_under_its_own_name_through_the_session(
     let _g = common::core_lock();
 
     let d = common::tmp_root_with_real_carts(&["Emerald"]);
-    std::fs::write(d.path().join(SELECTED_CORE_FILE), "Emerald = armgba\n").unwrap();
+    std::fs::write(d.path().join(SELECTED_CORE_FILE), "Emerald = gpsp\n").unwrap();
     let planted = d
         .path()
         .join("System")
-        .join(omega_zero::core::dylib_name(Core::Armgba));
-    std::fs::copy(&mgba, &planted).expect("plant a dylib under armGBA's name");
+        .join(omega_zero::core::dylib_name(Core::Gpsp));
+    std::fs::copy(&mgba, &planted).expect("plant a dylib under gpSP's name");
 
     common::clocked(d.path());
     let mut s = Session::boot(d.path().to_path_buf());
@@ -368,7 +435,7 @@ fn an_armgba_cart_runs_the_dylib_planted_under_its_own_name_through_the_session(
     s.app_mut().tick_ms(60_000);
     s.app_mut().settle_saves();
 
-    let state = persist::read_resume(d.path(), Platform::Gba, Core::Armgba, "Emerald")
+    let state = persist::read_resume(d.path(), Platform::Gba, Core::Gpsp, "Emerald")
         .expect("nothing resumed");
     assert!(
         state.len() > 100_000,
@@ -386,7 +453,7 @@ fn changing_the_ini_mid_session_does_not_move_a_seated_carts_autosave() {
     use std::time::{Duration, Instant};
 
     let d = common::tmp_root_with_carts(&["Emerald"]);
-    std::fs::write(d.path().join(SELECTED_CORE_FILE), "Emerald = armgba\n").unwrap();
+    std::fs::write(d.path().join(SELECTED_CORE_FILE), "Emerald = gpsp\n").unwrap();
 
     common::clocked(d.path());
     let mut s = Session::boot(d.path().to_path_buf());
@@ -409,7 +476,7 @@ fn changing_the_ini_mid_session_does_not_move_a_seated_carts_autosave() {
     s.app_mut().settle_saves();
 
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Gpsp, "Emerald")
             .read_resume()
             .unwrap()
             .is_some(),
@@ -434,7 +501,7 @@ fn changing_the_ini_mid_session_does_not_move_a_manual_save_state() {
     use std::time::{Duration, Instant};
 
     let d = common::tmp_root_with_carts(&["Emerald"]);
-    std::fs::write(d.path().join(SELECTED_CORE_FILE), "Emerald = armgba\n").unwrap();
+    std::fs::write(d.path().join(SELECTED_CORE_FILE), "Emerald = gpsp\n").unwrap();
 
     common::clocked(d.path());
     let mut s = Session::boot(d.path().to_path_buf());
@@ -456,7 +523,7 @@ fn changing_the_ini_mid_session_does_not_move_a_manual_save_state() {
     s.app_mut().apply(Action::SaveState);
 
     assert!(
-        !StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
+        !StateRing::new(d.path(), Platform::Gba, Core::Gpsp, "Emerald")
             .list()
             .unwrap()
             .is_empty(),
@@ -481,7 +548,7 @@ fn changing_the_ini_mid_session_does_not_move_an_ejected_carts_resume() {
     use std::time::{Duration, Instant};
 
     let d = common::tmp_root_with_carts(&["Emerald", "Fusion"]);
-    std::fs::write(d.path().join(SELECTED_CORE_FILE), "Emerald = armgba\n").unwrap();
+    std::fs::write(d.path().join(SELECTED_CORE_FILE), "Emerald = gpsp\n").unwrap();
 
     common::clocked(d.path());
     let mut s = Session::boot(d.path().to_path_buf());
@@ -503,7 +570,7 @@ fn changing_the_ini_mid_session_does_not_move_an_ejected_carts_resume() {
     s.app_mut().apply(Action::Eject);
 
     assert!(
-        StateRing::new(d.path(), Platform::Gba, Core::Armgba, "Emerald")
+        StateRing::new(d.path(), Platform::Gba, Core::Gpsp, "Emerald")
             .read_resume()
             .unwrap()
             .is_some(),
@@ -520,7 +587,7 @@ fn changing_the_ini_mid_session_does_not_move_an_ejected_carts_resume() {
 }
 
 #[test]
-fn open_core_reaches_an_armgba_named_dylib_under_the_content_roots_system_directory() {
+fn open_core_reaches_a_gpsp_named_dylib_under_the_content_roots_system_directory() {
     use omega_retro::ButtonMask;
 
     let Some(mgba) = common::vendored_core() else {
@@ -532,10 +599,10 @@ fn open_core_reaches_an_armgba_named_dylib_under_the_content_roots_system_direct
     let planted = d
         .path()
         .join("System")
-        .join(omega_zero::core::dylib_name(Core::Armgba));
-    std::fs::copy(&mgba, &planted).expect("plant a dylib under armGBA's name");
+        .join(omega_zero::core::dylib_name(Core::Gpsp));
+    std::fs::copy(&mgba, &planted).expect("plant a dylib under gpSP's name");
 
-    let mut core = omega_zero::core::open_core(d.path(), Core::Armgba, "cable", false, None).core;
+    let mut core = omega_zero::core::open_core(d.path(), Core::Gpsp, "auto", false, None).core;
     core.load(&d.path().join("Games/GBA/Probe.gba"))
         .expect("the planted core refused the test rom");
     core.run_frame(ButtonMask::default());
@@ -546,7 +613,7 @@ fn open_core_reaches_an_armgba_named_dylib_under_the_content_roots_system_direct
 }
 
 #[test]
-fn a_game_boy_carts_mgba_line_is_dropped_and_it_runs_on_the_platform_default() {
+fn a_game_boy_carts_gpsp_line_is_dropped_and_it_runs_on_the_platform_default() {
     let default = Core::default_for(Platform::Gb);
     use omega_input::{Btn, RawEvent};
     use omega_store::{StateRing, SELECTED_CORE_FILE};
@@ -556,7 +623,7 @@ fn a_game_boy_carts_mgba_line_is_dropped_and_it_runs_on_the_platform_default() {
     use std::time::{Duration, Instant};
 
     let d = common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]);
-    std::fs::write(d.path().join(SELECTED_CORE_FILE), "Tetris = mgba\n").unwrap();
+    std::fs::write(d.path().join(SELECTED_CORE_FILE), "Tetris = gpsp\n").unwrap();
     StateRing::new(d.path(), Platform::Gb, default, "Tetris")
         .write_resume(&700_000u64.to_le_bytes())
         .unwrap();
@@ -588,11 +655,11 @@ fn a_game_boy_carts_mgba_line_is_dropped_and_it_runs_on_the_platform_default() {
         }
         assert!(
             Instant::now() < deadline,
-            "the ini's `Tetris = mgba` was honoured for a Game Boy cart: States/GB/{} still \
-             reads {:?} and States/GB/mgba reads {:?}",
+            "the ini's `Tetris = gpsp` was honoured for a Game Boy cart: States/GB/{} still \
+             reads {:?} and States/GB/gpsp reads {:?}",
             default.as_str(),
             counter(default),
-            counter(Core::Mgba)
+            counter(Core::Gpsp)
         );
         now += 16;
         s.feed([], now);
@@ -601,8 +668,8 @@ fn a_game_boy_carts_mgba_line_is_dropped_and_it_runs_on_the_platform_default() {
         s.app_mut().flush_resume();
     }
     assert_eq!(
-        counter(Core::Mgba),
+        counter(Core::Gpsp),
         None,
-        "a Game Boy cart's state was filed under States/GB/mgba"
+        "a Game Boy cart's state was filed under States/GB/gpsp"
     );
 }

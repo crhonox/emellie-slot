@@ -6,16 +6,16 @@ LOADER="${AGS_LOADER:-/lib/ld-linux-aarch64.so.1}"
 POWEROFF="${AGS_POWEROFF:-poweroff}"
 export OMEGA_ROOT="$SD"
 # every thread allocates from the one heap: glibc's arenas, 64 MB of address space reserved
-# for each thread that contends, crowded the cores loaded after them, and a recompiler's code
-# cache has to be mapped near its code
+# for each thread that contends, crowded the cores loaded after them, and gpsp's JIT cache has
+# to be mapped within 128 MB of its code
 export MALLOC_ARENA_MAX=1
 
 log() {
 	echo "$(date '+%H:%M:%S') $*" >> "$SD/emellie-slot-session.log" 2>/dev/null
 }
 
-# The handheld going down starts nothing again: lid.sh, shut too long, switches it off itself
-# (omega-lid-off); POWER held in DSperate leaves it to be switched off here (omega-power-off).
+# The handheld going down starts nothing again: POWER held in DSperate leaves it to be switched
+# off here (omega-power-off).
 going_off() {
 	if [ -f "$RUN/omega-power-off" ]; then
 		rm -f "$RUN/omega-power-off"
@@ -24,12 +24,82 @@ going_off() {
 		$POWEROFF
 		exit 0
 	fi
-	if [ -f "$RUN/omega-lid-off" ]; then
-		log "lid shut, switched off by lid.sh"
-		sync
-		exit 0
-	fi
 }
+
+# An update over the air: Emellie Slot unpacks a release's System/ into .update/System and writes
+# .update/ready, then leaves. Here the two folders are swapped, the old one kept as System.old,
+# and the new launch_frontend.sh started in place of this one. Its first start is a trial: one
+# that cannot run or falls over within TRIAL_S goes back to System.old.
+UPDATE="$SD/.update"
+TRIAL="$SD/.update-trial"
+TRIAL_S="${AGS_UPDATE_TRIAL_S:-30}"
+
+# The old System's LED watchdog, for the new one's to start in its place
+stop_watchdogs() {
+	pid="$(cat "$RUN/omega-led.pid" 2>/dev/null)"
+	[ -n "$pid" ] && kill "$pid" 2>/dev/null
+	rm -f "$RUN/omega-led.pid"
+}
+
+apply_update() {
+	[ -f "$UPDATE/ready" ] || return 0
+	if [ ! -f "$UPDATE/System/emellie-slot" ] || [ ! -f "$UPDATE/System/launch_frontend.sh" ]; then
+		log "update: .update holds no whole System, dropped"
+		rm -rf "$UPDATE"
+		return 0
+	fi
+	tag="$(head -n 1 "$UPDATE/ready")"
+	log "update: putting $tag in place"
+	rm -rf "$SD/System.old"
+	stop_watchdogs
+	if ! mv "$SYS" "$SD/System.old"; then
+		log "update: could not move System aside, staying"
+		return 0
+	fi
+	if ! mv "$UPDATE/System" "$SYS"; then
+		mv "$SD/System.old" "$SYS"
+		log "update: could not move the new System in, staying"
+		return 0
+	fi
+	rm -rf "$UPDATE"
+	echo "$tag" > "$TRIAL"
+	sync
+	exec sh "$SYS/launch_frontend.sh"
+}
+
+# A trial still running TRIAL_S in is kept there and then: the handheld switched off from the
+# menu goes down from inside emellie-slot, and this script never sees it leave to judge it
+keep_trial_later() {
+	[ -f "$TRIAL" ] || return 0
+	(
+		sleep "$TRIAL_S"
+		[ -f "$TRIAL" ] || exit 0
+		log "update: $(cat "$TRIAL") ran ${TRIAL_S}s, kept"
+		rm -f "$TRIAL"
+		sync
+	) > /dev/null 2>&1 &
+}
+
+# The first start after an update: one that could not run (126, 127) or was killed (128 and up)
+# within TRIAL_S puts System.old back and starts it again
+judge_trial() {
+	[ -f "$TRIAL" ] || return 0
+	status="$1" took="$2"
+	if [ "$status" -lt 126 ] || [ "$took" -ge "$TRIAL_S" ] || [ ! -d "$SD/System.old" ]; then
+		log "update: $(cat "$TRIAL") started, kept"
+		rm -f "$TRIAL"
+		return 0
+	fi
+	log "update: $(cat "$TRIAL") fell over (status $status after ${took}s), back to the one before"
+	stop_watchdogs
+	rm -rf "$SD/System.failed"
+	mv "$SYS" "$SD/System.failed" && mv "$SD/System.old" "$SYS" || return 0
+	rm -f "$TRIAL"
+	sync
+	exec sh "$SYS/launch_frontend.sh"
+}
+
+apply_update
 
 pid="$(cat "$RUN/omega-led.pid" 2>/dev/null)"
 if [ -z "$pid" ] || [ ! -d "/proc/$pid" ]; then
@@ -38,13 +108,7 @@ if [ -z "$pid" ] || [ ! -d "/proc/$pid" ]; then
 	echo $! > "$RUN/omega-led.pid"
 fi
 
-# The lid sleeps the handheld, and switches it off shut LID_OFF_S, whatever is running (lid.sh)
-rm -f "$RUN/omega-lid-off" "$RUN/omega-power-off"
-pid="$(cat "$RUN/omega-lid.pid" 2>/dev/null)"
-if [ -z "$pid" ] || [ ! -d "/proc/$pid" ]; then
-	sh "$SYS/lid.sh" > /dev/null 2>&1 &
-	echo $! > "$RUN/omega-lid.pid"
-fi
+rm -f "$RUN/omega-power-off"
 
 echo "|/bin/sh $SYS/coresave.sh %p %s %e %t" > /proc/sys/kernel/core_pattern 2>/dev/null
 
@@ -64,12 +128,17 @@ fi
 export OMEGA_HANDOFF="$RUN/omega-handoff"
 rm -f "$OMEGA_HANDOFF"
 
+keep_trial_later
+
 returned=0
 while :; do
 	log "start $SYS/emellie-slot returned=$returned"
+	began="$(date +%s)"
 	OMEGA_RETURNED=$returned $LOADER "$SYS/emellie-slot" >> "$SD/emellie-slot.log" 2>&1
 	status=$?
 	going_off
+	judge_trial "$status" $(($(date +%s) - began))
+	apply_update
 	if [ ! -f "$OMEGA_HANDOFF" ]; then
 		log "emellie-slot left, status $status"
 		exit "$status"

@@ -130,16 +130,6 @@ launch || fail "launch_frontend.sh failed over POWER held"
 [ "$(cat "$TMP/omega.log")" = "returned=0" ] || fail "omega-zero started again over POWER held"
 [ ! -f "$TMP/run/omega-power-off" ] || fail "POWER held was left behind for the next boot"
 
-# --- the lid shut too long: lid.sh switches off, nothing starts again here
-setup
-omega
-printf '#!/bin/sh\ntouch "$TMP/run/omega-lid-off"\n' > "$TMP/card/System/nds.sh"
-printf '%s\n' "platform=NDS\\nrom=/g.nds\\n" > "$TMP/handoffs"
-rm -f "$TMP/omega.log" "$TMP/poweroff"
-launch || fail "launch_frontend.sh failed over the lid"
-[ "$(cat "$TMP/omega.log")" = "returned=0" ] || fail "omega-zero started again with the lid switching off"
-[ ! -f "$TMP/poweroff" ] || fail "launch_frontend.sh switched off what lid.sh switches off"
-
 # --- nds.sh: seeds the settings, maps the pad for the model, runs DSperate, restores the governor
 setup
 mkdir -p "$TMP/cpu"

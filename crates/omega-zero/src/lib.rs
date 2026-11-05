@@ -49,6 +49,7 @@ pub mod spruce;
 pub mod ssh;
 pub mod start_notice;
 pub mod thumb;
+pub mod update;
 pub mod video_mode;
 pub mod volume_keys;
 pub mod wallpaper;

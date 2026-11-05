@@ -63,6 +63,11 @@ impl App {
                 BluetoothSummary::On => QuickValue::On.text().to_string(),
                 BluetoothSummary::Connected(name) => name.to_uppercase(),
             }),
+            // the release a look found, while it is waiting to be installed: About opens Update
+            SettingsRow::About => self
+                .updates
+                .available()
+                .map(|r| r.version.tag().to_uppercase()),
             _ => self.settings_value(row).map(|v| v.text().to_string()),
         }
     }

@@ -1,20 +1,40 @@
 # Changelog
 
-## Unreleased
+## es-1.0.2 (2026-11-05)
+
+armGBA is back as the GBA's third core, to try games on: single-player only.
+
+- The GBA's cores are mGBA, gpSP and armGBA ([armGBA](https://github.com/Jacob-Matthew-Cook/armGBA)
+  @ e4b8d8e, built from source by `task core:armgba`, GPL-2.0, its source in `System/licenses/`).
+  The core picker keeps its two sockets: Right from gpSP turns the cores along, gpSP into the
+  first socket and armGBA into the second; Left from the first turns them back.
+- No link on armGBA: its link mode is off, and SELECT + MENU says there is no link support.
+- armGBA's colour correction showed washed out, much paler than mGBA's: its table mixed
+  Pokefan531's primaries at a gamma of 2.2 in and out, which only takes saturation away.
+  `cores/armgba/emellie-gba-colours.patch` reads the screen a gamma of 1.0 darker at 93%
+  luminance, as his gba-color shader does, which lands within a few levels of mGBA's.
 
 omega-zero is now **Emellie Slot**, a personal fork of it.
+
+Updates over the air: Emellie Slot finds its own releases (`es-x.y.z` on GitHub) and installs them.
+
+- A boot to the shelf or the menu with Wi-Fi on looks for a newer release once a network is
+  joined, in the background, and a toast says when there is one; Settings' ABOUT row names it.
+  A boot that puts a game straight back in, or a return from a DS game, port or PICO-8 cart,
+  does not look.
+- A on About opens UPDATE: the version installed, the latest, and Check for Update or Install
+  Update. An install downloads the release's zip into `.update/`, checks its SHA-256, unpacks it
+  and restarts; it needs 30% battery or the charger, and B waits until it is done.
+- `launch_frontend.sh` swaps the new `System/` in, keeping the old as `System.old`, and goes back
+  to it when the new one cannot run or falls over within 30 s of its first start
+  (`card/test-update.sh`). Nothing outside `System/` is touched.
+- The version is Emellie Slot's own, starting at es-1.0.0; `release.yml` publishes on an
+  `es-*` tag that matches it, with the zip's SHA-256 beside it.
 
 - The program on the card is `System/emellie-slot`, its log `emellie-slot.log` and its state
   `Config/emellie-slot.state`; a card's `Config/omega-zero.state` is taken on at the first boot,
   so nothing set is lost. About, the start notice, the boot logo, ScreenScraper's software name
   and RetroAchievements' user agent say Emellie Slot.
-- Shutting the lid puts the handheld to sleep for every system, DS games and ports included, as
-  spruceOS does on the Anbernic XX line: `System/lid.sh` reads the hall sensor and suspends the
-  kernel, CPU and panel asleep. Opened, the game goes on where it was; left shut 15 minutes
-  (`LID_OFF_S`), the RTC wakes the handheld, the game in play leaves with its save, and the
-  handheld switches off. On the clamshells (RG35XX SP and kin) opening the lid wakes it: BaseOS
-  keeps their kernels in Super Standby, which only POWER wakes, so `lid.sh` writes 0 to the
-  battery's `os_sleep` for the sleep and gives back 16 once awake, as spruceOS's lid wake.
 - On a handheld with sticks (RG CubeXX, RG40XX V) the left stick works the d-pad in every
   system the frontend runs, PS1 included, as well as the d-pad itself: pushed over half its
   reach it holds the direction, and lets go back under a third.
@@ -26,19 +46,6 @@ omega-zero is now **Emellie Slot**, a personal fork of it.
   frontend down is still named over the shelf at the next boot.
 - The boot logo is EMELLIE SLOT in Pixel Code, for each panel.
 
-armGBA takes gpSP's place, and is the GBA's default core; mGBA stays on X as the other.
-
-- armGBA, Jacob Cook's recompiling GBA core that spruceOS ships, built from its source at
-  `9847d41`, which ships beside it in `System/licenses/`. It boots a real `BIOS/gba_bios.bin`
-  through its intro, or its own BIOS straight into the game.
-- A cart left on gpSP in `Config/selected_core.ini` runs on armGBA; its old resume states, in
-  `States/GBA/gpsp/`, are not loaded.
-- The GBA link (SELECT + MENU) runs on armGBA for every GBA game, on the cable or the Wireless
-  Adapter: Pokemon's games switch between them with SELECT, others link the way they do on
-  hardware. mGBA still links by cable. Both handhelds need this build.
-- The Game Boy and Game Boy Color have armGBA as their other core, in mGBA's place: X on the
-  shelf picks it over Gambatte. A Game Boy game shows on it as the Game Boy Pocket's screen.
-  The Game Boys' link cable runs on armGBA; on Gambatte, SELECT + MENU says to switch.
 - In the core picker, B closes the picker; it no longer took the shelf back to the console grid
   with the picker left on the screen.
 - DSperate is at `e04b806`, with the hotkeys patch brought onto it.

@@ -9,7 +9,7 @@ use crate::plate::UndoFace;
 pub enum Toast {
     StateSaved,
     StateLoaded,
-    NeedsArmgba,
+    NeedsGpsp,
     NoLink,
     LinkEnded,
     PeerEnded,
@@ -32,6 +32,8 @@ pub enum Toast {
     /// The Collect panel put the game on a collection, or took it off.
     CollectionAdded,
     CollectionRemoved,
+    /// The look for updates at boot found a newer release.
+    UpdateAvailable,
 }
 
 /// What the toast says once disc `n` is in, for every disc a PlayStation game can have.
@@ -49,10 +51,10 @@ const DISC_IN: [&str; 9] = [
 
 impl Toast {
     /// Every toast there is, a disc's once, as disc 1.
-    pub const ALL: [Toast; 18] = [
+    pub const ALL: [Toast; 19] = [
         Toast::StateSaved,
         Toast::StateLoaded,
-        Toast::NeedsArmgba,
+        Toast::NeedsGpsp,
         Toast::NoLink,
         Toast::LinkEnded,
         Toast::PeerEnded,
@@ -68,6 +70,7 @@ impl Toast {
         Toast::NoCollections,
         Toast::CollectionAdded,
         Toast::CollectionRemoved,
+        Toast::UpdateAvailable,
     ];
 
     /// Its place in `ALL`: every disc's toast is the one place.
@@ -75,7 +78,7 @@ impl Toast {
         match self {
             Toast::StateSaved => 0,
             Toast::StateLoaded => 1,
-            Toast::NeedsArmgba => 2,
+            Toast::NeedsGpsp => 2,
             Toast::NoLink => 3,
             Toast::LinkEnded => 4,
             Toast::PeerEnded => 5,
@@ -91,6 +94,7 @@ impl Toast {
             Toast::NoCollections => 15,
             Toast::CollectionAdded => 16,
             Toast::CollectionRemoved => 17,
+            Toast::UpdateAvailable => 18,
         }
     }
 
@@ -98,7 +102,7 @@ impl Toast {
     pub fn label(self) -> &'static str {
         match self {
             Toast::StateSaved | Toast::StateLoaded => "SAVE STATE",
-            Toast::NeedsArmgba
+            Toast::NeedsGpsp
             | Toast::NoLink
             | Toast::LinkEnded
             | Toast::PeerEnded
@@ -110,6 +114,7 @@ impl Toast {
             Toast::NoCollections | Toast::CollectionAdded | Toast::CollectionRemoved => {
                 "COLLECTIONS"
             }
+            Toast::UpdateAvailable => "UPDATE",
         }
     }
 
@@ -118,7 +123,7 @@ impl Toast {
         match self {
             Toast::StateSaved => "State saved",
             Toast::StateLoaded => "State loaded",
-            Toast::NeedsArmgba => "Please switch to armGBA",
+            Toast::NeedsGpsp => "Please switch to gpSP",
             Toast::NoLink => "No link support",
             Toast::LinkEnded => "Link ended",
             Toast::PeerEnded => "Link was ended",
@@ -133,6 +138,7 @@ impl Toast {
             Toast::NoCollections => "MENU on a game makes one",
             Toast::CollectionAdded => "Added to collection",
             Toast::CollectionRemoved => "Taken off collection",
+            Toast::UpdateAvailable => "Update available: see About",
             Toast::Disc(n) => DISC_IN
                 .get(usize::from(n).wrapping_sub(1))
                 .copied()

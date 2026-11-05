@@ -7,10 +7,11 @@ pub const SELECTED_CORE_FILE: &str = "Config/selected_core.ini";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Core {
-    /// The GBA's default, in the place gpSP had.
     #[default]
-    Armgba,
     Mgba,
+    Gpsp,
+    /// armGBA, a third GBA core to try games on, single-player only: no link runs on it.
+    Armgba,
     Snes9x,
     Supafaust,
     PcsxRearmed,
@@ -27,9 +28,10 @@ pub enum Core {
 }
 
 impl Core {
-    pub const ALL: [Core; 13] = [
-        Core::Armgba,
+    pub const ALL: [Core; 14] = [
         Core::Mgba,
+        Core::Gpsp,
+        Core::Armgba,
         Core::Snes9x,
         Core::Supafaust,
         Core::PcsxRearmed,
@@ -46,6 +48,7 @@ impl Core {
     pub fn as_str(&self) -> &'static str {
         match self {
             Core::Mgba => "mgba",
+            Core::Gpsp => "gpsp",
             Core::Armgba => "armgba",
             Core::Snes9x => "snes9x",
             Core::Supafaust => "supafaust",
@@ -84,6 +87,8 @@ impl Core {
     pub fn text(self) -> &'static str {
         match self {
             Core::Mgba => "mGBA",
+            Core::Gpsp => "gpSP",
+            // the GBA sockets have room for four letters
             Core::Armgba => "arm",
             Core::Snes9x => "Snes9x",
             Core::Supafaust => "Faust",
@@ -103,6 +108,7 @@ impl Core {
     pub fn name(self) -> &'static str {
         match self {
             Core::Mgba => "mGBA",
+            Core::Gpsp => "gpSP",
             Core::Armgba => "armGBA",
             Core::Snes9x => "Snes9x",
             Core::Supafaust => "Supafaust",
@@ -121,8 +127,8 @@ impl Core {
     pub fn parse(s: &str) -> Option<Core> {
         match s.trim().to_ascii_lowercase().as_str() {
             "mgba" => Some(Core::Mgba),
-            // gpSP was the GBA's other core before armGBA took its place
-            "armgba" | "gpsp" => Some(Core::Armgba),
+            "gpsp" => Some(Core::Gpsp),
+            "armgba" => Some(Core::Armgba),
             "snes9x" => Some(Core::Snes9x),
             "supafaust" => Some(Core::Supafaust),
             "pcsx_rearmed" => Some(Core::PcsxRearmed),
@@ -146,9 +152,10 @@ impl Core {
     /// sockets show them.
     pub fn for_platform(platform: Platform) -> &'static [Core] {
         match platform {
-            Platform::Gba => &[Core::Armgba, Core::Mgba],
-            // Gambatte, in the palette it is set to; armGBA, which runs them on Gambatte too
-            Platform::Gb | Platform::Gbc => &[Core::Gambatte, Core::Armgba],
+            // more cores than the board's two sockets: the picker scrolls them past (core_picker)
+            Platform::Gba => &[Core::Mgba, Core::Gpsp, Core::Armgba],
+            // Gambatte, in the palette it is set to; mGBA for a Game Boy link cable
+            Platform::Gb | Platform::Gbc => &[Core::Gambatte, Core::Mgba],
             Platform::Nes => &[Core::Fceumm, Core::Nestopia],
             Platform::Snes => &[Core::Snes9x, Core::Supafaust],
             Platform::Md => &[Core::Picodrive, Core::GenesisPlusGx],

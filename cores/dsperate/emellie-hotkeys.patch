@@ -212,6 +212,124 @@ index ff83f6a..9fdd859 100644
    u32  stylus_dpad_ = 0;       // d-pad directions held under the chord (bit per DS button)
    u32  held_ = 0;              // SDL pad buttons currently down (bit per button)
    int  deadzone_ = 12000;
+diff --git a/src/frontend/sdl/lid.cpp b/src/frontend/sdl/lid.cpp
+index 883fbd9..1496ad7 100644
+--- a/src/frontend/sdl/lid.cpp
++++ b/src/frontend/sdl/lid.cpp
+@@ -2,6 +2,7 @@
+ #include "lid.h"
+ 
+ #include <cstdio>
++#include <cstdlib>
+ #include <cstring>
+ #include <string>
+ #include <ctime>
+@@ -28,6 +29,26 @@ bool switch_state(int fd, bool& closed) {
+   closed = (bits[SW_LID / (8 * sizeof(long))] >> (SW_LID % (8 * sizeof(long)))) & 1;
+   return true;
+ }
++// The hall sensor file's 0 (shut) or 1 (open); false when it reads neither.
++bool hall_state(int fd, bool& closed) {
++  char c = 0;
++  if (pread(fd, &c, 1, 0) != 1 || (c != '0' && c != '1')) return false;
++  closed = c == '0';
++  return true;
++}
++#endif
++}
++
++void Lid::open_hall(const char* path) {
++#ifdef __linux__
++  const int fd = ::open(path, O_RDONLY | O_CLOEXEC);
++  if (fd < 0) return;
++  if (!hall_state(fd, closed_)) { ::close(fd); return; }
++  hall_fd_ = fd;
++  shown_ = closed_;
++  std::fprintf(stderr, "lid: %s, %s\n", path, closed_ ? "closed" : "open");
++#else
++  (void)path;
+ #endif
+ }
+ 
+@@ -54,12 +75,25 @@ void Lid::open() {
+     ::close(fd);
+   }
+   closedir(d);
++  if (fd_ >= 0) return;
++  if (const char* hall = std::getenv("DS_LID_HALL"); hall && *hall) { open_hall(hall); return; }
++  if (DIR* psy = opendir("/sys/class/power_supply")) {
++    std::string first;
++    while (dirent* e = readdir(psy)) {
++      if (e->d_name[0] == '.') continue;
++      const std::string path = std::string("/sys/class/power_supply/") + e->d_name + "/hallkey";
++      if (::access(path.c_str(), R_OK) == 0 && (first.empty() || path < first)) first = path;
++    }
++    closedir(psy);
++    if (!first.empty()) open_hall(first.c_str());
++  }
+ #endif
+ }
+ 
+ void Lid::close() {
+ #ifdef __linux__
+   if (fd_ >= 0) { ::close(fd_); fd_ = -1; }
++  if (hall_fd_ >= 0) { ::close(hall_fd_); hall_fd_ = -1; }
+ #endif
+ }
+ 
+@@ -72,11 +106,14 @@ bool Lid::poll(bool& closed) {
+     // events can land out of step with the switch, and a missed open would
+     // leave the guest asleep for good.
+     switch_state(fd_, closed_);
++  } else if (hall_fd_ >= 0 && --hall_wait_ <= 0) {
++    hall_wait_ = kHallPollFrames;
++    hall_state(hall_fd_, closed_);
+   }
+ #endif
+   // No switch (or host froze before the event): clocks drifted >1s apart.
+   const s64 skew = clock_ns(CLOCK_BOOTTIME) - clock_ns(CLOCK_MONOTONIC);
+-  if (skew - skew_ns_ > 1000000000 && fd_ < 0) { pulse_ = 1; std::fprintf(stderr, "lid: host resumed from suspend; pulsing the lid\n"); }
++  if (skew - skew_ns_ > 1000000000 && !has_switch()) { pulse_ = 1; std::fprintf(stderr, "lid: host resumed from suspend; pulsing the lid\n"); }
+   skew_ns_ = skew;
+   bool raw = closed_;
+   if (pulse_ > 0) { --pulse_; raw = true; }
+diff --git a/src/frontend/sdl/lid.h b/src/frontend/sdl/lid.h
+index 092cfa8..7cbd94b 100644
+--- a/src/frontend/sdl/lid.h
++++ b/src/frontend/sdl/lid.h
+@@ -5,8 +5,11 @@
+ 
+ namespace ds::sdl {
+ 
+-// Host lid switch (evdev SW_LID; SDL has no switch events). Hosts without a
+-// switch get a synthetic pulse: a BOOTTIME/MONOTONIC clock jump after resume
++// Host lid switch (evdev SW_LID; SDL has no switch events). Hosts with no
++// such node but a hall sensor file (DS_LID_HALL, else the first
++// /sys/class/power_supply/*/hallkey: 0 shut, 1 open, as the Anbernic
++// clamshells' axp2202-battery) have it read every kHallPollFrames frames.
++// Hosts with neither get a synthetic pulse: a BOOTTIME/MONOTONIC clock jump after resume
+ // closes the lid briefly, mimicking the real hinge sequence.
+ //
+ // The guest always sees a close last at least kMinClosedFrames emulated
+@@ -19,12 +22,17 @@ public:
+   void close();
+   // Call once a frame. Returns true if state changed, stores it in `closed`.
+   bool poll(bool& closed);
+-  bool has_switch() const { return fd_ >= 0; }
++  bool has_switch() const { return fd_ >= 0 || hall_fd_ >= 0; }
+ 
+   static constexpr int kMinClosedFrames = 60;
++  static constexpr int kHallPollFrames = 9;   // ~150 ms, as omega-zero's own poll
++
++  void open_hall(const char* path);   // the hall sensor file, if it reads 0 or 1
+ 
+ private:
+   int  fd_ = -1;
++  int  hall_fd_ = -1;          // the hall sensor file, when there is no SW_LID node
++  int  hall_wait_ = 0;         // frames until it is read again
+   bool closed_ = false;        // the switch itself
+   bool shown_ = false;         // what the guest has been told
+   int  hold_ = 0;              // frames the guest must still see closed
 diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
 index 37e4e37..670edea 100644
 --- a/src/frontend/sdl/main.cpp

@@ -48,6 +48,7 @@ mod sync_start_notice;
 mod sync_switcher;
 mod sync_systems;
 mod sync_top_bar;
+mod sync_update;
 
 use lone::Baked;
 use sync_about::sync_about;
@@ -74,6 +75,7 @@ use sync_start_notice::sync_start_notice;
 use sync_switcher::{sync_switcher, Switcher};
 use sync_systems::sync_systems;
 use sync_top_bar::{sync_top_bar, TopBarTexes};
+use sync_update::sync_update;
 
 const DOZE_TIMEOUT: Duration = Duration::from_secs(180);
 
@@ -135,6 +137,7 @@ pub struct Frontend {
     keyboard: KeyboardTexes,
     info: InfoTexes,
     labels: Baked<(ListView, u8)>,
+    update: Baked<(ListView, u8)>,
     list_panel: Baked<(ListView, &'static str, u8)>,
     cheevos: Baked<(ListView, u8)>,
     controls: Baked<(crate::screens::controls::ControlsView, u8)>,
@@ -229,6 +232,7 @@ impl Frontend {
             keyboard: KeyboardTexes::default(),
             info: InfoTexes::default(),
             labels: Baked::default(),
+            update: Baked::default(),
             list_panel: Baked::default(),
             cheevos: Baked::default(),
             controls: Baked::default(),
@@ -371,6 +375,7 @@ impl Frontend {
         sync_controls(self.session.app_mut(), compositor, &mut self.controls);
         sync_shelf_name(self.session.app_mut(), compositor, &mut self.shelf_name);
         sync_labels(self.session.app_mut(), compositor, &mut self.labels);
+        sync_update(self.session.app_mut(), compositor, &mut self.update);
         sync_systems(self.session.app_mut(), compositor);
         sync_list_panel(self.session.app_mut(), compositor, &mut self.list_panel);
         sync_cheevos(self.session.app_mut(), compositor, &mut self.cheevos);
@@ -708,5 +713,16 @@ impl Frontend {
     /// not be, the cart coming back out instead.
     pub fn hand_over(&mut self) -> bool {
         self.session.app_mut().hand_over()
+    }
+
+    /// An update is unpacked and waiting, for omega-zero to leave so `launch_frontend.sh` can
+    /// put it in place.
+    pub fn updating(&self) -> bool {
+        self.session.app().update_ready()
+    }
+
+    /// Settles the saves and the state to the card before leaving for an update.
+    pub fn leave_for_update(&mut self) {
+        self.session.app_mut().leave_for_update();
     }
 }

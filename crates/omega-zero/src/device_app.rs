@@ -179,6 +179,12 @@ pub fn run() {
         if frontend.handing_over() && frontend.hand_over() {
             return;
         }
+        // an update unpacked: launch_frontend.sh swaps System/ for it and starts it
+        if frontend.updating() {
+            frontend.leave_for_update();
+            eprintln!("omega-zero: update: unpacked, leaving for launch_frontend.sh to put it in");
+            return;
+        }
         frontend.step_emulator(pacer.period, STEP_TIMEOUT);
         frontend.render(&mut compositor, surface.window_size());
         let swap = Instant::now();

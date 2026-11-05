@@ -32,7 +32,7 @@ use crate::disc_screen::{DiscBar, DiscScreen};
 use crate::handoff::{self, Handoff};
 use crate::label_screen::{Labels, LabelsScreen};
 use crate::label_sync::{label_jobs, Account, LabelJobs, NoKey, Want};
-use crate::link_kind::{armgba_port, both_ports, link_kind, LinkKind};
+use crate::link_kind::{link_carried, link_kind, serial_option, LinkKind};
 use crate::link_radio::{radio_jobs, LinkRole, RadioJob, RadioJobs};
 use crate::link_screen::{LinkBar, LinkSprites};
 use crate::link_start::{link_port, LinkFail, LinkProgress, LinkStarter, LinkStep};
@@ -274,6 +274,8 @@ pub enum Phase {
     /// RetroAchievements, opened from Settings.
     Cheevos(CheevosScreen),
     Background(BackgroundScreen),
+    /// Updates over the air, opened with A on About.
+    Update,
     Doze {
         cart: Option<String>,
     },
@@ -418,6 +420,12 @@ pub struct App {
     pub(crate) bluetooth_faces: Option<omega_ui::network::NetworkFaces>,
     pub(crate) labels: Labels,
     pub(crate) labels_panel: Option<Lone>,
+    /// Emellie Slot's releases: the check at boot, and an install from the Update screen.
+    pub(crate) updates: crate::update::Updates,
+    /// A check is to be made once a network is joined: a boot that did not put a game straight
+    /// back in, nor came back from one played in its own emulator.
+    pub(crate) update_check_due: bool,
+    pub(crate) update_panel: Option<Lone>,
     pub(crate) cheevos_panel: Option<Lone>,
     /// The RetroAchievements account as the card has it, for Settings.
     pub(crate) cheevos_account: omega_cheevos::config::Account,
@@ -476,6 +484,9 @@ impl App {
             bluetooth_faces: None,
             labels: Labels::new(Box::new(NoKey::default()), None),
             labels_panel: None,
+            updates: crate::update::Updates::new(Box::new(crate::update::NoUpdates)),
+            update_check_due: false,
+            update_panel: None,
             cheevos_panel: None,
             cheevos_account: omega_cheevos::config::Account::default(),
             stale_faces: Vec::new(),
@@ -591,6 +602,7 @@ impl App {
         app.ssh.start(app.state.ssh, Some(root));
         app.bluetooth.start(app.state.bluetooth);
         app.labels = Labels::new(label_jobs(root), Account::load(root));
+        app.updates = crate::update::Updates::new(crate::update::update_jobs(root));
         app.cheevos_account = omega_cheevos::config::account(root);
         if let Some(fell) = persist::take_starting(root) {
             eprintln!("omega-zero: {fell} took omega-zero down as it started; it is not resumed");
@@ -630,6 +642,10 @@ impl App {
         };
         self.phase = Phase::Shelf;
         let held = std::mem::take(&mut self.hold_resume);
+        // a boot that puts a game straight back in is not held up by a look for updates, nor is
+        // the start that follows a game played in its own emulator
+        self.update_check_due =
+            self.root.is_some() && !handoff::returned() && (held || seated.is_none());
         match seated {
             Some((at, i)) if held => {
                 self.shelf_at = at;
@@ -1033,11 +1049,11 @@ impl App {
     }
 
     pub fn link_mode(&self, stem: &str) -> (LinkKind, &'static str) {
-        let Some((_, auto)) = self.auto_link(stem) else {
-            return (LinkKind::Cable, armgba_port(LinkKind::Cable));
+        let Some((cart, auto)) = self.auto_link(stem) else {
+            return (LinkKind::Cable, "auto");
         };
         let chosen = self.link_choices.get(stem).copied().unwrap_or(auto);
-        (chosen, armgba_port(chosen))
+        (chosen, serial_option(chosen, auto, &cart.code, &cart.title))
     }
 
     pub fn link_active(&self) -> bool {
@@ -1416,6 +1432,7 @@ impl App {
             Phase::Labels(_) => self.labels_input(action),
             Phase::Cheevos(_) => self.cheevos_input(action),
             Phase::Background(_) => self.background_input(action),
+            Phase::Update => self.update_input(action),
             _ => {}
         }
     }
@@ -1500,7 +1517,8 @@ impl App {
             | Phase::Inserting { .. }
             | Phase::Ejecting { .. }
             | Phase::Labels(_)
-            | Phase::Cheevos(_) => Watch::Glance,
+            | Phase::Cheevos(_)
+            | Phase::Update => Watch::Glance,
             _ => Watch::Idle,
         }
     }
@@ -1591,6 +1609,23 @@ impl App {
 
     pub fn labels(&self) -> &Labels {
         &self.labels
+    }
+
+    /// Hands the updates to `jobs`, this build's version taken as `installed`.
+    pub fn set_update_jobs(
+        &mut self,
+        jobs: Box<dyn crate::update::UpdateJobs>,
+        installed: crate::update::Version,
+    ) {
+        self.updates = crate::update::Updates::with_installed(jobs, installed);
+    }
+
+    pub fn updates(&self) -> &crate::update::Updates {
+        &self.updates
+    }
+
+    pub fn update_check_due(&self) -> bool {
+        self.update_check_due
     }
 
     pub fn set_wifi_jobs(&mut self, jobs: Box<dyn WifiJobs>) {
@@ -1924,6 +1959,7 @@ impl App {
         self.ssh.tick(now, self.state.ssh);
         self.labels.tick();
         self.take_labels();
+        self.take_updates();
         self.play_hold();
         if self.doze_expired() {
             self.on_doze_timeout();
@@ -2262,6 +2298,7 @@ impl App {
             Phase::Bluetooth(_) => self.draw_bluetooth(out),
             Phase::Info(_) => self.draw_info(out),
             Phase::About => self.draw_about(out),
+            Phase::Update => self.draw_update(out),
             Phase::Inserting { cart, resumed, .. } => {
                 if !resumed {
                     self.shelf()
@@ -2443,7 +2480,7 @@ impl App {
         let board = board_from(shelf, progress);
         let zoom = board_zoom(board);
         let ready = self.core_faces_ready();
-        let cores = picker.cores();
+        let cores = picker.shown();
         let sockets = sockets_of(cores[0]);
 
         if ready {
@@ -2560,15 +2597,11 @@ impl App {
 
     fn auto_link(&self, stem: &str) -> Option<(&Cart, LinkKind)> {
         let cart = self.shelf().carts.iter().find(|c| c.stem == stem)?;
-        // the Wireless Adapter is the GBA's: a Game Boy game links by cable
-        let auto = match cart.platform {
-            Platform::Gba => link_kind(
-                &cart.code,
-                &cart.title,
-                omega_store::header_clean(&cart.rom),
-            ),
-            _ => LinkKind::Cable,
-        };
+        let auto = link_kind(
+            &cart.code,
+            &cart.title,
+            omega_store::header_clean(&cart.rom),
+        );
         Some((cart, auto))
     }
 
@@ -2790,12 +2823,17 @@ impl App {
             self.hud.toast(Toast::NoLink, self.now());
             return;
         }
+        // armGBA is a GBA core to try games on, single-player only
+        if self.core == Core::Armgba {
+            self.hud.toast(Toast::NoLink, self.now());
+            return;
+        }
         if self.core == Core::Mgba {
             let wireless = self
                 .seated()
                 .is_some_and(|stem| self.link_mode(stem).0 == LinkKind::Wireless);
             if wireless {
-                self.hud.toast(Toast::NeedsArmgba, self.now());
+                self.hud.toast(Toast::NeedsGpsp, self.now());
                 return;
             }
             self.link_hardware = LinkKind::Cable;
@@ -2803,10 +2841,20 @@ impl App {
             self.game_menu = Some(GameMenu::Pick(self.last_role));
             return;
         }
-        // armGBA links any GBA game, on the cable or the Wireless Adapter, and any Game Boy game
-        // on the cable
-        if self.core != Core::Armgba {
-            self.hud.toast(Toast::NeedsArmgba, self.now());
+        if self.platform != Platform::Gba {
+            self.hud.toast(Toast::NoLink, self.now());
+            return;
+        }
+        let carried = self
+            .seated()
+            .and_then(|stem| self.auto_link(stem))
+            .is_some_and(|(cart, _)| link_carried(&cart.code, &cart.title));
+        if !carried {
+            self.hud.toast(Toast::NoLink, self.now());
+            return;
+        }
+        if self.core != Core::Gpsp {
+            self.hud.toast(Toast::NeedsGpsp, self.now());
             return;
         }
         let hardware = self
@@ -2926,8 +2974,9 @@ impl App {
     }
 
     pub(crate) fn link_switchable(&self, stem: &str) -> bool {
-        self.auto_link(stem).is_some_and(|(cart, _)| {
-            cart.platform == Platform::Gba && both_ports(&cart.code, &cart.title)
+        self.auto_link(stem).is_some_and(|(cart, auto)| {
+            serial_option(self.link_hardware.other(), auto, &cart.code, &cart.title)
+                != serial_option(self.link_hardware, auto, &cart.code, &cart.title)
         })
     }
 
@@ -2935,10 +2984,7 @@ impl App {
         let Some(stem) = self.seated().map(str::to_string) else {
             return;
         };
-        // a game loaded on no port of its choosing was loaded on its own: what link_mode says
-        // before any choice
-        let own = self.auto_link(&stem).map_or(LinkKind::Cable, |(_, auto)| auto);
-        let loaded = self.link_loaded.unwrap_or(armgba_port(own));
+        let loaded = self.link_loaded.unwrap_or("auto");
         if self.core == Core::Mgba {
             let player = role.client_id() as u8;
             if self.link_player == Some(player) {

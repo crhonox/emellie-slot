@@ -63,6 +63,24 @@ go-task deploy:device        # or straight onto a handheld over adb
 - Labels need ScreenScraper developer credentials compiled in: export `OMEGA_SS_DEVID` and
   `OMEGA_SS_DEVPASSWORD` before building.
 
+## Updates
+
+Emellie Slot updates itself over Wi-Fi from this repository's releases, tagged `es-x.y.z`.
+
+- A boot that comes up on the shelf or the menu, with Wi-Fi on, asks GitHub for the latest
+  release once a network is joined, in the background; a toast says when there is a newer one and
+  Settings' ABOUT row names it. A boot that puts a game straight back in does not look.
+- Settings → About, then A, opens UPDATE: it looks (again) and installs. The release's zip is
+  fetched into `.update/` on the card, checked against its SHA-256 and unpacked; Emellie Slot then
+  restarts into it. It needs 30% battery or the charger, and some 400 MB free on the card.
+- Only `System/` is replaced: games, saves, states, labels and settings stay. The old one is kept
+  as `System.old`; a new one that falls over within 30 s of its first start is swapped back out
+  (kept as `System.failed`).
+
+To publish one: set `version` in `crates/omega-zero/Cargo.toml` to `x.y.z`, commit, and push the
+tag `es-x.y.z`. `.github/workflows/release.yml` builds the card tree on an arm64 runner and
+publishes it with its SHA-256 (it refuses a tag that is not the crate's version).
+
 ## Credits and licence
 
 - Based on [omega-zero](https://github.com/oauramos/omega-zero) by
@@ -71,8 +89,10 @@ go-task deploy:device        # or straight onto a handheld over adb
   [Brandon T. Kowalski](https://github.com/BrandonKowalski) (GPL-3.0). The code that hosts the
   cores, with their saves, sound and input, is still largely theirs.
 - [BaseOS](https://github.com/pvaibhav/BaseOS) by pvaibhav.
-- Emulation by [mGBA](https://mgba.io) (MPL-2.0) and
-  [armGBA](https://github.com/Jacob-Matthew-Cook/armGBA) (GPL-2.0) for the Game Boys; [Snes9x](https://github.com/libretro/snes9x) (free for
+- Emulation by [mGBA](https://mgba.io) (MPL-2.0),
+  [gpSP](https://github.com/libretro/gpsp) (GPL-2.0) and
+  [armGBA](https://github.com/Jacob-Matthew-Cook/armGBA) (GPL-2.0, single-player only) for the
+  Game Boys; [Snes9x](https://github.com/libretro/snes9x) (free for
   non-commercial use only) and [Supafaust](https://github.com/libretro/supafaust), Mednafen's
   snes_faust (GPL-2.0), for the SNES; and
   [PCSX ReARMed](https://github.com/libretro/pcsx_rearmed) (GPL-2.0) for the PlayStation; and

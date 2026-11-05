@@ -20,3 +20,4 @@ pub mod settings;
 pub mod shelf;
 pub mod ssh;
 pub mod systems;
+pub mod update;

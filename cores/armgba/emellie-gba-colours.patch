@@ -1,0 +1,29 @@
+--- a/libretro/libretro.c
++++ b/libretro/libretro.c
+@@ -427,7 +427,9 @@
+ // Options.
+ 
+ // Builds the color correction table from Pokefan531's measurements of the screen: its primaries
+-// mixed in linear light, at a gamma of 2.2.
++// mixed in linear light, at a gamma of 2.2. As in his gba-color shader, the screen's own response
++// is read a gamma of 1.0 darker than the display's (darken_screen) at 93% luminance; mixed at
++// 2.2 both ways the colors only lost saturation and showed washed out next to mGBA's.
+ static uint16_t corrected(uint16_t color) {
+ 	return correctedColors[(color & 0x1F) | ((color >> 1) & 0x7FE0)];
+ }
+@@ -447,13 +449,13 @@
+ 	};
+ 	float linear[32];
+ 	for (int i = 0; i < 32; ++i) {
+-		linear[i] = powf(i / 31.0f, 2.2f);
++		linear[i] = powf(i / 31.0f, 2.2f + 1.0f);
+ 	}
+ 	for (int i = 0; i < 0x8000; ++i) {
+ 		float in[3] = { linear[i >> 10], linear[(i >> 5) & 0x1F], linear[i & 0x1F] };
+ 		int out[3];
+ 		for (int c = 0; c < 3; ++c) {
+-			float value = mix[c][0] * in[0] + mix[c][1] * in[1] + mix[c][2] * in[2];
++			float value = 0.93f * (mix[c][0] * in[0] + mix[c][1] * in[1] + mix[c][2] * in[2]);
+ 			value = value < 0 ? 0 : value > 1 ? 1 : value;
+ 			out[c] = (int) (powf(value, 1 / 2.2f) * (c == 1 ? 63 : 31) + 0.5f);
+ 		}

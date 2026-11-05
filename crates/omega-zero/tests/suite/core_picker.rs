@@ -4,8 +4,8 @@ use omega_zero::core_picker::{
     CorePicker, Outcome, Press, CLOSE_MS, HOP_MS, LIFT_MS, OPEN_MS, SLIDE_MS,
 };
 
-/// The GBA's cores, a socket each: armGBA, then mGBA.
-const GBA: &[Core] = &[Core::Armgba, Core::Mgba];
+/// The GBA's cores: mGBA, gpSP and armGBA, two at a time in the board's two sockets.
+const GBA: &[Core] = &[Core::Mgba, Core::Gpsp, Core::Armgba];
 
 fn opened(seat: Core, at: Millis) -> CorePicker {
     opened_over(GBA, seat, at)
@@ -18,14 +18,14 @@ fn opened_over(cores: &'static [Core], seat: Core, at: Millis) -> CorePicker {
 }
 
 #[test]
-fn the_gba_the_game_boys_and_the_snes_each_have_two_sockets_and_the_rest_one() {
+fn the_gba_has_three_cores_the_game_boys_and_the_snes_two_and_the_rest_one() {
     assert_eq!(Core::for_platform(Platform::Gba), GBA);
     assert_eq!(
         Core::for_platform(Platform::Snes),
         [Core::Snes9x, Core::Supafaust]
     );
     for p in [Platform::Gb, Platform::Gbc] {
-        assert_eq!(Core::for_platform(p), [Core::Gambatte, Core::Armgba], "{p:?}");
+        assert_eq!(Core::for_platform(p), [Core::Gambatte, Core::Mgba], "{p:?}");
     }
     for p in [Platform::Ps1, Platform::Nds] {
         assert_eq!(Core::for_platform(p).len(), 1, "{p:?} has a core to pick");
@@ -58,7 +58,7 @@ fn on_a_snes_board_right_hops_from_snes9x_to_supafaust_and_left_back() {
 #[test]
 fn a_seat_the_board_has_no_socket_for_starts_in_the_first() {
     let snes = Core::for_platform(Platform::Snes);
-    let p = opened_over(snes, Core::Armgba, 0);
+    let p = opened_over(snes, Core::Mgba, 0);
     assert_eq!(p.seat(), Core::Snes9x);
     let p = opened_over(snes, Core::Supafaust, 0);
     assert_eq!(p.chip(0).across, 1.0);
@@ -66,7 +66,7 @@ fn a_seat_the_board_has_no_socket_for_starts_in_the_first() {
 
 #[test]
 fn it_opens_over_the_open_time_and_then_rests() {
-    let p = opened(Core::Armgba, 1000);
+    let p = opened(Core::Mgba, 1000);
     assert_eq!(p.openness(1000), 0.0);
     assert_eq!(p.openness(1000 + OPEN_MS / 4), 0.25);
     assert_eq!(p.openness(1000 + OPEN_MS), 1.0);
@@ -75,16 +75,16 @@ fn it_opens_over_the_open_time_and_then_rests() {
 
 #[test]
 fn the_chip_starts_seated_in_the_carts_own_core() {
-    let chip = opened(Core::Mgba, 0).chip(0);
-    assert_eq!(chip.seated, Some(Core::Mgba));
+    let chip = opened(Core::Gpsp, 0).chip(0);
+    assert_eq!(chip.seated, Some(Core::Gpsp));
     assert_eq!((chip.across, chip.lift), (1.0, 0.0));
 }
 
 #[test]
-fn right_from_armgba_hops_blank_and_lands_named_in_mgba() {
-    let mut p = opened(Core::Armgba, 0);
+fn right_from_mgba_hops_blank_and_lands_named_in_gpsp() {
+    let mut p = opened(Core::Mgba, 0);
     assert_eq!(p.press(Press::Right, 500), Outcome::Nothing);
-    assert_eq!(p.seat(), Core::Mgba);
+    assert_eq!(p.seat(), Core::Gpsp);
 
     let mid = p.chip(500 + HOP_MS / 2);
     assert_eq!(mid.seated, None, "the chip wears a name in flight");
@@ -92,50 +92,116 @@ fn right_from_armgba_hops_blank_and_lands_named_in_mgba() {
     assert!((mid.lift - 1.0).abs() < 0.01, "lift {}", mid.lift);
 
     let landed = p.chip(500 + HOP_MS);
-    assert_eq!(landed.seated, Some(Core::Mgba));
+    assert_eq!(landed.seated, Some(Core::Gpsp));
     assert_eq!((landed.across, landed.lift), (1.0, 0.0));
 }
 
 #[test]
 fn toward_the_socket_it_is_in_is_refused_and_only_shakes() {
     let mut p = opened(Core::Mgba, 0);
-    assert_eq!(p.press(Press::Right, 400), Outcome::Refused);
+    assert_eq!(p.press(Press::Left, 400), Outcome::Refused);
     assert_eq!(p.seat(), Core::Mgba);
     assert_ne!(p.chip(400).shake, 0.0, "a refusal with no shake");
     assert_eq!(p.chip(400).seated, Some(Core::Mgba));
     assert_eq!(p.chip(700).shake, 0.0, "the shake outlived its 300 ms");
+
+    let mut p = opened(Core::Armgba, 0);
+    assert_eq!(p.press(Press::Right, 400), Outcome::Refused);
+    assert_eq!(p.seat(), Core::Armgba);
+}
+
+#[test]
+fn the_board_shows_two_cores_and_opens_on_the_two_round_the_seat() {
+    assert_eq!(opened(Core::Mgba, 0).shown(), [Core::Mgba, Core::Gpsp]);
+    assert_eq!(opened(Core::Gpsp, 0).shown(), [Core::Mgba, Core::Gpsp]);
+    let p = opened(Core::Armgba, 0);
+    assert_eq!(p.shown(), [Core::Gpsp, Core::Armgba]);
+    let chip = p.chip(0);
+    assert_eq!((chip.seated, chip.across), (Some(Core::Armgba), 1.0));
+}
+
+#[test]
+fn right_from_gpsp_turns_the_cores_and_hops_into_armgba() {
+    let mut p = opened(Core::Gpsp, 0);
+    assert_eq!(p.press(Press::Right, 500), Outcome::Nothing);
+    assert_eq!(p.seat(), Core::Armgba);
+    assert_eq!(
+        p.shown(),
+        [Core::Gpsp, Core::Armgba],
+        "gpSP did not turn into the first socket"
+    );
+    let start = p.chip(500);
+    assert!(
+        start.across.abs() < 0.01,
+        "the hop starts at {}",
+        start.across
+    );
+    let mid = p.chip(500 + HOP_MS / 2);
+    assert_eq!(mid.seated, None);
+    assert!((mid.across - 0.5).abs() < 0.01, "across {}", mid.across);
+    let landed = p.chip(500 + HOP_MS);
+    assert_eq!((landed.seated, landed.across), (Some(Core::Armgba), 1.0));
+
+    // Left lands in gpSP without turning; Left again turns them back to mGBA
+    assert_eq!(p.press(Press::Left, 1_000), Outcome::Nothing);
+    assert_eq!(p.shown(), [Core::Gpsp, Core::Armgba]);
+    assert_eq!(p.chip(1_000 + HOP_MS).across, 0.0);
+    assert_eq!(p.press(Press::Left, 2_000), Outcome::Nothing);
+    assert_eq!(p.shown(), [Core::Mgba, Core::Gpsp]);
+    assert_eq!(
+        p.chip(2_000).across,
+        1.0,
+        "the hop back starts from gpSP's socket"
+    );
+    let landed = p.chip(2_000 + HOP_MS);
+    assert_eq!((landed.seated, landed.across), (Some(Core::Mgba), 0.0));
+    assert_eq!(p.press(Press::Keep, 3_000), Outcome::Write(Core::Mgba));
+}
+
+#[test]
+fn the_chip_stays_on_the_board_through_a_turn_and_a_turn_back() {
+    let mut p = opened(Core::Gpsp, 0);
+    p.press(Press::Right, 0);
+    // back mid-hop: it turns round toward gpSP, still in the first socket
+    assert_eq!(p.press(Press::Left, HOP_MS / 2), Outcome::Nothing);
+    assert_eq!(p.seat(), Core::Gpsp);
+    for t in (HOP_MS / 2..HOP_MS * 2).step_by(10) {
+        let across = p.chip(t).across;
+        assert!((0.0..=1.0).contains(&across), "across {across} at {t}");
+    }
+    assert_eq!(p.chip(HOP_MS * 2).across, 0.0);
 }
 
 #[test]
 fn back_mid_hop_turns_the_chip_round_from_where_it_is() {
-    let mut p = opened(Core::Armgba, 0);
+    let mut p = opened(Core::Mgba, 0);
     p.press(Press::Right, 400);
     let at = 400 + HOP_MS / 4;
     let before = p.chip(at).across;
     assert_eq!(p.press(Press::Left, at), Outcome::Nothing);
-    assert_eq!(p.seat(), Core::Armgba);
+    assert_eq!(p.seat(), Core::Mgba);
     assert!(
         (p.chip(at).across - before).abs() < 0.02,
         "the chip jumped from {before} to {} as it turned",
         p.chip(at).across
     );
-    assert_eq!(p.chip(at + HOP_MS).seated, Some(Core::Armgba));
+    assert_eq!(p.chip(at + HOP_MS).seated, Some(Core::Mgba));
 }
 
 #[test]
 fn onward_mid_hop_does_nothing_and_is_not_a_refusal() {
-    let mut p = opened(Core::Armgba, 0);
+    let mut p = opened(Core::Mgba, 0);
     p.press(Press::Right, 400);
     assert_eq!(p.press(Press::Right, 450), Outcome::Nothing);
     assert_eq!(p.chip(450).shake, 0.0);
-    assert_eq!(p.seat(), Core::Mgba);
+    assert_eq!(p.seat(), Core::Gpsp);
 }
 
 #[test]
 fn keep_writes_where_the_chip_is_heading_and_closes() {
-    let mut p = opened(Core::Armgba, 0);
+    let mut p = opened(Core::Mgba, 0);
     p.press(Press::Right, 400);
-    assert_eq!(p.press(Press::Keep, 450), Outcome::Write(Core::Mgba));
+    assert_eq!(p.press(Press::Keep, 450), Outcome::Write(Core::Gpsp));
     assert!(p.closing());
     assert!(!p.finished(450));
     assert!(p.finished(450 + CLOSE_MS));
@@ -143,7 +209,7 @@ fn keep_writes_where_the_chip_is_heading_and_closes() {
 
 #[test]
 fn back_closes_without_a_write() {
-    let mut p = opened(Core::Armgba, 0);
+    let mut p = opened(Core::Mgba, 0);
     assert_eq!(p.press(Press::Back, 400), Outcome::Nothing);
     assert!(p.closing());
     assert!(p.finished(400 + CLOSE_MS));
@@ -151,7 +217,7 @@ fn back_closes_without_a_write() {
 
 #[test]
 fn a_close_during_the_lift_reverses_from_where_the_lid_had_got_to() {
-    let mut p = opened(Core::Armgba, 0);
+    let mut p = opened(Core::Mgba, 0);
     let at = OPEN_MS / 2;
     let open = p.openness(at);
     p.press(Press::Back, at);
@@ -167,7 +233,7 @@ fn a_close_during_the_lift_reverses_from_where_the_lid_had_got_to() {
 
 #[test]
 fn a_hop_started_soon_after_a_refusal_does_not_carry_its_shake() {
-    let mut p = opened(Core::Mgba, 0);
+    let mut p = opened(Core::Armgba, 0);
     assert_eq!(p.press(Press::Right, 0), Outcome::Refused);
     assert_eq!(p.press(Press::Left, 100), Outcome::Nothing);
     assert_eq!(p.chip(100).shake, 0.0, "the refusal rode along on the hop");
@@ -176,11 +242,11 @@ fn a_hop_started_soon_after_a_refusal_does_not_carry_its_shake() {
 
 #[test]
 fn presses_during_the_close_do_nothing() {
-    let mut p = opened(Core::Armgba, 0);
+    let mut p = opened(Core::Mgba, 0);
     p.press(Press::Back, 400);
     assert_eq!(p.press(Press::Right, 420), Outcome::Nothing);
     assert_eq!(p.press(Press::Keep, 430), Outcome::Nothing);
-    assert_eq!(p.seat(), Core::Armgba);
+    assert_eq!(p.seat(), Core::Mgba);
 }
 
 #[test]
@@ -191,7 +257,7 @@ fn the_open_is_a_slide_then_a_lift_and_the_board_agrees() {
 
 #[test]
 fn a_picker_waits_until_it_is_started() {
-    let mut p = CorePicker::open(GBA, Core::Armgba, 100);
+    let mut p = CorePicker::open(GBA, Core::Mgba, 100);
     assert!(p.waiting());
     assert_eq!(p.openness(5_000), 0.0);
     assert_eq!(p.waited(350), 250);
@@ -203,7 +269,7 @@ fn a_picker_waits_until_it_is_started() {
 
 #[test]
 fn a_second_start_keeps_the_first() {
-    let mut p = CorePicker::open(GBA, Core::Armgba, 0);
+    let mut p = CorePicker::open(GBA, Core::Mgba, 0);
     p.start(300);
     p.start(500);
     assert_eq!(p.openness(300 + OPEN_MS), 1.0);
@@ -211,14 +277,14 @@ fn a_second_start_keeps_the_first() {
 
 #[test]
 fn backing_out_while_waiting_finishes_at_once() {
-    let mut p = CorePicker::open(GBA, Core::Armgba, 0);
+    let mut p = CorePicker::open(GBA, Core::Mgba, 0);
     p.press(Press::Back, 50);
     assert!(p.finished(50));
 }
 
 #[test]
 fn a_close_from_rest_takes_the_close_time() {
-    let mut p = opened(Core::Armgba, 0);
+    let mut p = opened(Core::Mgba, 0);
     p.press(Press::Back, OPEN_MS);
     assert_eq!(p.openness(OPEN_MS + CLOSE_MS / 4), 0.75);
     assert!(p.finished(OPEN_MS + CLOSE_MS));
@@ -226,11 +292,11 @@ fn a_close_from_rest_takes_the_close_time() {
 
 #[test]
 fn the_arrows_do_nothing_while_the_picker_waits() {
-    let mut p = CorePicker::open(GBA, Core::Armgba, 0);
+    let mut p = CorePicker::open(GBA, Core::Mgba, 0);
     assert_eq!(p.press(Press::Right, 100), Outcome::Nothing);
-    assert_eq!(p.seat(), Core::Armgba, "a hop started while the cart waited");
+    assert_eq!(p.seat(), Core::Mgba, "a hop started while the cart waited");
     let chip = p.chip(100);
-    assert_eq!((chip.seated, chip.shake), (Some(Core::Armgba), 0.0));
+    assert_eq!((chip.seated, chip.shake), (Some(Core::Mgba), 0.0));
     assert_eq!(
         p.press(Press::Left, 120),
         Outcome::Nothing,
@@ -242,7 +308,7 @@ fn the_arrows_do_nothing_while_the_picker_waits() {
     assert_eq!(p.press(Press::Right, 300), Outcome::Nothing);
     assert_eq!(
         p.seat(),
-        Core::Mgba,
+        Core::Gpsp,
         "the arrow did nothing once the cart had opened"
     );
     assert_eq!(

@@ -153,6 +153,7 @@ pub fn actions_on(phase: &Phase) -> Option<Actions> {
         | Phase::Labels(_)
         | Phase::Cheevos(_)
         | Phase::Background(_)
+        | Phase::Update
         | Phase::SetClock { .. }
         | Phase::About => Some(Actions::Menu),
         Phase::Polaroids { .. } => Some(Actions::Switcher),
