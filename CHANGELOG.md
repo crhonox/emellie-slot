@@ -1,6 +1,6 @@
 # Changelog
 
-## es-1.0.2 (2026-11-05)
+## es-1.0.3 (2026-11-05)
 
 armGBA is back as the GBA's third core, to try games on: single-player only.
 
