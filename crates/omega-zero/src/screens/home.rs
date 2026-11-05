@@ -42,7 +42,7 @@ impl Entry {
         match self {
             Entry::Recents => "Recents",
             Entry::Favorites => "Favorites",
-            Entry::Collections => "Collections",
+            Entry::Collections => "Colls.",
             Entry::Games => "Games",
             Entry::Settings => "Settings",
         }

@@ -1,5 +1,9 @@
 # Changelog
 
+## es-1.0.5 (2026-11-05)
+
+- The main menu's Collections icon is named "Colls.", so its name fits its column on 640x480.
+
 ## es-1.0.4 (2026-11-05)
 
 A new look for the menus and the boot.
