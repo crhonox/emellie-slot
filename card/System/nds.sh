@@ -104,6 +104,9 @@ export DS_POWER_HOLD_MS=2000
 # the DS's frame round one screen shown alone at twice its size with integer scale on
 # (cores/dsperate/emellie-single-bezel.patch)
 export DS_SINGLE_BEZEL="$DIR/bg_s0.bmp"
+# and the 2.5x subpixel grid over the screen shown alone with integer scale off and seam blend or
+# blend_linear (DS_3x_Grid_25.png as a 32-bit BMP, same patch)
+export DS_SINGLE_GRID="$DIR/grid_s0.bmp"
 
 # MENU held a second quits, over whatever the player's settings say; screenshots go beside the
 # other systems', in Screenshots/NDS, whatever settings seeded before said

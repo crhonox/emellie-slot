@@ -1,5 +1,15 @@
 # Changelog
 
+## es-1.0.8 (2026-11-07)
+
+- A 2.5x subpixel grid over DSperate's single screen with integer scale off and seam blend or
+  blend_linear, where the screen fills the 640x480 panel (`System/dsperate/grid_s0.bmp`, set by
+  `DS_SINGLE_GRID` in `nds.sh`). `cores/dsperate/emellie-single-bezel.patch` has the screen scaled
+  into a side buffer and writes it with the grid into the frame. The frame from es-1.0.6 still
+  shows only with integer scale on. The original PNG is kept in `emellie_new_assets/ds-grid-640x480.png`.
+- DS games, ports and PICO-8 carts go first in Recents when they are handed over to their own
+  emulator; they never reached the "playing" state that recorded the others.
+
 ## es-1.0.7 (2026-11-05)
 
 - The single-screen DS frame (`System/dsperate/bg_s0.bmp`) is now steward-fu's DraStic Advanced

@@ -1,44 +1,57 @@
 diff --git a/src/frontend/sdl/display.cpp b/src/frontend/sdl/display.cpp
-index e18efae..49be57e 100644
+index e18efae..04045a8 100644
 --- a/src/frontend/sdl/display.cpp
 +++ b/src/frontend/sdl/display.cpp
 @@ -130,6 +130,7 @@ double Display::dominant_ratio() const {
  
  bool Display::open(const char* title, int scale, bool fullscreen, bool linear, bool vsync, const Layout& layout_mode, int only_screen, int display_index) {
    sync();
-+  if (bezel_.empty()) load_bezel();
++  if (!overlays_read_) { overlays_read_ = true; load_bezel(); }
    layout_ = layout_mode;
    linear_ = linear;
    only_screen_ = only_screen;
-@@ -806,6 +807,61 @@ void Display::clear_margins(u32* px, u32 pitch, int w, int h) const {
+@@ -806,6 +807,110 @@ void Display::clear_margins(u32* px, u32 pitch, int w, int h) const {
    }
  }
  
-+// A BMP of 32 bits a pixel (B, G, R, A), its rows either way up; nothing when it is anything else.
-+void Display::load_bezel() {
-+  const char* path = std::getenv("DS_SINGLE_BEZEL");
-+  if (!path || !*path) return;
++// A BMP of 32 bits a pixel (B, G, R, A), its rows either way up, as A R G B; false when it is
++// anything else.
++static bool read_bmp32(const char* path, const char* what, std::vector<u32>& out, int& ow, int& oh) {
 +  std::FILE* f = std::fopen(path, "rb");
-+  if (!f) { std::fprintf(stderr, "bezel: no %s\n", path); return; }
++  if (!f) { std::fprintf(stderr, "%s: no %s\n", what, path); return false; }
 +  std::vector<unsigned char> b;
 +  unsigned char chunk[65536];
 +  for (size_t n; (n = std::fread(chunk, 1, sizeof chunk, f)) > 0;) b.insert(b.end(), chunk, chunk + n);
 +  std::fclose(f);
 +  const auto le = [&](size_t at, int bytes) { u32 v = 0; for (int i = bytes - 1; i >= 0; --i) v = v << 8 | b[at + i]; return v; };
-+  if (b.size() < 54 || b[0] != 'B' || b[1] != 'M' || le(28, 2) != 32) { std::fprintf(stderr, "bezel: %s is not a 32-bit BMP\n", path); return; }
++  if (b.size() < 54 || b[0] != 'B' || b[1] != 'M' || le(28, 2) != 32) { std::fprintf(stderr, "%s: %s is not a 32-bit BMP\n", what, path); return false; }
 +  const u32 off = le(10, 4);
 +  const int w = static_cast<int>(le(18, 4)), sh = static_cast<int>(le(22, 4));
 +  const int h = sh < 0 ? -sh : sh;
-+  if (w <= 0 || h <= 0 || w > 4096 || h > 4096 || off + static_cast<size_t>(w) * h * 4 > b.size()) { std::fprintf(stderr, "bezel: %s is cut short\n", path); return; }
-+  bezel_.resize(static_cast<size_t>(w) * h);
++  if (w <= 0 || h <= 0 || w > 4096 || h > 4096 || off + static_cast<size_t>(w) * h * 4 > b.size()) { std::fprintf(stderr, "%s: %s is cut short\n", what, path); return false; }
++  out.resize(static_cast<size_t>(w) * h);
 +  for (int y = 0; y < h; ++y) {
 +    const unsigned char* row = b.data() + off + static_cast<size_t>(sh < 0 ? y : h - 1 - y) * w * 4;
 +    for (int x = 0; x < w; ++x) {
 +      const unsigned char* p = row + x * 4;
-+      bezel_[static_cast<size_t>(y) * w + x] = static_cast<u32>(p[3]) << 24 | p[2] << 16 | p[1] << 8 | p[0];
++      out[static_cast<size_t>(y) * w + x] = static_cast<u32>(p[3]) << 24 | p[2] << 16 | p[1] << 8 | p[0];
 +    }
 +  }
-+  bezel_w_ = w; bezel_h_ = h;
++  ow = w; oh = h;
++  return true;
++}
++
++void Display::load_bezel() {
++  if (const char* path = std::getenv("DS_SINGLE_BEZEL"); path && *path)
++    if (!read_bmp32(path, "bezel", bezel_, bezel_w_, bezel_h_)) bezel_.clear();
++  if (const char* path = std::getenv("DS_SINGLE_GRID"); path && *path) {
++    if (!read_bmp32(path, "grid", grid_ov_, grid_ov_w_, grid_ov_h_)) { grid_ov_.clear(); return; }
++    for (u32& p : grid_ov_) {
++      const u32 a = p >> 24;
++      const auto ch = [&](int s) { return ((p >> s & 0xFFu) * a + 127) / 255 << s; };
++      p = (255 - a) << 24 | ch(16) | ch(8) | ch(0);
++    }
++  }
 +}
 +
 +// Where the bezel's top left goes, its window centred on the screen shown alone; false when it is
@@ -54,6 +67,42 @@ index e18efae..49be57e 100644
 +    return true;
 +  }
 +  return false;
++}
++
++// Where the grid's top left goes: on the screen shown alone, integer scale off, seams blended
++// (not bilinear), the screen exactly the grid's size; false when it is not to be drawn.
++bool Display::grid_at(int& ox, int& oy) const {
++  if (grid_ov_.empty() || layout_.mode != Mode::Single || int_scale_ != IntScale::Off || only_screen_ >= 0) return false;
++  if (seam_blend_ == 0 || linear_ || disp_) return false;
++  for (int i = 0; i < nviews_; ++i) {
++    const View& v = views_[i];
++    if (!v.direct || !v.shown) continue;
++    if (v.rect.w != grid_ov_w_ || v.rect.h != grid_ov_h_) return false;
++    ox = v.rect.x; oy = v.rect.y;
++    return true;
++  }
++  return false;
++}
++
++// The screen scaled into grid_side_, under the grid, into the frame: one write a pixel.
++void Display::paint_grid() {
++  if (!grid_now_) return;
++  grid_now_ = false;
++  if (!frame_px_) return;
++  const int x0 = std::max(0, grid_x_), x1 = std::min(frame_w_, grid_x_ + grid_ov_w_);
++  const int y0 = std::max(0, grid_y_), y1 = std::min(frame_h_, grid_y_ + grid_ov_h_);
++  for (int y = y0; y < y1; ++y) {
++    const size_t at = static_cast<size_t>(y - grid_y_) * grid_ov_w_ - grid_x_;
++    const u32* ov = grid_ov_.data() + at;
++    const u32* game = grid_side_.data() + at;
++    u32* row = frame_px_ + static_cast<size_t>(y) * frame_pitch_;
++    for (int x = x0; x < x1; ++x) {
++      const u32 o = ov[x], ia = o >> 24, s = game[x];
++      const u32 rb = ((s & 0xFF00FFu) * ia >> 8) & 0xFF00FFu;
++      const u32 g = ((s & 0x00FF00u) * ia >> 8) & 0x00FF00u;
++      row[x] = 0xFF000000u | ((rb | g) + (o & 0xFFFFFFu));
++    }
++  }
 +}
 +
 +// The bezel's opaque pixels inside `r`; its clear ones leave the frame as it is.
@@ -72,7 +121,22 @@ index e18efae..49be57e 100644
  // Accumulated into one rect for the frame (a modal page and a corner label
  // are the two cases; a union costs a few cleared pixels, saves a list).
  void Display::note_canvas_draw(int x, int y, int w, int h) {
-@@ -944,9 +1000,10 @@ void Display::take_frame(u32* px, u32 stride, int w, int h, int idx, Target out[
+@@ -828,9 +933,13 @@ void Display::clear_rect(u32* px, u32 pitch, int w, int h, const SDL_Rect& r) co
+ void Display::targets(u32* px, u32 stride, int w, int h, Target out[SCREENS]) {
+   frame_px_ = px; frame_pitch_ = stride; frame_w_ = w; frame_h_ = h;
+   insets_done_ = false;
++  grid_now_ = grid_at(grid_x_, grid_y_);
++  if (grid_now_) grid_side_.resize(static_cast<size_t>(grid_ov_w_) * grid_ov_h_);
+   for (int i = 0; i < nviews_; ++i) {
+     const View& v = views_[i];
+-    if (v.direct) {
++    if (v.direct && grid_now_ && v.shown)
++      out[v.screen] = Target{grid_side_.data(), static_cast<u32>(v.rect.w), static_cast<u32>(v.rect.h), xrun_[v.screen].data(), seam_w_[v.screen].data(), lin_sx_[v.screen].data(), lin_wx_[v.screen].data(), grid_on(v.screen), xrun_plain_[v.screen].data()};
++    else if (v.direct) {
+       // px at the rect's first kept row/column; runs are relative to it (see build_scale).
+       const int x0 = std::max(0, -v.rect.x), y0 = std::max(0, -v.rect.y);
+       const int y1 = std::clamp(h - v.rect.y, 0, v.rect.h);
+@@ -944,9 +1053,10 @@ void Display::take_frame(u32* px, u32 stride, int w, int h, int idx, Target out[
    // another still holds the old layout until it's cycled back to.
    if (margins_dirty_) { out_clean_ = 0; margins_dirty_ = false; }
    const u32 bit = idx >= 0 && idx < 32 ? 1u << idx : 0u;
@@ -84,11 +148,27 @@ index e18efae..49be57e 100644
      canvas_prev_[idx] = SDL_Rect{0, 0, 0, 0};
    }
    canvas_drawn_ = SDL_Rect{0, 0, 0, 0};
+@@ -959,6 +1069,7 @@ void Display::finish_views() {
+   sync();
+   if (disp_) return;
+   blit_insets();
++  paint_grid();
+ }
+ 
+ bool Display::canvas_capable() const {
 diff --git a/src/frontend/sdl/display.h b/src/frontend/sdl/display.h
-index 5af3c2c..0f5c1d2 100644
+index 5af3c2c..8654506 100644
 --- a/src/frontend/sdl/display.h
 +++ b/src/frontend/sdl/display.h
-@@ -272,6 +272,15 @@ private:
+@@ -36,6 +36,7 @@ public:
+   static bool parse_int_scale(const std::string& s, IntScale& m) { return frontend::parse_int_scale(s, m); }
+   static double snap_scale(double s, IntScale m) { return frontend::snap_scale(s, m); }
+   void set_integer_scale(IntScale m) { int_scale_ = m; }
++  void set_seam_blend(int m) { seam_blend_ = m; }   // 0 dark, 1 blend, 2 blend_linear; picks the grid overlay
+   IntScale integer_scale() const { return int_scale_; }
+   static const char* mode_name(Mode m) { return frontend::mode_name(m); }
+   static bool parse_mode(const std::string& s, Mode& m) { return frontend::parse_mode(s, m); }
+@@ -272,6 +273,30 @@ private:
    SDL_Rect          canvas_drawn_{0, 0, 0, 0};
    SDL_Rect          canvas_prev_[kMaxBufs] = {};
    void clear_rect(u32* px, u32 pitch, int w, int h, const SDL_Rect& r) const;
@@ -101,6 +181,33 @@ index 5af3c2c..0f5c1d2 100644
 +  void load_bezel();
 +  bool bezel_at(int& ox, int& oy) const;
 +  void paint_bezel(u32* px, u32 pitch, int w, int h, const SDL_Rect& r) const;
++  // Single-screen grid (DS_SINGLE_GRID, a 32-bit BMP the size of the screen shown alone with
++  // integer scale off, 640x480 = 2.5x): blended over the game every presented frame while
++  // the seams are blend or blend_linear and the screen fills exactly its size. Kept as
++  // 255 - alpha in the top byte and the colour times alpha below it.
++  std::vector<u32>  grid_ov_;
++  int               grid_ov_w_ = 0, grid_ov_h_ = 0;
++  int               seam_blend_ = 0;
++  bool              overlays_read_ = false;
++  // While it shows, the screen is scaled into grid_side_ (cached memory) and finish_views()
++  // writes game and grid together into the frame, which is never read back (uncached on fb0).
++  std::vector<u32>  grid_side_;
++  bool              grid_now_ = false;   // this frame's screen went to grid_side_
++  int               grid_x_ = 0, grid_y_ = 0;
++  bool grid_at(int& ox, int& oy) const;
++  void paint_grid();
    bool              out_frame_ = false;   // current begin_frame targeted the scanout tier
    int               scaled_w_ = 0, scaled_h_ = 0;
    std::vector<u16>  xrun_[SCREENS];   // per screen, 257 entries; see kern::scale_row
+diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
+index 670edea..82f11ee 100644
+--- a/src/frontend/sdl/main.cpp
++++ b/src/frontend/sdl/main.cpp
+@@ -988,6 +988,7 @@ bool open_displays(const VideoSetup& vs, ds::sdl::Display& display, ds::sdl::Dis
+   display.set_chunky(vs.chunky != 0, vs.chunky_cell);
+   display.set_sinks(vs.panel_sink, vs.want_sink);
+   display.set_integer_scale(vs.int_scale);
++  display.set_seam_blend(vs.linear ? 0 : vs.seam_blend);
+   display.set_grid_strength(vs.linear ? 0.0 : vs.grid_s);
+   if (!vs.linear) display.set_disp_grid(static_cast<u8>(((256 - vs.grid) * 255) / 256));
+   return display.open("DSperate", vs.scale, vs.fullscreen, vs.linear, vs.vsync, vs.layout);

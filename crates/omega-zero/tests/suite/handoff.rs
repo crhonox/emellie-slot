@@ -2,7 +2,7 @@ use crate::common;
 
 use common::{boot, tmp_root_with_carts};
 use omega_input::{Action, Btn};
-use omega_store::{read_app_state, Platform};
+use omega_store::{lists, read_app_state, GameRef, Platform};
 use omega_zero::app::{App, Phase};
 
 /// Two DS games, so that the boot leaves the shelf up rather than put the only cart in.
@@ -68,6 +68,20 @@ fn handing_over_writes_the_game_for_launch_frontend_and_notes_it_as_in_the_handh
     let state = read_app_state(d.path());
     assert_eq!(state.cart.as_deref(), Some("Platinum"));
     assert_eq!(state.cart_platform, Some(Platform::Nds));
+}
+
+#[test]
+fn a_ds_game_handed_over_goes_first_in_recents() {
+    let d = ds_card();
+    let mut a = boot(d.path());
+    a.apply(Action::Insert);
+    settle(&mut a);
+    assert!(a.hand_over(), "the handoff was not written");
+    assert_eq!(
+        lists::recents(d.path()).first(),
+        Some(&GameRef::new(Platform::Nds, "Platinum")),
+        "the DS game is not first in Recents"
+    );
 }
 
 #[test]

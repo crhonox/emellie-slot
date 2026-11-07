@@ -2070,6 +2070,12 @@ impl App {
         match h.write(&root) {
             Ok(path) => {
                 eprintln!("omega-zero: handoff: wrote {}", path.display());
+                // never Playing in here, so record_cart does not see it go in: first in Recents now
+                if let Err(e) =
+                    omega_store::lists::push_recent(&root, &GameRef::new(h.platform, &h.stem))
+                {
+                    eprintln!("omega-zero: recents: {e}");
+                }
                 self.state.cart = Some(h.stem.clone());
                 self.state.cart_platform = Some(h.platform);
                 self.persist();
