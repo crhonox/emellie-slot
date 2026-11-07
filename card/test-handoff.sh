@@ -197,7 +197,7 @@ grep -qx 'mac_suffix = 1' "$TMP/card/Config/dsperate/nds-nostick.ini" || fail "t
 grep -qx 'pause = mod+start' "$TMP/card/Config/dsperate/nds-nostick.ini" || fail "a hotkey bound in DSperate's menu stayed"
 [ "$(grep -c '^\[padhotkeys\]' "$TMP/card/Config/dsperate/nds-nostick.ini")" = 1 ] || fail "the hotkeys were put in twice"
 
-grep -qx 'stylus_dpad = none' "$TMP/card/Config/dsperate/nds-nostick.ini" \
+grep -qx 'stylus_hold = none' "$TMP/card/Config/dsperate/nds-nostick.ini" \
 	|| fail "the RG35XX SP's L2 moves the stylus as well as swapping the screens"
 grep -q '@PAD@' "$TMP/card/Config/dsperate/nds-nostick.ini" && fail "the pad's stylus was left unwritten"
 

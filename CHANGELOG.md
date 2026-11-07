@@ -1,5 +1,13 @@
 # Changelog
 
+## es-1.0.9 (2026-11-07)
+
+- DSperate is at `a165843` (3.3.0: slot-2 GBA cartridge and Rumble Pak, analog patches, the 3D
+  layer on OpenGL ES 3.1, translations), with `emellie-hotkeys.patch` brought onto it.
+  `pad.stylus_dpad` is now `pad.stylus_hold` in `System/dsperate/pad-*.ini`; DSperate still reads
+  the old name in a player's config.
+- armGBA is at `334c20f` (games patched for SRAM reproduction cartridges get SRAM).
+
 ## es-1.0.8 (2026-11-07)
 
 - A 2.5x subpixel grid over DSperate's single screen with integer scale off and seam blend or

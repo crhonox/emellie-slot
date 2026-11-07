@@ -13,7 +13,7 @@ vars:
   NESTOPIA_HOST: vendor/nestopia_libretro.dylib
   MGBA_COMMIT: e31759b24e7a4e3899285ff720d7b573ac328ae7
   GPSP_COMMIT: 7b2dd37394e2822110cacef321e9bb291a305b77
-  ARMGBA_COMMIT: e4b8d8e267ca0ecb85e4b8223197239e4a903c26
+  ARMGBA_COMMIT: 334c20f3420251c293185f45da917d21b4046239
   SNES9X_COMMIT: fae2fea08f74180759ef540ee94259213f503480
   SUPAFAUST_COMMIT: 642d1d1b6684aa7e306a02a89885f3f5456a5157
   PCSX_COMMIT: c8816799b50388e61cfe237fe2cdbb7d8175f20a
@@ -23,7 +23,7 @@ vars:
   FCEUMM_COMMIT: ac0d00a7fc01166f84c7bac01d1084ebfd2b865e
   NESTOPIA_COMMIT: 2110d21b7174455ec98948bb474147dea0e3cad0
   # DSperate is no libretro core: the DS games are handed over to it, System/dsperate/dsperate
-  DSPERATE_COMMIT: e04b806b5c01527b08a8e7181476ada57e97db52
+  DSPERATE_COMMIT: a16584306c23ba733439f2685f1e70213653a425
   # The mali-fbdev SDL2 DSperate draws to fb0 through (BaseOS's own cannot reach the panel), and
   # the libsamplerate it needs, taken from a spruceOS checkout, which builds them for the H700
   SPRUCE: '{{.SPRUCE | default "../spruceOS"}}'
