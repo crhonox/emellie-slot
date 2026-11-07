@@ -24,3 +24,21 @@ index cc8c5c2..a09f85d 100644
  }
  
  } // namespace
+diff --git a/src/frontend/sdl/input.cpp b/src/frontend/sdl/input.cpp
+index de35f53..6814afb 100644
+--- a/src/frontend/sdl/input.cpp
++++ b/src/frontend/sdl/input.cpp
+@@ -427,7 +427,13 @@ void Input::detect_faces() {
+ }
+ 
+ bool Input::has_rumble() const {
++#if SDL_VERSION_ATLEAST(2, 0, 18)
+   return pad_ && SDL_GameControllerHasRumble(pad_);
++#else
++  // SDL 2.0.14's headers (Debian bullseye) have no HasRumble: a zero-length rumble
++  // answers 0 where the pad can rumble and -1 where it cannot.
++  return pad_ && SDL_GameControllerRumble(pad_, 0, 0, 0) == 0;
++#endif
+ }
+ 
+ void Input::rumble(int strength, u32 ms) {

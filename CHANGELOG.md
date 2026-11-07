@@ -6,6 +6,9 @@
   layer on OpenGL ES 3.1, translations), with `emellie-hotkeys.patch` brought onto it.
   `pad.stylus_dpad` is now `pad.stylus_hold` in `System/dsperate/pad-*.ini`; DSperate still reads
   the old name in a player's config.
+- `sdl-2.0.14-no-kmsdrm-wminfo.patch` also covers DSperate's Rumble Pak check, which needs
+  SDL 2.0.18's `SDL_GameControllerHasRumble`; built against bullseye's SDL 2.0.14 it asks with a
+  zero-length rumble instead.
 - armGBA is at `334c20f` (games patched for SRAM reproduction cartridges get SRAM).
 
 ## es-1.0.8 (2026-11-07)
