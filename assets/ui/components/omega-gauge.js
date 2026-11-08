@@ -2,7 +2,7 @@
   <omega-gauge>: a level on one line, like the life gauge in Mega Man Zero: a title tab naming it
   on the left, a well of cells on the right, as many lit as the level reaches, and an icon at its
   end. It is a panel's header with the strip beside the tab made the gauge, so it sits with the
-  menus' panels, and on its own over a game for the volume, the brightness, the blue light or the
+  menus' panels, and on its own over a game for the volume, the brightness, the sunlight on a solar sensor cartridge or the
   rewind left.
 
     <omega-gauge label="VOLUME" value="55" max="100" cells="20" icon="volume"></omega-gauge>
@@ -12,7 +12,7 @@
   max     the level the gauge is full at. Default 100.
   cells   how many cells the well has: one to a step is clearest (9 for 0 to 9). Default 20.
   icon    a 7x7 sprite after the cells, the height of the capitals: volume, muted, headphones,
-          brightness, bluelight, rewind, fastforward. None without it.
+          brightness, sun, rewind, fastforward. None without it.
 
   Lit cells are round(value / max * cells) from the left, so 0 lights none and max lights them
   all. Lit, a cell is --oz-label; unlit, --oz-plate, the colour of whatever is off on a row.
@@ -87,14 +87,14 @@
       '.#...#.',
       '#..#..#',
     ],
-    bluelight: [
-      '..##...',
-      '.##....',
-      '##.....',
-      '##.....',
-      '##....#',
-      '.##..##',
-      '..####.',
+    sun: [
+      '#..#..#',
+      '.#...#.',
+      '..###..',
+      '.#####.',
+      '.#####.',
+      '.......',
+      '#######',
     ],
     rewind: [
       '...#..#',

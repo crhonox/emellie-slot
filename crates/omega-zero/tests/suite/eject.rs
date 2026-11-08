@@ -120,7 +120,7 @@ fn eject_preserves_the_levels() {
         &AppState {
             cart: Some("Emerald".into()),
             brightness: 2,
-            blue_light: 7,
+            sunlight: 7,
             volume: 35,
             muted: true,
             clock_set: true,
@@ -139,7 +139,7 @@ fn eject_preserves_the_levels() {
     )
     .unwrap();
     let s = read_app_state(d.path());
-    assert_eq!((s.brightness, s.blue_light, s.volume), (2, 7, 35));
+    assert_eq!((s.brightness, s.sunlight, s.volume), (2, 7, 35));
     assert!(s.muted, "the cart came out and the sound came back");
 }
 

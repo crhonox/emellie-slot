@@ -2,7 +2,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use omega_gfx::{blue_light_gain, out_h, out_w, Compositor, HeadlessSurface};
+use omega_gfx::{out_h, out_w, Compositor, HeadlessSurface};
 use omega_input::{Btn, InputSource, Millis, RawEvent};
 use omega_power::SimPlatform;
 use omega_zero::frontend::Frontend;
@@ -121,7 +121,7 @@ fn parse(script: &str) -> Vec<Step> {
 
 fn panel(pixels: &mut [u8], app: &omega_zero::app::App, lit: u8) {
     let light = f32::from(app.brightness()) / f32::from(lit);
-    let gain = blue_light_gain(app.blue_light()).map(|g| g * light);
+    let gain = [light; 3];
     if gain == [1.0; 3] {
         return;
     }

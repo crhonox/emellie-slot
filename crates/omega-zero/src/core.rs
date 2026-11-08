@@ -182,6 +182,17 @@ fn report_missing(core: Core, paths: &[PathBuf]) {
     );
 }
 
+/// The option that sets the sunlight a solar sensor cartridge sees, 0 to 10, on a core that
+/// emulates the sensor: mGBA and armGBA. gpSP has none.
+pub fn solar_option(which: Core, level: u8) -> Option<(&'static str, String)> {
+    let key = match which {
+        Core::Mgba => "mgba_solar_sensor_level",
+        Core::Armgba => "armgba_solar_sensor",
+        _ => return None,
+    };
+    Some((key, level.min(omega_store::SUNLIGHT_MAX).to_string()))
+}
+
 pub fn colour_option(which: Core, on: bool) -> Option<(&'static str, &'static str)> {
     match which {
         Core::Mgba => Some(("mgba_color_correction", if on { "Auto" } else { "OFF" })),

@@ -34,6 +34,8 @@ pub enum Toast {
     CollectionRemoved,
     /// The look for updates at boot found a newer release.
     UpdateAvailable,
+    /// SELECT + Left or Right on a solar sensor game under gpSP, which has no sensor.
+    NeedsSunCore,
 }
 
 /// What the toast says once disc `n` is in, for every disc a PlayStation game can have.
@@ -51,7 +53,7 @@ const DISC_IN: [&str; 9] = [
 
 impl Toast {
     /// Every toast there is, a disc's once, as disc 1.
-    pub const ALL: [Toast; 19] = [
+    pub const ALL: [Toast; 20] = [
         Toast::StateSaved,
         Toast::StateLoaded,
         Toast::NeedsGpsp,
@@ -71,6 +73,7 @@ impl Toast {
         Toast::CollectionAdded,
         Toast::CollectionRemoved,
         Toast::UpdateAvailable,
+        Toast::NeedsSunCore,
     ];
 
     /// Its place in `ALL`: every disc's toast is the one place.
@@ -95,6 +98,7 @@ impl Toast {
             Toast::CollectionAdded => 16,
             Toast::CollectionRemoved => 17,
             Toast::UpdateAvailable => 18,
+            Toast::NeedsSunCore => 19,
         }
     }
 
@@ -115,6 +119,7 @@ impl Toast {
                 "COLLECTIONS"
             }
             Toast::UpdateAvailable => "UPDATE",
+            Toast::NeedsSunCore => "SUNLIGHT",
         }
     }
 
@@ -139,6 +144,7 @@ impl Toast {
             Toast::CollectionAdded => "Added to collection",
             Toast::CollectionRemoved => "Taken off collection",
             Toast::UpdateAvailable => "Update available: see About",
+            Toast::NeedsSunCore => "Please switch to mGBA",
             Toast::Disc(n) => DISC_IN
                 .get(usize::from(n).wrapping_sub(1))
                 .copied()

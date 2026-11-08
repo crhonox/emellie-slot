@@ -135,7 +135,7 @@ impl ControlsView {
                 | Platform::Pico8
                 | Platform::Ports => {}
             }
-            game.extend([("SELECT+▲▼", "BRIGHTNESS"), ("SELECT+◀▶", "BLUE LIGHT")]);
+            game.extend([("SELECT+▲▼", "BRIGHTNESS"), ("SELECT+◀▶", "SUNLIGHT")]);
             if platform.colour_correction() {
                 game.push(("SELECT+Y", "COLOUR"));
             }

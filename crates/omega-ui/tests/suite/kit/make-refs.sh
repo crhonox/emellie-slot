@@ -146,7 +146,7 @@ shoot gauge-volume 157 15 'c=gauge&label=VOLUME&value=55&max=100&cells=20&icon=v
 shoot gauge-muted 157 15 'c=gauge&label=VOLUME&value=0&max=100&cells=20&icon=muted'
 shoot gauge-headphones 157 15 'c=gauge&label=VOLUME&value=35&max=100&cells=20&icon=headphones'
 shoot gauge-brightness 137 15 'c=gauge&label=BRIGHTNESS&value=6&max=9&cells=9&icon=brightness'
-shoot gauge-bluelight 137 15 'c=gauge&label=BLUE%20LIGHT&value=3&max=9&cells=9&icon=bluelight'
+shoot gauge-sun 125 15 'c=gauge&label=SUNLIGHT&value=5&max=10&cells=10&icon=sun'
 shoot gauge-rewind 157 15 'c=gauge&label=REWIND&value=70&max=100&cells=20&icon=rewind'
 shoot gauge-speed 103 15 'c=gauge&label=SPEED&value=4&max=8&cells=8&icon=fastforward'
 shoot gauge-empty 97 15 'c=gauge&label=LEVEL&value=0&max=9&cells=9'

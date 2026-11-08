@@ -3,7 +3,7 @@ use crate::common;
 use common::tmp_root;
 use omega_store::{
     atomic_write, read_app_state, write_app_state, AppState, BackdropStyle, Font, Platform,
-    BACKDROP_COLOURS, FF_SPEEDS, FF_SPEED_DEFAULT,
+    BACKDROP_COLOURS, FF_SPEEDS, FF_SPEED_DEFAULT, SUNLIGHT_DEFAULT,
 };
 use tempfile::tempdir;
 
@@ -69,7 +69,7 @@ fn app_state_round_trips_including_a_stem_with_an_equals_sign() {
     let s = AppState {
         cart: Some("Cheats = On".into()),
         brightness: 3,
-        blue_light: 9,
+        sunlight: 9,
         volume: 71,
         muted: true,
         clock_set: true,
@@ -96,7 +96,6 @@ fn an_out_of_range_level_reads_as_default() {
     let d = tmp_root();
     for body in [
         "cart=\nbrightness=10\nblue_light=1\nvolume=50\n",
-        "cart=\nbrightness=3\nblue_light=10\nvolume=50\n",
         "cart=\nbrightness=3\nblue_light=1\nvolume=101\n",
     ] {
         std::fs::write(d.path().join("Config/emellie-slot.state"), body).unwrap();
@@ -123,7 +122,7 @@ fn app_state_round_trips_a_negative_utc_offset() {
     let s = AppState {
         cart: None,
         brightness: 5,
-        blue_light: 0,
+        sunlight: 0,
         volume: 60,
         muted: false,
         clock_set: true,
@@ -152,13 +151,12 @@ fn a_line_the_reader_does_not_know_is_skipped() {
     assert_eq!(
         (
             s.brightness,
-            s.blue_light,
             s.volume,
             s.muted,
             s.clock_set,
             s.utc_offset_min
         ),
-        (3, 1, 40, true, true, -300)
+        (3, 40, true, true, -300)
     );
 }
 
@@ -185,7 +183,7 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             cart: Some("Emerald".into()),
             cart_platform: None,
             brightness: 3,
-            blue_light: 1,
+            sunlight: SUNLIGHT_DEFAULT,
             volume: 40,
             volume_hp: 40,
             muted: true,
@@ -580,4 +578,27 @@ fn a_font_the_reader_does_not_know_or_never_saw_is_bold() {
         );
     }
     assert_eq!(AppState::default().font, Font::Bold);
+}
+
+#[test]
+fn the_sunlight_round_trips_and_an_old_blue_light_line_is_skipped() {
+    let d = tmp_root();
+    let s = AppState {
+        clock_set: true,
+        sunlight: 8,
+        ..AppState::default()
+    };
+    write_app_state(d.path(), &s).unwrap();
+    assert_eq!(read_app_state(d.path()), s);
+    let text = std::fs::read_to_string(d.path().join("Config/emellie-slot.state")).unwrap();
+    assert!(text.lines().any(|l| l == "sunlight=8"), "{text:?}");
+
+    let known = "cart=\nbrightness=3\nblue_light=4\nvolume=40\nmuted=0\nclock_set=1\nutc_offset_min=0\n";
+    std::fs::write(d.path().join("Config/emellie-slot.state"), known).unwrap();
+    let s = read_app_state(d.path());
+    assert_eq!((s.brightness, s.sunlight), (3, SUNLIGHT_DEFAULT), "the card's state was thrown away");
+    for bad in ["sunlight=11\n", "sunlight=-1\n", "sunlight=sun\n"] {
+        std::fs::write(d.path().join("Config/emellie-slot.state"), format!("{known}{bad}")).unwrap();
+        assert_eq!(read_app_state(d.path()).sunlight, SUNLIGHT_DEFAULT, "{bad:?}");
+    }
 }

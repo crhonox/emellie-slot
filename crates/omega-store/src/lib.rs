@@ -16,12 +16,13 @@ mod region;
 mod ring;
 mod rumble;
 mod scan;
+mod solar;
 pub mod snes;
 mod stamp;
 mod theme;
 
 pub use app_state::{
-    read_app_state, write_app_state, AppState, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, FF_SPEEDS,
+    read_app_state, write_app_state, AppState, BRIGHTNESS_MAX, SUNLIGHT_DEFAULT, SUNLIGHT_MAX, FF_SPEEDS,
     FF_SPEED_DEFAULT, UTC_OFFSET_MAX, UTC_OFFSET_MIN, VOLUME_MAX,
 };
 pub use atomic::{atomic_write, atomic_write_dated};
@@ -36,6 +37,7 @@ pub use gba::{header_clean, header_code, header_title};
 pub use lists::GameRef;
 pub use platform::Platform;
 pub use region::Region;
+pub use solar::{gba_code_has_sun, has_solar_sensor};
 pub use ring::{StateEntry, StateRing, RING_MAX};
 pub use rumble::{gb_type_rumbles, gba_code_rumbles, has_rumble};
 pub use scan::{initial, is_hidden, scan, sort_key, Cart, StoreError};

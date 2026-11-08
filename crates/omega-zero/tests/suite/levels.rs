@@ -1,9 +1,12 @@
 use crate::common;
 
-use common::{app_playing_in, app_playing_with_volume, boot, tmp_root_with_carts};
+use common::{
+    app_playing_in, app_playing_with_volume, boot, tmp_root_with_carts, tmp_root_with_real_carts,
+    write_real_cart_as,
+};
 use omega_input::Action;
-use omega_store::read_app_state;
-use omega_ui::GaugeIcon;
+use omega_store::{read_app_state, Core, SUNLIGHT_DEFAULT, SUNLIGHT_MAX};
+use omega_ui::{GaugeIcon, Toast};
 use omega_zero::app::Phase;
 
 #[test]
@@ -37,8 +40,76 @@ fn levels_work_on_the_shelf_not_only_in_game() {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     let mut a = boot(d.path());
     assert!(matches!(a.phase(), Phase::Shelf));
-    a.apply(Action::BlueLightUp);
-    assert_eq!(read_app_state(d.path()).blue_light, 1);
+    a.apply(Action::BrightnessDown);
+    assert_eq!(read_app_state(d.path()).brightness, 4);
+}
+
+/// A Boktai cart: its header's game code is the one mGBA and armGBA give a solar sensor.
+fn boktai() -> tempfile::TempDir {
+    let d = tmp_root_with_real_carts(&["Boktai"]);
+    write_real_cart_as(&d, "Boktai", "BOKTAI", "U3IE");
+    d
+}
+
+#[test]
+fn select_and_right_or_left_change_a_solar_carts_sunlight() {
+    let d = boktai();
+    let mut a = app_playing_in(d.path(), "Boktai");
+    assert!(a.plays_solar_game());
+    assert_eq!(a.sunlight(), SUNLIGHT_DEFAULT);
+    a.apply(Action::SunlightUp);
+    assert_eq!(read_app_state(d.path()).sunlight, SUNLIGHT_DEFAULT + 1);
+    assert_eq!(a.take_sunlight(), Some(SUNLIGHT_DEFAULT + 1), "the core was never told");
+    let gauge = a.hud().gauge().expect("the sunlight shows no gauge");
+    assert_eq!(gauge.icon, GaugeIcon::Sun);
+    for _ in 0..20 {
+        a.apply(Action::SunlightUp);
+    }
+    assert_eq!(a.sunlight(), SUNLIGHT_MAX);
+    for _ in 0..20 {
+        a.apply(Action::SunlightDown);
+    }
+    assert_eq!(read_app_state(d.path()).sunlight, 0);
+    assert!(matches!(a.phase(), Phase::Playing { .. }));
+}
+
+#[test]
+fn the_sunlight_keys_do_nothing_but_on_a_solar_cart() {
+    let d = tmp_root_with_carts(&["Emerald"]);
+    let mut a = app_playing_in(d.path(), "Emerald");
+    a.apply(Action::SunlightUp);
+    assert_eq!(a.sunlight(), SUNLIGHT_DEFAULT);
+    assert_eq!(a.take_sunlight(), None);
+    assert!(a.hud().gauge().is_none(), "a game with no sensor showed the sunlight");
+
+    let d = boktai();
+    let mut a = boot(d.path());
+    a.apply(Action::SunlightUp);
+    assert_eq!(a.sunlight(), SUNLIGHT_DEFAULT, "the shelf changed the sunlight");
+}
+
+#[test]
+fn under_gpsp_a_solar_cart_says_which_core_has_the_sensor() {
+    let d = boktai();
+    let mut a = app_playing_in(d.path(), "Boktai");
+    a.set_core(Core::Gpsp);
+    a.apply(Action::SunlightUp);
+    assert_eq!(a.sunlight(), SUNLIGHT_DEFAULT);
+    assert_eq!(a.hud().last_toast(), Some(Toast::NeedsSunCore));
+}
+
+#[test]
+fn mgba_and_armgba_take_the_sunlight_as_their_option_and_gpsp_has_none() {
+    use omega_zero::core::solar_option;
+    assert_eq!(
+        solar_option(Core::Mgba, 7),
+        Some(("mgba_solar_sensor_level", "7".to_string()))
+    );
+    assert_eq!(
+        solar_option(Core::Armgba, 10),
+        Some(("armgba_solar_sensor", "10".to_string()))
+    );
+    assert_eq!(solar_option(Core::Gpsp, 5), None);
 }
 
 #[test]

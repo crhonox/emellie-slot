@@ -101,7 +101,7 @@ classic scripts, no build step, so it works from `file://`.
 
 `<omega-gauge>`, `<omega-toast>` and `<omega-badge>` are what omega-zero puts over a game, the
 shelf or a menu, with nothing behind them but what is on the screen. A gauge (volume 20 cells,
-brightness and blue light 9, rewind 20) or a toast stands centred at the top, 4 art pixels down,
+brightness 9, sunlight 10, rewind 20) or a toast stands centred at the top, 4 art pixels down,
 or 2 under the top bar where the shelf shows it; only one at a time, a toast taking the gauge's
 place. Each comes at once and goes in four even steps of fading out. A badge stays in the top
 right corner while it lasts, level with a gauge's middle: fast forward, `×2` to `×6` as Settings

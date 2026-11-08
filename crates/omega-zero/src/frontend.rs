@@ -336,7 +336,6 @@ impl Frontend {
     }
 
     pub fn compose(&mut self, compositor: &mut Compositor) {
-        compositor.set_blue_light(self.session.app().blue_light());
         compositor.set_shake(self.session.app().screen_shake());
         compositor.set_screen_power(self.session.app().screen_power());
         let platform = self.session.app().platform();

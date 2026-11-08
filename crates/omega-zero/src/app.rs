@@ -7,7 +7,7 @@ use omega_power::{Battery, Charge, LedState, LidPolicy, Power};
 use omega_retro::LinkChannel;
 use omega_store::{
     format_stamp, read_app_state, scan, write_app_state, AppState, BackdropStyle, Cart, Core,
-    GameRef, Platform, StateEntry, StateRing, Theme, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, VOLUME_MAX,
+    GameRef, Platform, StateEntry, StateRing, Theme, BRIGHTNESS_MAX, SUNLIGHT_MAX, VOLUME_MAX,
 };
 use omega_ui::kit::action::Font;
 use omega_ui::kit::fade::stepped;
@@ -363,6 +363,8 @@ pub struct App {
     pub(crate) snapshot: Option<Box<dyn Snapshot>>,
     pub(crate) core: Core,
     pub(crate) colour_pending: Option<bool>,
+    /// A sunlight level for the running core's solar sensor, set and not yet handed to it.
+    sun_pending: Option<u8>,
     /// X on the DS's Controls put DSperate's hotkeys back since Controls opened.
     pub(crate) ds_hotkeys_reset: bool,
     pub(crate) link_player: Option<u8>,
@@ -552,6 +554,7 @@ impl App {
             snapshot: None,
             core: Core::default(),
             colour_pending: None,
+            sun_pending: None,
             ds_hotkeys_reset: false,
             link_player: None,
             platform: Platform::default(),
@@ -1241,6 +1244,48 @@ impl App {
         self.colour_pending.take()
     }
 
+    /// The sunlight to hand the core, once SELECT + Left or Right changed it.
+    pub fn take_sunlight(&mut self) -> Option<u8> {
+        self.sun_pending.take()
+    }
+
+    pub fn sunlight(&self) -> u8 {
+        self.state.sunlight
+    }
+
+    /// The game being played has a solar sensor on its cartridge (Boktai).
+    pub fn plays_solar_game(&self) -> bool {
+        matches!(self.phase, Phase::Playing { .. })
+            && self
+                .seated_cart()
+                .is_some_and(|c| omega_store::has_solar_sensor(&c.rom, c.platform))
+    }
+
+    /// SELECT + Right or Left: more or less sun on a solar sensor cartridge, shown on its gauge.
+    /// Any other game ignores it; under gpSP, which has no sensor, a toast says which core has.
+    fn change_sunlight(&mut self, brighter: bool) -> bool {
+        if !self.plays_solar_game() {
+            return false;
+        }
+        if crate::core::solar_option(self.core, 0).is_none() {
+            self.hud.toast(Toast::NeedsSunCore, self.now());
+            return true;
+        }
+        let before = self.state.sunlight;
+        let value = match brighter {
+            true => up(before, 1, SUNLIGHT_MAX),
+            false => before.saturating_sub(1),
+        };
+        self.state.sunlight = value;
+        self.sun_pending = Some(value);
+        let now = self.now();
+        self.hud.show(HudKind::Sunlight, value, false, now);
+        if value != before {
+            self.persist();
+        }
+        true
+    }
+
     pub fn core(&self) -> Core {
         self.core
     }
@@ -1656,12 +1701,15 @@ impl App {
             self.hud.toast(said, self.now());
             return true;
         }
+        match action {
+            Action::SunlightUp => return self.change_sunlight(true),
+            Action::SunlightDown => return self.change_sunlight(false),
+            _ => {}
+        }
         let s = &self.state;
         let (kind, value) = match action {
             Action::BrightnessUp => (HudKind::Brightness, up(s.brightness, 1, BRIGHTNESS_MAX)),
             Action::BrightnessDown => (HudKind::Brightness, s.brightness.saturating_sub(1)),
-            Action::BlueLightUp => (HudKind::BlueLight, up(s.blue_light, 1, BLUE_LIGHT_MAX)),
-            Action::BlueLightDown => (HudKind::BlueLight, s.blue_light.saturating_sub(1)),
             Action::VolumeUp => (HudKind::Volume, up(self.level(), VOLUME_STEP, VOLUME_MAX)),
             Action::VolumeDown => (HudKind::Volume, self.level().saturating_sub(VOLUME_STEP)),
             _ => return false,
@@ -1671,7 +1719,7 @@ impl App {
         }
         let level = match kind {
             HudKind::Brightness => &mut self.state.brightness,
-            HudKind::BlueLight => &mut self.state.blue_light,
+            HudKind::Sunlight => return false,
             HudKind::Volume if self.headphones => &mut self.state.volume_hp,
             HudKind::Volume => &mut self.state.volume,
             HudKind::Rewind => return false,
@@ -1740,10 +1788,6 @@ impl App {
 
     pub fn ff_badge(&self) -> Option<CornerBadge> {
         self.hud.ff_badge()
-    }
-
-    pub fn blue_light(&self) -> u8 {
-        self.state.blue_light
     }
 
     pub fn brightness(&self) -> u8 {

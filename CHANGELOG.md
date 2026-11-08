@@ -1,5 +1,16 @@
 # Changelog
 
+## es-1.0.18 (2026-11-08)
+
+- Sunlight for solar sensor cartridges: SELECT + Right gives more sun, SELECT + Left less, 0 (dark)
+  to 10 (full sun) on a SUNLIGHT gauge. Only while playing Boktai, Boktai 2 or Boktai 3 (read
+  from the ROM header, every region); other games and the shelf ignore the keys. The level is
+  remembered and starts at 5. mGBA (`mgba_solar_sensor_level`) and armGBA
+  (`armgba_solar_sensor`) take it while the game runs; gpSP has no sensor and says "Please
+  switch to mGBA".
+- The blue light filter and its hotkey are gone. An old `blue_light=` line in the state file is
+  ignored, so a saved tint goes away. Controls says SUNLIGHT for SELECT + Left/Right.
+
 ## es-1.0.17 (2026-11-08)
 
 - Rumble works again on rumble cartridges, and only on them. The motor is on while the game asks

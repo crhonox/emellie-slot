@@ -376,8 +376,8 @@ impl App {
         match action {
             Action::BrightnessUp
             | Action::BrightnessDown
-            | Action::BlueLightUp
-            | Action::BlueLightDown
+            | Action::SunlightUp
+            | Action::SunlightDown
             | Action::VolumeUp
             | Action::VolumeDown
             | Action::MuteToggle

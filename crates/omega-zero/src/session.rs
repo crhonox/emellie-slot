@@ -252,6 +252,13 @@ impl Session {
                 }
             }
         }
+        if let Some(level) = self.app.take_sunlight() {
+            if let (Some(emu), Some((key, value))) =
+                (&self.emu, crate::core::solar_option(self.app.core(), level))
+            {
+                emu.set_option(key, &value);
+            }
+        }
         if let Some(disc) = self.app.take_disc_swap() {
             if let Some(emu) = &self.emu {
                 emu.set_disc(disc);
@@ -426,6 +433,7 @@ impl Session {
         };
         let core = omega_store::core_for_platform(&self.root, stem, platform);
         self.rumble_cart = omega_store::has_rumble(&rom, platform);
+        let solar = omega_store::has_solar_sensor(&rom, platform);
         self.app.set_core(core);
         self.app.set_platform(platform);
         self.app
@@ -471,6 +479,12 @@ impl Session {
         emu.set_volume(self.app.output_volume());
         emu.set_driven(self.driven);
         self.app.set_snapshot(Box::new(emu.snapshot()));
+        // a solar sensor cartridge sees the sun last set, not the core's own default
+        if solar {
+            if let Some((key, value)) = crate::core::solar_option(core, self.app.sunlight()) {
+                emu.set_option(key, &value);
+            }
+        }
         self.emu = Some(emu);
         self.running = Some((platform, stem.to_string()));
     }

@@ -30,8 +30,9 @@ pub enum Action {
     FfStop,
     BrightnessUp,
     BrightnessDown,
-    BlueLightUp,
-    BlueLightDown,
+    /// SELECT + Right and Left: more or less sunlight on a solar sensor cartridge (Boktai).
+    SunlightUp,
+    SunlightDown,
     VolumeUp,
     VolumeDown,
     QuickMenu,
@@ -278,8 +279,8 @@ impl Gestures {
         Some(match b {
             Btn::Up => (1, Action::BrightnessUp),
             Btn::Down => (2, Action::BrightnessDown),
-            Btn::Left => (4, Action::BlueLightDown),
-            Btn::Right => (8, Action::BlueLightUp),
+            Btn::Left => (4, Action::SunlightDown),
+            Btn::Right => (8, Action::SunlightUp),
             Btn::Y if self.keys.colour => (64, Action::ColourCorrectionToggle),
             Btn::L2 if self.keys.game_l2_r2 && self.keys.rewind => (L2_CHORD, Action::RewindStart),
             Btn::R2 if self.keys.game_l2_r2 => (R2_CHORD, Action::FfStart),

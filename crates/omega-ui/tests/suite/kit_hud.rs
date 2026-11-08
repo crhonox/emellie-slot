@@ -37,12 +37,12 @@ fn the_gauges_are_chromes() {
             "gauge-brightness",
         ),
         (
-            "BLUE LIGHT",
-            3,
-            9,
-            9,
-            Some(GaugeIcon::BlueLight),
-            "gauge-bluelight",
+            "SUNLIGHT",
+            5,
+            10,
+            10,
+            Some(GaugeIcon::Sun),
+            "gauge-sun",
         ),
         (
             "REWIND",

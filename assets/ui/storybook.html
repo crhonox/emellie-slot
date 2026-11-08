@@ -568,7 +568,7 @@
           <div style="display: grid; gap: calc(6 * var(--u)); justify-items: start">
             <omega-gauge label="VOLUME" value="55" max="100" cells="20" icon="volume"></omega-gauge>
             <omega-gauge label="BRIGHTNESS" value="6" max="9" cells="9" icon="brightness"></omega-gauge>
-            <omega-gauge label="BLUE LIGHT" value="3" max="9" cells="9" icon="bluelight"></omega-gauge>
+            <omega-gauge label="SUNLIGHT" value="5" max="10" cells="10" icon="sun"></omega-gauge>
             <omega-gauge label="REWIND" value="70" max="100" cells="20" icon="rewind"></omega-gauge>
             <omega-gauge label="VOLUME" value="0" max="100" cells="20" icon="muted"></omega-gauge>
           </div>
@@ -591,7 +591,7 @@
             <tr><td>value</td><td>The level, from 0 to <code>max</code>. Default 0.</td></tr>
             <tr><td>max</td><td>The level the gauge is full at. Default 100.</td></tr>
             <tr><td>cells</td><td>How many cells the well has. Lit cells are <code>round(value / max × cells)</code> from the left, in <code>--oz-label</code>; the rest in <code>--oz-plate</code>. Default 20.</td></tr>
-            <tr><td>icon</td><td>A 7×7 sprite after the cells, in <code>--oz-cream</code>: <code>volume</code>, <code>muted</code>, <code>headphones</code>, <code>brightness</code>, <code>bluelight</code>, <code>rewind</code>, <code>fastforward</code>. None without it.</td></tr>
+            <tr><td>icon</td><td>A 7×7 sprite after the cells, in <code>--oz-cream</code>: <code>volume</code>, <code>muted</code>, <code>headphones</code>, <code>brightness</code>, <code>sun</code>, <code>rewind</code>, <code>fastforward</code>. None without it.</td></tr>
             <tr><td>::part</td><td><code>gauge</code>, <code>tab</code>, <code>label</code>, <code>slant</code>, <code>strip</code>, <code>well</code>, <code>cells</code>, <code>icon</code></td></tr>
           </table>
         </div>

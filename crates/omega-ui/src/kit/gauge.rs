@@ -61,7 +61,8 @@ pub enum GaugeIcon {
     Muted,
     Headphones,
     Brightness,
-    BlueLight,
+    /// The sunlight on a solar sensor cartridge: the sun over the horizon.
+    Sun,
     Rewind,
     FastForward,
 }
@@ -72,7 +73,7 @@ impl GaugeIcon {
         GaugeIcon::Muted,
         GaugeIcon::Headphones,
         GaugeIcon::Brightness,
-        GaugeIcon::BlueLight,
+        GaugeIcon::Sun,
         GaugeIcon::Rewind,
         GaugeIcon::FastForward,
     ];
@@ -117,14 +118,14 @@ impl GaugeIcon {
                 ".#...#.",
                 "#..#..#",
             ],
-            GaugeIcon::BlueLight => [
-                "..##...",
-                ".##....",
-                "##.....",
-                "##.....",
-                "##....#",
-                ".##..##",
-                "..####.",
+            GaugeIcon::Sun => [
+                "#..#..#",
+                ".#...#.",
+                "..###..",
+                ".#####.",
+                ".#####.",
+                ".......",
+                "#######",
             ],
             GaugeIcon::Rewind => [
                 "...#..#",

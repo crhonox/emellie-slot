@@ -123,7 +123,7 @@ fn seating_a_cart_preserves_the_levels_already_in_the_file() {
         &AppState {
             cart: None,
             brightness: 2,
-            blue_light: 7,
+            sunlight: 7,
             volume: 35,
             muted: false,
             clock_set: true,
@@ -139,7 +139,7 @@ fn seating_a_cart_preserves_the_levels_already_in_the_file() {
         a.update(1.0 / 60.0);
     }
     let s = read_app_state(d.path());
-    assert_eq!((s.brightness, s.blue_light, s.volume), (2, 7, 35));
+    assert_eq!((s.brightness, s.sunlight, s.volume), (2, 7, 35));
 }
 
 #[test]

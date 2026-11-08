@@ -82,7 +82,7 @@ fn volume_reads_against_100_not_the_nine_step_scale() {
         "volume 9 is being read against the brightness scale"
     );
     assert_eq!(lit(HudKind::Volume, 100), 20);
-    assert_eq!(lit(HudKind::BlueLight, 3), 3);
+    assert_eq!(lit(HudKind::Sunlight, 5), 5);
     assert_eq!(lit(HudKind::Rewind, 70), 14);
 }
 
@@ -91,7 +91,7 @@ fn each_level_has_its_title_and_cells() {
     let kinds = [
         (HudKind::Volume, "VOLUME", 20),
         (HudKind::Brightness, "BRIGHTNESS", 9),
-        (HudKind::BlueLight, "BLUE LIGHT", 9),
+        (HudKind::Sunlight, "SUNLIGHT", 10),
         (HudKind::Rewind, "REWIND", 20),
     ];
     for (kind, label, cells) in kinds {

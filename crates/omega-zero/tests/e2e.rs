@@ -113,9 +113,12 @@ fn the_whole_pass_from_boot_to_resume() {
     p.tap(Btn::VolUp);
     let levels = read_app_state(root);
     assert_eq!(levels.brightness, 6);
-    assert_eq!(levels.blue_light, 1);
+    assert_eq!(
+        levels.sunlight,
+        omega_store::SUNLIGHT_DEFAULT,
+        "SELECT + Right changed the sunlight of a game with no solar sensor"
+    );
     assert_eq!(levels.volume, 65);
-    assert_eq!(p.session.app().blue_light(), 1);
     assert_eq!(
         p.playing(),
         Some("Emerald"),

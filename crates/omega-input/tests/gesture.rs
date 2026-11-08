@@ -31,7 +31,7 @@ fn select_with_a_shoulder_saves_or_loads_no_state() {
 fn a_chord_keeps_both_keys_from_the_game() {
     let mut g = Gestures::new();
     assert!(g.feed(Down(Select), 0).is_empty());
-    assert_eq!(g.feed(Down(Right), 50), vec![BlueLightUp]);
+    assert_eq!(g.feed(Down(Right), 50), vec![SunlightUp]);
     assert!(
         g.feed(Up(Right), 60).is_empty(),
         "the chord key reached the game"
@@ -83,8 +83,8 @@ fn select_chords_map_to_all_four_axes() {
     for (btn, want) in [
         (Btn::Up, BrightnessUp),
         (Btn::Down, BrightnessDown),
-        (Right, BlueLightUp),
-        (Left, BlueLightDown),
+        (Right, SunlightUp),
+        (Left, SunlightDown),
     ] {
         let mut g = Gestures::new();
         g.feed(RawEvent::Down(Select), 0);
@@ -266,7 +266,7 @@ fn a_chord_landing_late_is_still_a_chord() {
     let mut g = Gestures::new();
     g.feed(Down(Select), 0);
     g.tick(400);
-    assert_eq!(g.feed(Down(Right), 400), vec![BlueLightUp]);
+    assert_eq!(g.feed(Down(Right), 400), vec![SunlightUp]);
     assert!(
         g.tick(5_000).is_empty(),
         "the tick handed something over behind a late chord"
@@ -688,8 +688,8 @@ fn a_snes_game_rewinds_and_fast_forwards_as_a_handheld_game_does() {
     assert!(g.feed(Up(R2), 1_150).is_empty());
     assert!(g.ff_latched());
     assert!(g.feed(Down(Select), 2_000).is_empty());
-    assert_eq!(g.feed(Down(Right), 2_050), vec![BlueLightUp]);
-    assert_eq!(g.feed(Down(Left), 2_100), vec![BlueLightDown]);
+    assert_eq!(g.feed(Down(Right), 2_050), vec![SunlightUp]);
+    assert_eq!(g.feed(Down(Left), 2_100), vec![SunlightDown]);
 }
 
 #[test]

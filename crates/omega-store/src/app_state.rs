@@ -9,7 +9,10 @@ use crate::platform::Platform;
 pub const STATE_FILE: &str = "emellie-slot.state";
 
 pub const BRIGHTNESS_MAX: u8 = 9;
-pub const BLUE_LIGHT_MAX: u8 = 9;
+/// The sunlight a solar sensor cartridge (Boktai) sees, as mGBA and armGBA count it: 0 is dark,
+/// 10 full sun.
+pub const SUNLIGHT_MAX: u8 = 10;
+pub const SUNLIGHT_DEFAULT: u8 = 5;
 pub const VOLUME_MAX: u8 = 100;
 
 pub const UTC_OFFSET_MIN: i16 = -720;
@@ -24,7 +27,8 @@ pub struct AppState {
     pub cart: Option<String>,
     pub cart_platform: Option<Platform>,
     pub brightness: u8,
-    pub blue_light: u8,
+    /// The sunlight on a solar sensor cartridge, 0 to [`SUNLIGHT_MAX`].
+    pub sunlight: u8,
     pub volume: u8,
     pub volume_hp: u8,
     pub muted: bool,
@@ -65,7 +69,7 @@ impl Default for AppState {
             cart: None,
             cart_platform: None,
             brightness: 5,
-            blue_light: 0,
+            sunlight: SUNLIGHT_DEFAULT,
             volume: 60,
             volume_hp: 60,
             muted: false,
@@ -103,11 +107,11 @@ pub fn read_app_state(root: &Path) -> AppState {
 
 pub fn write_app_state(root: &Path, s: &AppState) -> std::io::Result<()> {
     let text = format!(
-        "cart={}\ncart_platform={}\nbrightness={}\nblue_light={}\nvolume={}\nvolume_hp={}\nmuted={}\nmuted_hp={}\nclock_set={}\nutc_offset_min={}\nff_speed={}\nff_sound={}\ncolour_correction={}\nwifi={}\nssh={}\nbluetooth={}\nbackdrop={}\nbackdrop_moving={}\nbackdrop_colour={}\nfont={}\n",
+        "cart={}\ncart_platform={}\nbrightness={}\nsunlight={}\nvolume={}\nvolume_hp={}\nmuted={}\nmuted_hp={}\nclock_set={}\nutc_offset_min={}\nff_speed={}\nff_sound={}\ncolour_correction={}\nwifi={}\nssh={}\nbluetooth={}\nbackdrop={}\nbackdrop_moving={}\nbackdrop_colour={}\nfont={}\n",
         s.cart.as_deref().unwrap_or(""),
         s.cart_platform.map_or(String::new(), platform_key),
         s.brightness,
-        s.blue_light,
+        s.sunlight,
         s.volume,
         s.volume_hp,
         s.muted as u8,
@@ -142,7 +146,7 @@ fn parse(text: &str) -> Option<AppState> {
     let mut cart = None;
     let mut cart_platform = None;
     let mut brightness = None;
-    let mut blue_light = None;
+    let mut sunlight = None;
     let mut volume = None;
     let mut volume_hp = None;
     let mut muted = None;
@@ -170,7 +174,7 @@ fn parse(text: &str) -> Option<AppState> {
             "cart" => cart = Some(value.to_string()),
             "cart_platform" => cart_platform = platform_value(value),
             "brightness" => brightness = Some(level(value, BRIGHTNESS_MAX)?),
-            "blue_light" => blue_light = Some(level(value, BLUE_LIGHT_MAX)?),
+            "sunlight" => sunlight = level(value, SUNLIGHT_MAX),
             "volume" => volume = Some(level(value, VOLUME_MAX)?),
             "volume_hp" => volume_hp = Some(level(value, VOLUME_MAX)?),
             "muted" => muted = Some(level(value, 1)? == 1),
@@ -204,7 +208,7 @@ fn parse(text: &str) -> Option<AppState> {
         cart: (!cart.is_empty()).then_some(cart),
         cart_platform,
         brightness: brightness?,
-        blue_light: blue_light?,
+        sunlight: sunlight.unwrap_or(fallback.sunlight),
         volume: volume?,
         volume_hp: volume_hp.or(volume)?,
         muted: muted?,

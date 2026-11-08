@@ -13,7 +13,7 @@
 //! it was drawn for.
 
 use omega_gfx::{out_w, Draw, TexId};
-use omega_store::{BLUE_LIGHT_MAX, BRIGHTNESS_MAX, VOLUME_MAX};
+use omega_store::{BRIGHTNESS_MAX, SUNLIGHT_MAX, VOLUME_MAX};
 
 use crate::kit::badge::{badge_face, BadgeIcon, BADGE_H};
 use crate::kit::fade::stepped;
@@ -50,7 +50,7 @@ const BADGE_RIGHT: u32 = BADGE_TOP;
 pub enum HudKind {
     #[default]
     Brightness,
-    BlueLight,
+    Sunlight,
     Volume,
     Rewind,
 }
@@ -61,7 +61,7 @@ impl HudKind {
     pub fn icon(self, muted: bool, headphones: bool) -> GaugeIcon {
         match self {
             HudKind::Brightness => GaugeIcon::Brightness,
-            HudKind::BlueLight => GaugeIcon::BlueLight,
+            HudKind::Sunlight => GaugeIcon::Sun,
             HudKind::Volume if muted => GaugeIcon::Muted,
             HudKind::Volume if headphones => GaugeIcon::Headphones,
             HudKind::Volume => GaugeIcon::Volume,
@@ -73,17 +73,18 @@ impl HudKind {
     pub fn label(self) -> &'static str {
         match self {
             HudKind::Brightness => "BRIGHTNESS",
-            HudKind::BlueLight => "BLUE LIGHT",
+            HudKind::Sunlight => "SUNLIGHT",
             HudKind::Volume => "VOLUME",
             HudKind::Rewind => "REWIND",
         }
     }
 
-    /// How many cells the gauge has: one to a step for the levels of 0 to 9, one to 5% for
+    /// How many cells the gauge has: one to a step for the levels of 0 to 9 (0 to 10 for the sunlight), one to 5% for
     /// the volume and the rewind left.
     pub fn cells(self) -> u32 {
         match self {
-            HudKind::Brightness | HudKind::BlueLight => 9,
+            HudKind::Brightness => 9,
+            HudKind::Sunlight => 10,
             HudKind::Volume | HudKind::Rewind => 20,
         }
     }
@@ -91,7 +92,7 @@ impl HudKind {
     fn max(self) -> u8 {
         match self {
             HudKind::Brightness => BRIGHTNESS_MAX,
-            HudKind::BlueLight => BLUE_LIGHT_MAX,
+            HudKind::Sunlight => SUNLIGHT_MAX,
             HudKind::Volume => VOLUME_MAX,
             HudKind::Rewind => 100,
         }
