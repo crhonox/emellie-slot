@@ -1,5 +1,9 @@
 # Changelog
 
+## es-1.0.12 (2026-11-08)
+
+- DS_Overlay, the single-screen grid overlay from es-1.0.11, fine-tuned.
+
 ## es-1.0.11 (2026-11-08)
 
 - DSperate's single-screen grid overlay (`System/dsperate/grid_s0.bmp`) is now DS_Overlay, in
