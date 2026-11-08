@@ -28,6 +28,8 @@ pub struct Session {
     rewinding: bool,
     fast: bool,
     motor: u16,
+    /// The seated cartridge has a rumble motor of its own; no other game rumbles.
+    rumble_cart: bool,
     reloading: bool,
     driven: bool,
     /// The system and stem of the game the core was last opened for.
@@ -62,6 +64,7 @@ impl Session {
             rewinding: false,
             fast: false,
             motor: 0,
+            rumble_cart: false,
             reloading: false,
             driven: false,
             running: None,
@@ -88,8 +91,8 @@ impl Session {
         self.sink.ring()
     }
 
-    /// Hands the motor the core's strength. While it is not 0 this goes out every frame: the
-    /// motor is on for the share of the frames that the strength is of full (omega-power's Duty).
+    /// Hands the motor the core's strength. While it is not 0 this goes out every frame, and
+    /// the motor stays on (omega-power's Hold).
     pub fn rumble(&mut self, strength: u16) {
         if strength == 0 && self.motor == 0 {
             return;
@@ -289,7 +292,7 @@ impl Session {
 
     fn sync_rumble(&mut self) {
         let want = match &self.emu {
-            Some(emu) if self.playing() && self.app.rumble_enabled() => emu.rumble().strength(),
+            Some(emu) if self.playing() && self.rumble_cart => emu.rumble().strength(),
             _ => 0,
         };
         self.rumble(want);
@@ -422,6 +425,7 @@ impl Session {
             return;
         };
         let core = omega_store::core_for_platform(&self.root, stem, platform);
+        self.rumble_cart = omega_store::has_rumble(&rom, platform);
         self.app.set_core(core);
         self.app.set_platform(platform);
         self.app

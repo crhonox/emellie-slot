@@ -215,7 +215,7 @@ fn settings_draws_the_modal_and_the_lit_rows_band_over_the_backdrop() {
     assert_eq!(art(&px, x + 2, y + 2), pal.tab, "the band");
     assert_eq!(art(&px, x + w / 2, y + h - 2), pal.tab, "the band");
     assert_eq!(art(&px, x, y), pal.well, "the band's corner is the well's");
-    let [x, y, w, h] = row_rect(&f, SettingsRow::Rumble);
+    let [x, y, w, h] = row_rect(&f, SettingsRow::Labels);
     for (dx, dy) in [(1, 0), (2, 2), (w / 2, h - 2)] {
         assert_eq!(
             art(&px, x + dx, y + dy),

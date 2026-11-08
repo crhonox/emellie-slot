@@ -10,7 +10,7 @@ pub use baseos::{
 };
 pub use device::{
     has_bit, headphones_in, motor_pin, record_first_frame, rumble_node, trace_first_frame,
-    uptime_seconds, DevicePlatform, Duty,
+    uptime_seconds, DevicePlatform,
 };
 pub use motor::Motor;
 pub use power::Power;

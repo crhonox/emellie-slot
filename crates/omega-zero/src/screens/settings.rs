@@ -31,7 +31,6 @@ impl App {
             SettingsRow::FastForward => QuickValue::speed(self.state.ff_speed),
             SettingsRow::FastForwardSound => Some(QuickValue::flag(self.state.ff_sound)),
             SettingsRow::ColourCorrection => Some(QuickValue::flag(self.state.colour_correction)),
-            SettingsRow::Rumble => Some(QuickValue::flag(self.state.rumble)),
             SettingsRow::Labels
             | SettingsRow::Achievements
             | SettingsRow::DateTime
@@ -143,8 +142,7 @@ impl App {
             SettingsRow::About => Phase::About,
             SettingsRow::FastForward
             | SettingsRow::FastForwardSound
-            | SettingsRow::ColourCorrection
-            | SettingsRow::Rumble => return,
+            | SettingsRow::ColourCorrection => return,
         };
         self.go(to, Dir::Deeper);
     }
@@ -164,7 +162,6 @@ impl App {
                 s.colour_correction = !s.colour_correction;
                 self.colour_pending = Some(s.colour_correction);
             }
-            SettingsRow::Rumble => s.rumble = !s.rumble,
             SettingsRow::Labels
             | SettingsRow::Achievements
             | SettingsRow::DateTime

@@ -2,9 +2,10 @@ use crate::common;
 
 use std::time::{Duration, Instant};
 
-use common::{session_with_platform, tmp_root_with_carts, tmp_root_with_real_carts};
+use common::{
+    session_with_platform, tmp_root_with_carts, tmp_root_with_real_carts, write_real_cart_as,
+};
 use omega_input::{Btn, Millis, RawEvent, MENU_HOLD_MS, POWER_HOLD_MS};
-use omega_store::{write_app_state, AppState};
 use omega_zero::app::Phase;
 use omega_zero::session::Session;
 
@@ -13,9 +14,18 @@ const DT: f32 = 1.0 / 60.0;
 
 const STRONG: u32 = 0;
 
-#[test]
-fn what_the_core_asks_for_reaches_the_motor() {
+/// Two carts whose header says Drill Dozer: a cartridge with a motor of its own.
+fn rumble_carts() -> tempfile::TempDir {
     let d = tmp_root_with_real_carts(&["Advance Wars", "Emerald"]);
+    for stem in ["Advance Wars", "Emerald"] {
+        write_real_cart_as(&d, stem, "DRILL DOZER", "V49E");
+    }
+    d
+}
+
+#[test]
+fn what_a_rumble_cart_asks_for_reaches_the_motor() {
+    let d = rumble_carts();
     let (mut s, motor) = session_with_platform(d.path());
     let mut now = 0;
     play(&mut s, &mut now);
@@ -36,16 +46,8 @@ fn what_the_core_asks_for_reaches_the_motor() {
 }
 
 #[test]
-fn with_rumble_off_the_motor_stays_still_whatever_the_core_asks() {
+fn a_game_without_a_rumble_cart_never_moves_the_motor() {
     let d = tmp_root_with_real_carts(&["Advance Wars", "Emerald"]);
-    write_app_state(
-        d.path(),
-        &AppState {
-            rumble: false,
-            ..AppState::default()
-        },
-    )
-    .expect("write omega-zero.state");
     let (mut s, motor) = session_with_platform(d.path());
     let mut now = 0;
     play(&mut s, &mut now);
@@ -59,7 +61,7 @@ fn with_rumble_off_the_motor_stays_still_whatever_the_core_asks() {
     for _ in 0..5 {
         step(&mut s, &mut now);
     }
-    assert_eq!(motor.last(), 0, "the motor moved with rumble off");
+    assert_eq!(motor.last(), 0, "a cart with no motor rumbled");
 }
 
 #[test]
@@ -120,7 +122,7 @@ fn play(s: &mut Session, now: &mut Millis) {
 
 #[test]
 fn the_power_menu_takes_the_motor_down() {
-    let d = tmp_root_with_real_carts(&["Advance Wars", "Emerald"]);
+    let d = rumble_carts();
     let (mut s, motor) = session_with_platform(d.path());
     let mut now = 0;
     play(&mut s, &mut now);

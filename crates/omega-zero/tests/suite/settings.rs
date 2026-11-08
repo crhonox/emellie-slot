@@ -138,7 +138,6 @@ fn up_and_down_move_the_bar_and_wrap_at_the_ends() {
         SettingsRow::FastForward,
         SettingsRow::FastForwardSound,
         SettingsRow::ColourCorrection,
-        SettingsRow::Rumble,
         SettingsRow::Labels,
         SettingsRow::Achievements,
         SettingsRow::DateTime,
@@ -179,29 +178,18 @@ fn fast_forward_steps_through_its_speeds_and_saves_each_one() {
 }
 
 #[test]
-fn rumble_and_fast_forward_sound_flip_on_either_arrow_and_save() {
+fn fast_forward_sound_flips_on_either_arrow_and_saves() {
     let (d, mut a, _) = on_carousel();
-    let card = |d: &TempDir| {
-        let s = read_app_state(d.path());
-        (s.ff_sound, s.rumble)
-    };
+    let card = |d: &TempDir| read_app_state(d.path()).ff_sound;
     open_at(&mut a, SettingsRow::FastForwardSound);
     press(&mut a, Btn::Left);
-    assert_eq!(card(&d), (true, true));
+    assert!(card(&d));
     assert_eq!(
         a.settings_value(SettingsRow::FastForwardSound),
         Some(QuickValue::On)
     );
     press(&mut a, Btn::Right);
-    assert_eq!(card(&d), (false, true));
-    press(&mut a, Btn::Down);
-    press(&mut a, Btn::Down);
-    press(&mut a, Btn::Right);
-    assert_eq!(card(&d), (false, false));
-    assert!(!a.rumble_enabled());
-    assert_eq!(a.settings_value(SettingsRow::Rumble), Some(QuickValue::Off));
-    press(&mut a, Btn::Left);
-    assert_eq!(card(&d), (false, true));
+    assert!(!card(&d));
 }
 
 #[test]
@@ -244,12 +232,8 @@ fn colour_correction_leaves_the_settings_around_it_alone() {
     let s = read_app_state(d.path());
     assert!(s.colour_correction, "the row never took");
     assert_eq!(
-        (s.ff_speed, s.ff_sound, s.rumble),
-        (
-            AppState::default().ff_speed,
-            AppState::default().ff_sound,
-            AppState::default().rumble
-        ),
+        (s.ff_speed, s.ff_sound),
+        (AppState::default().ff_speed, AppState::default().ff_sound),
         "the row reached a setting that is not its own"
     );
 }
@@ -520,7 +504,6 @@ fn the_rows_say_what_is_set_in_flows_capitals() {
         ff_speed: 4,
         ff_sound: true,
         colour_correction: false,
-        rumble: true,
         ..AppState::default()
     });
     open_at(&mut a, SettingsRow::FastForward);
@@ -533,7 +516,6 @@ fn the_rows_say_what_is_set_in_flows_capitals() {
             text("4X"),
             text("ON"),
             text("OFF"),
-            text("ON"),
             None,
             text("ON"),
             clock_text,

@@ -57,7 +57,6 @@ pub enum SettingsRow {
     FastForward,
     FastForwardSound,
     ColourCorrection,
-    Rumble,
     Labels,
     /// RetroAchievements: on or off, and the account.
     Achievements,
@@ -71,11 +70,10 @@ pub enum SettingsRow {
 }
 
 impl SettingsRow {
-    pub const ALL: [SettingsRow; 11] = [
+    pub const ALL: [SettingsRow; 10] = [
         SettingsRow::FastForward,
         SettingsRow::FastForwardSound,
         SettingsRow::ColourCorrection,
-        SettingsRow::Rumble,
         SettingsRow::Labels,
         SettingsRow::Achievements,
         SettingsRow::DateTime,
@@ -94,7 +92,6 @@ impl SettingsRow {
             SettingsRow::FastForward => "Fast Forward",
             SettingsRow::FastForwardSound => "Fast Forward Sound",
             SettingsRow::ColourCorrection => "Colour Correction",
-            SettingsRow::Rumble => "Rumble",
             SettingsRow::Labels => "Labels",
             SettingsRow::Achievements => "Achievements",
             SettingsRow::DateTime => "Date & Time",
@@ -110,7 +107,6 @@ impl SettingsRow {
             SettingsRow::FastForward
             | SettingsRow::FastForwardSound
             | SettingsRow::ColourCorrection
-            | SettingsRow::Rumble
             | SettingsRow::Labels
             | SettingsRow::Achievements => SettingsGroup::Configs,
             SettingsRow::DateTime
@@ -144,7 +140,6 @@ impl SettingsRow {
             SettingsRow::FastForward
                 | SettingsRow::FastForwardSound
                 | SettingsRow::ColourCorrection
-                | SettingsRow::Rumble
         )
     }
 

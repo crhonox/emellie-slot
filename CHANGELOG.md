@@ -1,5 +1,16 @@
 # Changelog
 
+## es-1.0.17 (2026-11-08)
+
+- Rumble works again on rumble cartridges, and only on them. The motor is on while the game asks
+  for any rumble at all, with 150 ms plays renewed every 100 ms (as es-1.0.14, which was felt on
+  the SP). es-1.0.16 turned a weaker rumble into one-frame flicks the motor never spun up for,
+  and every core reports a cartridge's rumble as a share of the frame.
+- Only games whose cartridge has a motor rumble, read from the ROM header: on GBA Drill Dozer and
+  WarioWare: Twisted! (every region), on GB/GBC every MBC5 + Rumble cartridge (Pokémon Pinball,
+  Perfect Dark, ...). No other game moves the motor, whatever its core asks.
+- Settings > Rumble is gone. An old `rumble=` line in the state file is ignored.
+
 ## es-1.0.16 (2026-11-08)
 
 - No Game Boy Player on any core: games play as on a handheld. armGBA's Game Boy Player from

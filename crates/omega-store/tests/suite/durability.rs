@@ -163,9 +163,8 @@ fn a_line_the_reader_does_not_know_is_skipped() {
 }
 
 #[test]
-fn a_first_boot_rumbles_and_fast_forwards_silently_at_the_default() {
+fn a_first_boot_fast_forwards_silently_at_the_default() {
     let s = AppState::default();
-    assert!(s.rumble, "boots with the motor off");
     assert_eq!(s.ff_speed, FF_SPEED_DEFAULT);
     assert!(!s.ff_sound, "boots with fast forward audible");
     assert!(!s.colour_correction, "boots with the picture tinted");
@@ -193,7 +192,6 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             muted_hp: true,
             clock_set: true,
             utc_offset_min: -300,
-            rumble: true,
             ff_speed: FF_SPEED_DEFAULT,
             ff_sound: false,
             colour_correction: false,
@@ -216,7 +214,6 @@ fn the_quick_menu_settings_round_trip_as_their_own_lines() {
     let d = tmp_root();
     let s = AppState {
         clock_set: true,
-        rumble: false,
         ff_speed: 2,
         ff_sound: true,
         colour_correction: true,
@@ -226,13 +223,11 @@ fn the_quick_menu_settings_round_trip_as_their_own_lines() {
     write_app_state(d.path(), &s).unwrap();
     assert_eq!(read_app_state(d.path()), s);
     let text = std::fs::read_to_string(d.path().join("Config/emellie-slot.state")).unwrap();
-    for line in [
-        "rumble=0",
-        "ff_speed=2",
-        "ff_sound=1",
-        "colour_correction=1",
-        "wifi=1",
-    ] {
+    assert!(
+        !text.lines().any(|l| l.starts_with("rumble=")),
+        "rumble has no setting any more: {text:?}"
+    );
+    for line in ["ff_speed=2", "ff_sound=1", "colour_correction=1", "wifi=1"] {
         assert!(text.lines().any(|l| l == line), "no {line} in {text:?}");
     }
 }
@@ -295,14 +290,8 @@ fn an_out_of_range_setting_falls_back_to_its_default() {
         .unwrap();
         let s = read_app_state(d.path());
         assert_eq!(
-            (
-                s.rumble,
-                s.ff_speed,
-                s.ff_sound,
-                s.colour_correction,
-                s.wifi
-            ),
-            (true, FF_SPEED_DEFAULT, false, false, false),
+            (s.ff_speed, s.ff_sound, s.colour_correction, s.wifi),
+            (FF_SPEED_DEFAULT, false, false, false),
             "accepted {bad:?}"
         );
         assert_eq!(

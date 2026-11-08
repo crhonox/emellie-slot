@@ -1,9 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use omega_power::{
-    motor_pin, rumble_node, Battery, Charge, DevicePlatform, Duty, LedState, Platform,
-};
+use omega_power::{motor_pin, rumble_node, Battery, Charge, DevicePlatform, LedState, Platform};
 use tempfile::TempDir;
 
 fn sysfs_with(max_brightness: &str, capacity: &str, status: Option<&str>) -> TempDir {
@@ -234,14 +232,11 @@ fn without_force_feedback_the_pmic_motor_pin_rumbles() {
     assert!(p.report().contains("moto"), "{}", p.report());
     p.set_rumble(u16::MAX);
     assert_eq!(fs::read_to_string(&pin).unwrap(), "1");
-    // 61% of full: on for that share of the frames
-    let on = (0..100)
-        .filter(|_| {
-            p.set_rumble(40_000);
-            fs::read_to_string(&pin).unwrap() == "1"
-        })
-        .count();
-    assert!((59..=63).contains(&on), "on {on} frames of 100");
+    // a cart's motor is on or off: any share of a frame keeps it on
+    for _ in 0..10 {
+        p.set_rumble(0x0400);
+        assert_eq!(fs::read_to_string(&pin).unwrap(), "1");
+    }
     p.set_rumble(0);
     assert_eq!(fs::read_to_string(&pin).unwrap(), "0");
 }
@@ -254,40 +249,6 @@ fn a_motor_left_running_is_stopped_when_omega_zero_lets_go_of_it() {
     p.set_rumble(u16::MAX);
     drop(p);
     assert_eq!(fs::read_to_string(&pin).unwrap(), "0");
-}
-
-/// The motor on for each of `frames` frames at `strength`.
-fn duty_run(strength: u16, frames: usize) -> Vec<bool> {
-    let mut duty = Duty::default();
-    (0..frames).map(|_| duty.step(strength)).collect()
-}
-
-#[test]
-fn full_strength_keeps_the_motor_on_and_none_keeps_it_off() {
-    assert!(duty_run(u16::MAX, 30).iter().all(|&on| on));
-    assert!(duty_run(0, 30).iter().all(|&on| !on));
-}
-
-#[test]
-fn a_weaker_rumble_is_the_motor_on_for_that_share_of_the_frames() {
-    let half = duty_run(0x8000, 60);
-    assert!(half[0], "a rumble starts with the motor on");
-    let on = half.iter().filter(|&&on| on).count();
-    assert!((29..=31).contains(&on), "half strength: on {on} frames of 60");
-    let quarter = duty_run(0x4000, 60).iter().filter(|&&on| on).count();
-    assert!((14..=16).contains(&quarter), "a quarter: on {quarter} frames of 60");
-    let faint = duty_run(0x0400, 64);
-    assert!(faint[0], "even a faint rumble is felt as it starts");
-    assert!(faint.iter().filter(|&&on| on).count() <= 2);
-}
-
-#[test]
-fn a_rumble_that_stops_and_starts_again_starts_with_the_motor_on() {
-    let mut duty = Duty::default();
-    assert!(duty.step(0x2000));
-    assert!(!duty.step(0x2000));
-    assert!(!duty.step(0));
-    assert!(duty.step(0x2000), "a new rumble does not wait for the old one's leftovers");
 }
 
 fn leds(d: &TempDir, name: &str, attrs: &[(&str, &str)]) {

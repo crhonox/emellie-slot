@@ -4,7 +4,7 @@ use std::io::Write;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::{Battery, Charge, LedState, Platform};
 
@@ -200,48 +200,16 @@ pub fn rumble_node(sysfs: &Path) -> Option<String> {
     Some(dir.file_name()?.to_string_lossy().into_owned())
 }
 
-/// Turns the strength a core asks for (0 to 0xFFFF) into the motor on or off, one step a frame,
-/// as muOS's input daemon does: the motor has no strength of its own, so a weaker rumble is the
-/// motor on for that share of the frames. A rumble cartridge's motor is the same, switched on and
-/// off by the game. Full strength keeps it on; the first frame of a rumble always turns it on.
-#[derive(Default)]
-pub struct Duty {
-    /// Strength carried over from earlier frames, short of a whole frame on.
-    carried: u32,
-    /// Whether the last frame asked for rumble at all.
-    asked: bool,
-}
-
-impl Duty {
-    pub fn step(&mut self, strength: u16) -> bool {
-        const FULL: u32 = u16::MAX as u32;
-        let strength = u32::from(strength);
-        if strength == 0 {
-            *self = Duty::default();
-            return false;
-        }
-        if !self.asked {
-            self.asked = true;
-            self.carried = FULL - strength;
-        }
-        if strength >= FULL {
-            return true;
-        }
-        self.carried += strength;
-        if self.carried >= FULL {
-            self.carried -= FULL;
-            true
-        } else {
-            false
-        }
-    }
-}
+/// How long one force feedback play runs the motor. The play is renewed every [`FF_REPEAT`]
+/// while the game keeps the motor on, so it never runs out in between; an effect of length 0
+/// ("until stopped") or one much shorter is not felt on the Anbernic handhelds.
+const FF_PULSE: Duration = Duration::from_millis(150);
+const FF_REPEAT: Duration = Duration::from_millis(100);
 
 /// The rumble motor: a force feedback node where the kernel offers one, or the PMIC's motor
 /// pin, which the Anbernic kernel exposes as a power supply's `moto` file instead.
 struct Motor {
     kind: MotorKind,
-    duty: Duty,
 }
 
 enum MotorKind {
@@ -254,10 +222,7 @@ impl Motor {
         let kind = FfMotor::open(sysfs)
             .map(MotorKind::Ff)
             .or_else(|| PinMotor::find(sysfs).map(MotorKind::Pin))?;
-        Some(Motor {
-            kind,
-            duty: Duty::default(),
-        })
+        Some(Motor { kind })
     }
 
     fn name(&self) -> String {
@@ -267,9 +232,12 @@ impl Motor {
         }
     }
 
-    /// Called on every frame while the core asks for rumble, and once with 0 when it stops.
+    /// Called on every frame while the core asks for rumble, and once with 0 when it stops. A
+    /// rumble cartridge's motor is only ever on or off, the game switching it many times a
+    /// frame to make it feel weaker; the core reports that as a share of the frame, which the
+    /// handheld's motor cannot follow, so any rumble at all is the motor on.
     fn drive(&mut self, strength: u16) {
-        let on = self.duty.step(strength);
+        let on = strength > 0;
         match &mut self.kind {
             MotorKind::Ff(m) => m.set(on),
             MotorKind::Pin(m) => {
@@ -322,6 +290,8 @@ struct FfMotor {
     name: String,
     id: i16,
     running: bool,
+    /// When the last play began.
+    played: Instant,
     /// The log has said once that the effect had to be uploaded anew.
     renewed: bool,
 }
@@ -372,15 +342,17 @@ extern "C" {
     fn ioctl(fd: c_int, request: c_ulong, ...) -> c_int;
 }
 
-/// Uploads (id -1) or updates the rumble effect, as muOS's: both motors at full, playing until it
-/// is stopped (length 0).
+/// Uploads (id -1) or updates the rumble effect: one [`FF_PULSE`] with both motors at full.
 fn upload(node: &fs::File, id: i16) -> std::io::Result<i16> {
     let mut effect = FfEffect {
         kind: FF_RUMBLE,
         id,
         direction: 0,
         trigger: FfTrigger::default(),
-        replay: FfReplay::default(),
+        replay: FfReplay {
+            length: FF_PULSE.as_millis() as u16,
+            delay: 0,
+        },
         _align: 0,
         rumble: FfRumble {
             strong: u16::MAX,
@@ -418,19 +390,27 @@ impl FfMotor {
             name,
             id,
             running: false,
+            played: Instant::now(),
             renewed: false,
         })
     }
 
-    /// Turns the motor on or off; only a change reaches the kernel.
+    /// Turns the motor on or off. While on, the play is renewed every [`FF_REPEAT`].
     fn set(&mut self, on: bool) {
-        if on == self.running {
+        if !on {
+            if self.running {
+                self.play(false);
+            }
             return;
         }
-        if on && !self.keep() {
+        if self.running && self.played.elapsed() < FF_REPEAT {
             return;
         }
-        self.play(on);
+        // the effect goes up again before every play: the kernel may have thrown it away
+        if self.keep() {
+            self.play(true);
+            self.played = Instant::now();
+        }
     }
 
     /// Makes sure the kernel still has the effect before it plays, uploading it anew when not.
@@ -446,7 +426,10 @@ impl FfMotor {
             Ok(id) => {
                 if !self.renewed {
                     self.renewed = true;
-                    eprintln!("omega-zero: rumble {}: effect was dropped, uploaded anew", self.name);
+                    eprintln!(
+                        "omega-zero: rumble {}: effect was dropped, uploaded anew",
+                        self.name
+                    );
                 }
                 self.id = id;
                 true

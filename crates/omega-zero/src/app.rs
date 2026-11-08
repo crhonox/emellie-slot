@@ -1169,10 +1169,6 @@ impl App {
         }
     }
 
-    pub fn rumble_enabled(&self) -> bool {
-        self.state.rumble
-    }
-
     pub fn ff_speed(&self) -> u8 {
         self.state.ff_speed
     }
