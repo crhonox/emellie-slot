@@ -1,5 +1,18 @@
 # Changelog
 
+## es-1.0.15 (2026-11-08)
+
+- armGBA has the Game Boy Player, as mGBA emulates it (`cores/armgba/emellie-gbplayer.patch`):
+  found when a game shows the player's logo, it answers the game's transfers, and its rumble
+  reaches the motor, so Pokémon Pinball: Ruby & Sapphire vibrates on armGBA too. Not while a link
+  cable or the Wireless Adapter is on the port. Its state sits in padding the console struct
+  already had, so save states keep their layout and older ones still load.
+- gpSP's Game Boy Player rumble no longer runs on or gets stuck
+  (`cores/gpsp/gbp-rumble-command.patch`): it counted the player's 16-word exchange round and
+  round, drifted whenever a frame had another number of transfers, and read handshake words as
+  "start". The exchange now starts over every frame, and only the start command (0x22) starts
+  the motor, as in mGBA.
+
 ## es-1.0.14 (2026-11-08)
 
 - Rumble works: the force feedback effect is uploaded again before every pulse. The kernel drops
