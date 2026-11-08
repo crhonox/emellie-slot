@@ -17,6 +17,9 @@ use crate::persist;
 /// How many frames a core runs before the card stops noting it as opening: two seconds, well
 /// past the first frame, where a core that cannot take its options gives up.
 const SETTLED_FRAMES: u64 = 120;
+/// Rumble starts and stops written to the log a game: enough to see it works, not a line a
+/// pulse.
+const RUMBLE_LOG_MAX: u8 = 6;
 
 pub struct Session {
     root: PathBuf,
@@ -28,6 +31,10 @@ pub struct Session {
     rewinding: bool,
     fast: bool,
     motor: u16,
+    /// Rumble starts and stops written to the log so far, kept to a few a game.
+    rumble_logged: u8,
+    /// The core asked for rumble with Settings > Rumble off, and the log says so.
+    rumble_off_logged: bool,
     reloading: bool,
     driven: bool,
     /// The system and stem of the game the core was last opened for.
@@ -62,6 +69,8 @@ impl Session {
             rewinding: false,
             fast: false,
             motor: 0,
+            rumble_logged: 0,
+            rumble_off_logged: false,
             reloading: false,
             driven: false,
             running: None,
@@ -93,6 +102,14 @@ impl Session {
     pub fn rumble(&mut self, strength: u16) {
         if strength == 0 && self.motor == 0 {
             return;
+        }
+        if (strength == 0) != (self.motor == 0) && self.rumble_logged < RUMBLE_LOG_MAX {
+            self.rumble_logged += 1;
+            if strength == 0 {
+                eprintln!("omega-zero: rumble off");
+            } else {
+                eprintln!("omega-zero: rumble on, strength {strength:#06x}");
+            }
         }
         self.motor = strength;
         self.app.set_rumble(strength);
@@ -288,9 +305,18 @@ impl Session {
     }
 
     fn sync_rumble(&mut self) {
-        let want = match &self.emu {
-            Some(emu) if self.playing() && self.app.rumble_enabled() => emu.rumble().strength(),
+        let asked = match &self.emu {
+            Some(emu) if self.playing() => emu.rumble().strength(),
             _ => 0,
+        };
+        let want = if self.app.rumble_enabled() {
+            asked
+        } else {
+            if asked > 0 && !self.rumble_off_logged {
+                self.rumble_off_logged = true;
+                eprintln!("omega-zero: rumble asked for, but Settings > Rumble is off");
+            }
+            0
         };
         self.rumble(want);
     }
@@ -469,6 +495,8 @@ impl Session {
         self.app.set_snapshot(Box::new(emu.snapshot()));
         self.emu = Some(emu);
         self.running = Some((platform, stem.to_string()));
+        self.rumble_logged = 0;
+        self.rumble_off_logged = false;
     }
 
     /// Takes the note of the core opening off the card once it has run a moment, or once there

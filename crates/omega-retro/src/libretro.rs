@@ -359,6 +359,9 @@ unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
                 return false;
             }
             with_host(|h| {
+                if !h.asked_for_rumble {
+                    eprintln!("omega-retro: the core asked for rumble");
+                }
                 h.asked_for_rumble = true;
                 (*(data as *mut RumbleInterface)).set_rumble_state = set_rumble_state;
             })

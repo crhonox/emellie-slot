@@ -1,5 +1,11 @@
 # Changelog
 
+## es-1.0.13 (2026-11-08)
+
+- Rumble shows in the log (`emellie-slot.log`), to find why games with a rumble cart do not
+  vibrate: when the core asks for rumble, when it starts and stops (six lines a game at most),
+  and when it is asked for with Settings > Rumble off.
+
 ## es-1.0.12 (2026-11-08)
 
 - DS_Overlay, the single-screen grid overlay from es-1.0.11, fine-tuned.
