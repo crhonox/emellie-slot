@@ -4,7 +4,7 @@ use std::io::Write;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::{Battery, Charge, LedState, Platform};
 
@@ -200,6 +200,32 @@ pub fn rumble_node(sysfs: &Path) -> Option<String> {
     Some(dir.file_name()?.to_string_lossy().into_owned())
 }
 
+/// How long each force feedback pulse lasts. spruceOS drives the Anbernic XX motor with 150 ms
+/// effects (spruce/bin64/rumble <event> <magnitude> 150): its measurements on an RG SP found 150 ms
+/// felt normal, while an effect of length 0 ("until stopped") never moves the motor at all.
+pub const FF_PULSE: Duration = Duration::from_millis(150);
+
+/// How often a held rumble starts the next pulse, less than [`FF_PULSE`] so they overlap and
+/// the motor never stops between them.
+pub const FF_REPEAT: Duration = Duration::from_millis(100);
+
+/// The motor's magnitude for a core's strength (1..=0xFFFF), scaled into spruceOS's range of
+/// 0x8000 (its "Weak") to 0xFFFF: on an RG SP 0x1000 and 0x2000 could not be felt, 0x8000
+/// could. 0 stays 0, which is off.
+pub fn ff_magnitude(strength: u16) -> u16 {
+    if strength == 0 {
+        0
+    } else {
+        0x8000 | (strength >> 1)
+    }
+}
+
+/// Whether a held rumble starts a pulse now: when the motor is still, or the last pulse
+/// began [`FF_REPEAT`] or more ago.
+pub fn pulse_due(running: bool, since_last: Duration) -> bool {
+    !running || since_last >= FF_REPEAT
+}
+
 pub fn motor_change(strength: u16, running: bool) -> Option<bool> {
     match (strength > 0, running) {
         (true, false) => Some(true),
@@ -229,17 +255,15 @@ impl Motor {
         }
     }
 
-    fn running(&self) -> bool {
+    /// Called on every frame while the core asks for rumble, and once with 0 when it stops.
+    fn drive(&mut self, strength: u16) {
         match self {
-            Motor::Ff(m) => m.running,
-            Motor::Pin(m) => m.running,
-        }
-    }
-
-    fn play(&mut self, on: bool) {
-        match self {
-            Motor::Ff(m) => m.play(on),
-            Motor::Pin(m) => m.play(on),
+            Motor::Ff(m) => m.drive(strength),
+            Motor::Pin(m) => {
+                if let Some(on) = motor_change(strength, m.running) {
+                    m.play(on);
+                }
+            }
         }
     }
 }
@@ -284,7 +308,11 @@ struct FfMotor {
     node: fs::File,
     name: String,
     id: i16,
+    /// The magnitude the uploaded effect has now.
+    magnitude: u16,
     running: bool,
+    /// When the last pulse began.
+    pulsed: Instant,
 }
 
 #[repr(C)]
@@ -333,6 +361,37 @@ extern "C" {
     fn ioctl(fd: c_int, request: c_ulong, ...) -> c_int;
 }
 
+/// Uploads (id -1) or updates the rumble effect: one [`FF_PULSE`] at `magnitude` on both motors.
+fn upload(node: &fs::File, id: i16, magnitude: u16) -> std::io::Result<i16> {
+    let mut effect = FfEffect {
+        kind: FF_RUMBLE,
+        id,
+        direction: 0,
+        trigger: FfTrigger::default(),
+        replay: FfReplay {
+            length: FF_PULSE.as_millis() as u16,
+            delay: 0,
+        },
+        _align: 0,
+        rumble: FfRumble {
+            strong: magnitude,
+            weak: magnitude,
+        },
+        _tail: [0; 28],
+    };
+    let rc = unsafe {
+        ioctl(
+            node.as_raw_fd(),
+            EVIOCSFF,
+            &mut effect as *mut FfEffect as *mut c_void,
+        )
+    };
+    if rc < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(effect.id)
+}
+
 impl FfMotor {
     fn open(sysfs: &Path) -> Option<FfMotor> {
         let name = rumble_node(sysfs)?;
@@ -342,39 +401,37 @@ impl FfMotor {
             .open(Path::new(DEV_INPUT).join(&name))
             .map_err(|e| eprintln!("omega-zero: rumble {name}: {e}"))
             .ok()?;
-        let mut effect = FfEffect {
-            kind: FF_RUMBLE,
-            id: -1,
-            direction: 0,
-            trigger: FfTrigger::default(),
-            replay: FfReplay::default(),
-            _align: 0,
-            rumble: FfRumble {
-                strong: u16::MAX,
-                weak: u16::MAX,
-            },
-            _tail: [0; 28],
-        };
-        let rc = unsafe {
-            ioctl(
-                node.as_raw_fd(),
-                EVIOCSFF,
-                &mut effect as *mut FfEffect as *mut c_void,
-            )
-        };
-        if rc < 0 {
-            eprintln!(
-                "omega-zero: rumble {name}: {}",
-                std::io::Error::last_os_error()
-            );
-            return None;
-        }
+        let id = upload(&node, -1, u16::MAX)
+            .map_err(|e| eprintln!("omega-zero: rumble {name}: {e}"))
+            .ok()?;
         Some(FfMotor {
             node,
             name,
-            id: effect.id,
+            id,
+            magnitude: u16::MAX,
             running: false,
+            pulsed: Instant::now(),
         })
+    }
+
+    fn drive(&mut self, strength: u16) {
+        if strength == 0 {
+            if self.running {
+                self.play(false);
+            }
+            return;
+        }
+        let magnitude = ff_magnitude(strength);
+        if magnitude != self.magnitude {
+            match upload(&self.node, self.id, magnitude) {
+                Ok(_) => self.magnitude = magnitude,
+                Err(e) => eprintln!("omega-zero: rumble {}: {e}", self.name),
+            }
+        }
+        if pulse_due(self.running, self.pulsed.elapsed()) {
+            self.play(true);
+            self.pulsed = Instant::now();
+        }
     }
 
     fn play(&mut self, on: bool) {
@@ -656,8 +713,6 @@ impl Platform for DevicePlatform {
         let Some(motor) = &mut self.motor else {
             return;
         };
-        if let Some(on) = motor_change(strength, motor.running()) {
-            motor.play(on);
-        }
+        motor.drive(strength);
     }
 }

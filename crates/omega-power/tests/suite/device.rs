@@ -1,8 +1,10 @@
 use std::fs;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use omega_power::{
-    motor_change, motor_pin, rumble_node, Battery, Charge, DevicePlatform, LedState, Platform,
+    ff_magnitude, motor_change, motor_pin, pulse_due, rumble_node, Battery, Charge, DevicePlatform,
+    LedState, Platform, FF_PULSE, FF_REPEAT,
 };
 use tempfile::TempDir;
 
@@ -257,6 +259,36 @@ fn only_the_edge_between_still_and_moving_reaches_the_motor() {
     assert_eq!(motor_change(65_535, true), None);
     assert_eq!(motor_change(1, true), None);
     assert_eq!(motor_change(0, true), Some(false));
+}
+
+#[test]
+fn the_ff_motor_never_drops_below_what_an_rg_sp_can_feel() {
+    assert_eq!(ff_magnitude(0), 0, "0 is off");
+    assert_eq!(
+        ff_magnitude(1),
+        0x8000,
+        "spruceOS's Weak, the floor felt on an RG SP"
+    );
+    assert_eq!(ff_magnitude(0x4000), 0xA000);
+    assert_eq!(ff_magnitude(u16::MAX), u16::MAX);
+}
+
+#[test]
+fn a_held_rumble_is_overlapping_150_ms_pulses() {
+    assert_eq!(FF_PULSE, Duration::from_millis(150), "spruceOS's pulse");
+    assert!(
+        FF_REPEAT < FF_PULSE,
+        "a gap between pulses would stutter the motor"
+    );
+    assert!(
+        pulse_due(false, Duration::ZERO),
+        "a still motor starts at once"
+    );
+    assert!(
+        !pulse_due(true, Duration::from_millis(16)),
+        "a pulse every frame"
+    );
+    assert!(pulse_due(true, FF_REPEAT));
 }
 
 fn leds(d: &TempDir, name: &str, attrs: &[(&str, &str)]) {

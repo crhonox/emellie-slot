@@ -88,8 +88,10 @@ impl Session {
         self.sink.ring()
     }
 
+    /// Hands the motor the core's strength. While it is not 0 this goes out every frame: the
+    /// force feedback motor plays short pulses and starts the next one as the last runs out.
     pub fn rumble(&mut self, strength: u16) {
-        if strength == self.motor {
+        if strength == 0 && self.motor == 0 {
             return;
         }
         self.motor = strength;

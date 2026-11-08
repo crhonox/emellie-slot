@@ -9,8 +9,8 @@ pub use baseos::{
     BASEOS_RELEASE,
 };
 pub use device::{
-    has_bit, headphones_in, motor_change, motor_pin, record_first_frame, rumble_node,
-    trace_first_frame, uptime_seconds, DevicePlatform,
+    ff_magnitude, has_bit, headphones_in, motor_change, motor_pin, pulse_due, record_first_frame,
+    rumble_node, trace_first_frame, uptime_seconds, DevicePlatform, FF_PULSE, FF_REPEAT,
 };
 pub use motor::Motor;
 pub use power::Power;
@@ -52,6 +52,8 @@ pub trait Platform: Send {
     fn root(&self) -> &Path;
     fn now(&self) -> i64;
     fn set_clock(&mut self, secs: i64);
+    /// The rumble the core asks for: called on every frame while `strength` is not 0, and once
+    /// with 0 when it stops.
     fn set_rumble(&mut self, strength: u16);
 
     fn relink_adb(&mut self) -> bool {

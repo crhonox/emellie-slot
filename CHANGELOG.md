@@ -1,5 +1,12 @@
 # Changelog
 
+## es-1.0.10 (2026-11-07)
+
+- Rumble works the way spruceOS drives the Anbernic XX motor: 150 ms force feedback pulses,
+  started again every 100 ms while the core asks, at 0x8000 to 0xFFFF (the core's strength
+  scaled into that range). The old single effect of length 0 never moved the motor on the RG SP
+  or the CubeXX.
+
 ## es-1.0.9 (2026-11-07)
 
 - DSperate is at `a165843` (3.3.0: slot-2 GBA cartridge and Rumble Pak, analog patches, the 3D
