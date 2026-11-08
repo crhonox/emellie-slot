@@ -313,6 +313,8 @@ struct FfMotor {
     running: bool,
     /// When the last pulse began.
     pulsed: Instant,
+    /// The log has said once that the effect had to be uploaded anew.
+    renewed: bool,
 }
 
 #[repr(C)]
@@ -411,6 +413,7 @@ impl FfMotor {
             magnitude: u16::MAX,
             running: false,
             pulsed: Instant::now(),
+            renewed: false,
         })
     }
 
@@ -422,16 +425,41 @@ impl FfMotor {
             return;
         }
         let magnitude = ff_magnitude(strength);
-        if magnitude != self.magnitude {
-            match upload(&self.node, self.id, magnitude) {
-                Ok(_) => self.magnitude = magnitude,
-                Err(e) => eprintln!("omega-zero: rumble {}: {e}", self.name),
-            }
+        let due = pulse_due(self.running, self.pulsed.elapsed());
+        // the effect goes up again before every pulse, not only when its magnitude changes: the
+        // kernel may have thrown it away since (see `refresh`)
+        if (due || magnitude != self.magnitude) && !self.refresh(magnitude) {
+            return;
         }
-        if pulse_due(self.running, self.pulsed.elapsed()) {
+        if due {
             self.play(true);
             self.pulsed = Instant::now();
         }
+    }
+
+    /// Puts the effect up at `magnitude`, as a new one when the kernel no longer has ours. The
+    /// kernel drops the effects a file uploaded whenever any copy of its descriptor is closed,
+    /// and every program the frontend starts (curl, amixer, the Wi-Fi scripts) closes the copy
+    /// it inherited as it starts: by the time a game rumbles, the effect from boot is usually
+    /// gone, and updating it fails with EINVAL.
+    fn refresh(&mut self, magnitude: u16) -> bool {
+        if upload(&self.node, self.id, magnitude).is_err() {
+            match upload(&self.node, -1, magnitude) {
+                Ok(id) => {
+                    if !self.renewed {
+                        self.renewed = true;
+                        eprintln!("omega-zero: rumble {}: effect was dropped, uploaded anew", self.name);
+                    }
+                    self.id = id;
+                }
+                Err(e) => {
+                    eprintln!("omega-zero: rumble {}: {e}", self.name);
+                    return false;
+                }
+            }
+        }
+        self.magnitude = magnitude;
+        true
     }
 
     fn play(&mut self, on: bool) {

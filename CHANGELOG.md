@@ -1,5 +1,15 @@
 # Changelog
 
+## es-1.0.14 (2026-11-08)
+
+- Rumble works: the force feedback effect is uploaded again before every pulse. The kernel drops
+  a file's effects whenever any copy of it is closed, and every program the frontend starts
+  (curl, amixer, the Wi-Fi scripts) closes the copy it inherited, so the effect from boot was
+  gone by the time a game rumbled and updating it failed with "Invalid argument".
+- mGBA plays Game Boy Player games as on one (`mgba_force_gbp`), so Pokémon Pinball: Ruby &
+  Sapphire and the others that rumble through it vibrate; it stays off over the link cable,
+  which uses the same port. armGBA has no Game Boy Player.
+
 ## es-1.0.13 (2026-11-08)
 
 - Rumble shows in the log (`emellie-slot.log`), to find why games with a rumble cart do not
