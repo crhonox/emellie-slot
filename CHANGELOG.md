@@ -1,5 +1,12 @@
 # Changelog
 
+## es-1.0.11 (2026-11-08)
+
+- DSperate's single-screen grid overlay (`System/dsperate/grid_s0.bmp`) is now DS_Overlay, in
+  place of the 2.5x DS_3x_Grid_25 grid. It shows in the same cases as before: integer scale off,
+  seam blend or blend_linear, the screen filling the 640x480 panel. The original PNG is kept in
+  `emellie_new_assets/ds-grid-640x480.png`.
+
 ## es-1.0.10 (2026-11-07)
 
 - Rumble works the way spruceOS drives the Anbernic XX motor: 150 ms force feedback pulses,
