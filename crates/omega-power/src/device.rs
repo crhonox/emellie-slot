@@ -4,7 +4,7 @@ use std::io::Write;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::{Battery, Charge, LedState, Platform};
 
@@ -200,67 +200,80 @@ pub fn rumble_node(sysfs: &Path) -> Option<String> {
     Some(dir.file_name()?.to_string_lossy().into_owned())
 }
 
-/// How long each force feedback pulse lasts. spruceOS drives the Anbernic XX motor with 150 ms
-/// effects (spruce/bin64/rumble <event> <magnitude> 150): its measurements on an RG SP found 150 ms
-/// felt normal, while an effect of length 0 ("until stopped") never moves the motor at all.
-pub const FF_PULSE: Duration = Duration::from_millis(150);
-
-/// How often a held rumble starts the next pulse, less than [`FF_PULSE`] so they overlap and
-/// the motor never stops between them.
-pub const FF_REPEAT: Duration = Duration::from_millis(100);
-
-/// The motor's magnitude for a core's strength (1..=0xFFFF), scaled into spruceOS's range of
-/// 0x8000 (its "Weak") to 0xFFFF: on an RG SP 0x1000 and 0x2000 could not be felt, 0x8000
-/// could. 0 stays 0, which is off.
-pub fn ff_magnitude(strength: u16) -> u16 {
-    if strength == 0 {
-        0
-    } else {
-        0x8000 | (strength >> 1)
-    }
+/// Turns the strength a core asks for (0 to 0xFFFF) into the motor on or off, one step a frame,
+/// as muOS's input daemon does: the motor has no strength of its own, so a weaker rumble is the
+/// motor on for that share of the frames. A rumble cartridge's motor is the same, switched on and
+/// off by the game. Full strength keeps it on; the first frame of a rumble always turns it on.
+#[derive(Default)]
+pub struct Duty {
+    /// Strength carried over from earlier frames, short of a whole frame on.
+    carried: u32,
+    /// Whether the last frame asked for rumble at all.
+    asked: bool,
 }
 
-/// Whether a held rumble starts a pulse now: when the motor is still, or the last pulse
-/// began [`FF_REPEAT`] or more ago.
-pub fn pulse_due(running: bool, since_last: Duration) -> bool {
-    !running || since_last >= FF_REPEAT
-}
-
-pub fn motor_change(strength: u16, running: bool) -> Option<bool> {
-    match (strength > 0, running) {
-        (true, false) => Some(true),
-        (false, true) => Some(false),
-        _ => None,
+impl Duty {
+    pub fn step(&mut self, strength: u16) -> bool {
+        const FULL: u32 = u16::MAX as u32;
+        let strength = u32::from(strength);
+        if strength == 0 {
+            *self = Duty::default();
+            return false;
+        }
+        if !self.asked {
+            self.asked = true;
+            self.carried = FULL - strength;
+        }
+        if strength >= FULL {
+            return true;
+        }
+        self.carried += strength;
+        if self.carried >= FULL {
+            self.carried -= FULL;
+            true
+        } else {
+            false
+        }
     }
 }
 
 /// The rumble motor: a force feedback node where the kernel offers one, or the PMIC's motor
 /// pin, which the Anbernic kernel exposes as a power supply's `moto` file instead.
-enum Motor {
+struct Motor {
+    kind: MotorKind,
+    duty: Duty,
+}
+
+enum MotorKind {
     Ff(FfMotor),
     Pin(PinMotor),
 }
 
 impl Motor {
     fn open(sysfs: &Path) -> Option<Motor> {
-        FfMotor::open(sysfs)
-            .map(Motor::Ff)
-            .or_else(|| PinMotor::find(sysfs).map(Motor::Pin))
+        let kind = FfMotor::open(sysfs)
+            .map(MotorKind::Ff)
+            .or_else(|| PinMotor::find(sysfs).map(MotorKind::Pin))?;
+        Some(Motor {
+            kind,
+            duty: Duty::default(),
+        })
     }
 
     fn name(&self) -> String {
-        match self {
-            Motor::Ff(m) => m.name.clone(),
-            Motor::Pin(m) => m.path.display().to_string(),
+        match &self.kind {
+            MotorKind::Ff(m) => m.name.clone(),
+            MotorKind::Pin(m) => m.path.display().to_string(),
         }
     }
 
     /// Called on every frame while the core asks for rumble, and once with 0 when it stops.
     fn drive(&mut self, strength: u16) {
-        match self {
-            Motor::Ff(m) => m.drive(strength),
-            Motor::Pin(m) => {
-                if let Some(on) = motor_change(strength, m.running) {
+        let on = self.duty.step(strength);
+        match &mut self.kind {
+            MotorKind::Ff(m) => m.set(on),
+            MotorKind::Pin(m) => {
+                if on != m.running {
                     m.play(on);
                 }
             }
@@ -308,11 +321,7 @@ struct FfMotor {
     node: fs::File,
     name: String,
     id: i16,
-    /// The magnitude the uploaded effect has now.
-    magnitude: u16,
     running: bool,
-    /// When the last pulse began.
-    pulsed: Instant,
     /// The log has said once that the effect had to be uploaded anew.
     renewed: bool,
 }
@@ -363,21 +372,19 @@ extern "C" {
     fn ioctl(fd: c_int, request: c_ulong, ...) -> c_int;
 }
 
-/// Uploads (id -1) or updates the rumble effect: one [`FF_PULSE`] at `magnitude` on both motors.
-fn upload(node: &fs::File, id: i16, magnitude: u16) -> std::io::Result<i16> {
+/// Uploads (id -1) or updates the rumble effect, as muOS's: both motors at full, playing until it
+/// is stopped (length 0).
+fn upload(node: &fs::File, id: i16) -> std::io::Result<i16> {
     let mut effect = FfEffect {
         kind: FF_RUMBLE,
         id,
         direction: 0,
         trigger: FfTrigger::default(),
-        replay: FfReplay {
-            length: FF_PULSE.as_millis() as u16,
-            delay: 0,
-        },
+        replay: FfReplay::default(),
         _align: 0,
         rumble: FfRumble {
-            strong: magnitude,
-            weak: magnitude,
+            strong: u16::MAX,
+            weak: u16::MAX / 2,
         },
         _tail: [0; 28],
     };
@@ -403,63 +410,52 @@ impl FfMotor {
             .open(Path::new(DEV_INPUT).join(&name))
             .map_err(|e| eprintln!("omega-zero: rumble {name}: {e}"))
             .ok()?;
-        let id = upload(&node, -1, u16::MAX)
+        let id = upload(&node, -1)
             .map_err(|e| eprintln!("omega-zero: rumble {name}: {e}"))
             .ok()?;
         Some(FfMotor {
             node,
             name,
             id,
-            magnitude: u16::MAX,
             running: false,
-            pulsed: Instant::now(),
             renewed: false,
         })
     }
 
-    fn drive(&mut self, strength: u16) {
-        if strength == 0 {
-            if self.running {
-                self.play(false);
-            }
+    /// Turns the motor on or off; only a change reaches the kernel.
+    fn set(&mut self, on: bool) {
+        if on == self.running {
             return;
         }
-        let magnitude = ff_magnitude(strength);
-        let due = pulse_due(self.running, self.pulsed.elapsed());
-        // the effect goes up again before every pulse, not only when its magnitude changes: the
-        // kernel may have thrown it away since (see `refresh`)
-        if (due || magnitude != self.magnitude) && !self.refresh(magnitude) {
+        if on && !self.keep() {
             return;
         }
-        if due {
-            self.play(true);
-            self.pulsed = Instant::now();
-        }
+        self.play(on);
     }
 
-    /// Puts the effect up at `magnitude`, as a new one when the kernel no longer has ours. The
-    /// kernel drops the effects a file uploaded whenever any copy of its descriptor is closed,
-    /// and every program the frontend starts (curl, amixer, the Wi-Fi scripts) closes the copy
-    /// it inherited as it starts: by the time a game rumbles, the effect from boot is usually
-    /// gone, and updating it fails with EINVAL.
-    fn refresh(&mut self, magnitude: u16) -> bool {
-        if upload(&self.node, self.id, magnitude).is_err() {
-            match upload(&self.node, -1, magnitude) {
-                Ok(id) => {
-                    if !self.renewed {
-                        self.renewed = true;
-                        eprintln!("omega-zero: rumble {}: effect was dropped, uploaded anew", self.name);
-                    }
-                    self.id = id;
+    /// Makes sure the kernel still has the effect before it plays, uploading it anew when not.
+    /// The kernel drops the effects a file uploaded whenever any copy of its descriptor is
+    /// closed, and every program the frontend starts (curl, amixer, the Wi-Fi scripts) closes the
+    /// copy it inherited as it starts; playing a dropped effect fails silently. Updating it
+    /// fails instead, with EINVAL, which is how this finds out.
+    fn keep(&mut self) -> bool {
+        if upload(&self.node, self.id).is_ok() {
+            return true;
+        }
+        match upload(&self.node, -1) {
+            Ok(id) => {
+                if !self.renewed {
+                    self.renewed = true;
+                    eprintln!("omega-zero: rumble {}: effect was dropped, uploaded anew", self.name);
                 }
-                Err(e) => {
-                    eprintln!("omega-zero: rumble {}: {e}", self.name);
-                    return false;
-                }
+                self.id = id;
+                true
+            }
+            Err(e) => {
+                eprintln!("omega-zero: rumble {}: {e}", self.name);
+                false
             }
         }
-        self.magnitude = magnitude;
-        true
     }
 
     fn play(&mut self, on: bool) {

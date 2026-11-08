@@ -231,8 +231,6 @@ pub fn apply_link_options(core: &mut LibretroCore, which: Core, player: u8) {
         return;
     }
     core.set_option("mgba_link", "on");
-    // the Game Boy Player sits on the link port, which the cable needs
-    core.set_option("mgba_force_gbp", "OFF");
     core.set_option("mgba_link_player", &player.to_string());
     eprintln!("omega-zero: core: link mode on, player {player}");
 }
@@ -264,8 +262,8 @@ pub fn apply_core_options(
 /// The PlayStation runs its own BIOS from BIOS/ when one is there and its
 /// built-in one otherwise, and keeps memory card 1 as the game's save, in Saves/PS1; the
 /// second card, which pcsx_rearmed would keep in a file of its own in Saves, is left out.
-/// mGBA plays a game made for the Game Boy Player as on one, for its rumble, except over the
-/// link cable. PicoDrive and Genesis Plus GX skip frames as mGBA does; FCEUmm and Nestopia have no skipping.
+/// mGBA has no Game Boy Player, so a game made for one plays as on a handheld.
+/// PicoDrive and Genesis Plus GX skip frames as mGBA does; FCEUmm and Nestopia have no skipping.
 /// armGBA has no frame skipping and no link here: its link mode is off, so `serial` never reaches
 /// it; it boots a real BIOS through its intro, else its own BIOS straight into the game.
 pub fn core_options(
@@ -282,10 +280,8 @@ pub fn core_options(
             put("mgba_sgb_borders", "OFF");
             put("mgba_gb_colors_preset", "1");
             put("mgba_gb_colors", "GBC Dark Green →A");
-            // the Game Boy Player's rumble, which Pokémon Pinball: Ruby & Sapphire and a few
-            // other GBA games use instead of a rumble cartridge: mGBA only looks for it when told
-            // to, and only games that show the Game Boy Player logo take it up
-            put("mgba_force_gbp", "ON");
+            // no Game Boy Player: games play as on a handheld
+            put("mgba_force_gbp", "OFF");
         }
         Core::Gpsp => {
             put("gpsp_frameskip", "auto");
@@ -337,9 +333,9 @@ mod tests {
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
-    fn mgba_looks_for_the_game_boy_player_for_its_rumble() {
+    fn mgba_has_no_game_boy_player() {
         let options = core_options(Core::Mgba, "auto", false, true);
-        assert!(options.contains(&("mgba_force_gbp", "ON".to_string())));
+        assert!(options.contains(&("mgba_force_gbp", "OFF".to_string())));
     }
 
     #[test]

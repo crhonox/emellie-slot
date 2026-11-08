@@ -1,5 +1,18 @@
 # Changelog
 
+## es-1.0.16 (2026-11-08)
+
+- No Game Boy Player on any core: games play as on a handheld. armGBA's Game Boy Player from
+  es-1.0.15 is gone, gpSP no longer picks it from its game list (`cores/gpsp/no-gb-player.patch`;
+  its rumble fix from es-1.0.15 went with it) and mGBA's `mgba_force_gbp` is off. Rumble
+  cartridges still rumble (Drill Dozer, WarioWare: Twisted!, Game Boy rumble carts).
+- The motor is driven as muOS drives it: one force feedback effect at full, playing until
+  stopped, switched on and off. A weaker rumble is the motor on for that share of the frames, as
+  a rumble cartridge's motor is switched by the game; the 150 ms pulses and the 0x8000 floor
+  from es-1.0.10 are gone. Before the motor starts, an effect the kernel dropped is uploaded
+  again.
+- The rumble log lines from es-1.0.13 are gone.
+
 ## es-1.0.15 (2026-11-08)
 
 - armGBA has the Game Boy Player, as mGBA emulates it (`cores/armgba/emellie-gbplayer.patch`):

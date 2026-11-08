@@ -1,0 +1,16 @@
+--- a/gba_memory.c
++++ b/gba_memory.c
+@@ -3040,6 +3040,13 @@
+    flash_mode = FLASH_BASE_MODE;
+    flash_bank_num = 0;
+ 
++   /* No Game Boy Player: games play as on a handheld, where nothing
++    * answers the player's check, so none of its rumble or button signal.
++    * The ROM database names it for some games (FLAGS_GBA_PLAYER), and
++    * the gpsp_serial option could ask for it. */
++   if (serial_mode == SERIAL_MODE_GBP)
++      serial_mode = SERIAL_MODE_DISABLED;
++
+    if (force_rtc != FEAT_AUTODETECT)
+       rtc_enabled = (force_rtc == FEAT_ENABLE);
+    if (force_rumble != FEAT_AUTODETECT)
