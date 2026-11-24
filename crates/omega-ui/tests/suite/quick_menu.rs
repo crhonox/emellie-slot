@@ -25,7 +25,9 @@ fn px(face: &UndoFace, x: u32, y: u32) -> Option<[u8; 3]> {
 fn flow_rows(lit: SettingsRow) -> Vec<RowShown> {
     let value = |row| match row {
         SettingsRow::FastForward => Some("6X"),
-        SettingsRow::FastForwardSound | SettingsRow::ColourCorrection => Some("OFF"),
+        SettingsRow::FastForwardSound
+        | SettingsRow::ColourCorrection
+        | SettingsRow::FrameBlending => Some("OFF"),
         SettingsRow::DateTime => Some("OCT 10 16:00"),
         SettingsRow::Network => Some("HOME"),
         SettingsRow::Bluetooth => Some("8BITDO SN30 PRO"),
@@ -285,7 +287,8 @@ fn the_rows_left_and_right_change_step_between_arrows_and_the_rows_that_open_end
         [
             SettingsRow::FastForward,
             SettingsRow::FastForwardSound,
-            SettingsRow::ColourCorrection
+            SettingsRow::ColourCorrection,
+            SettingsRow::FrameBlending
         ]
     );
     let pal = palette(NIGHT);
@@ -459,6 +462,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
             "Fast Forward",
             "Fast Forward Sound",
             "Colour Correction",
+            "Frame Blending",
             "Labels",
             "Achievements",
             "Date & Time",
@@ -490,7 +494,7 @@ fn the_configs_come_first_and_the_handheld_itself_after() {
         .iter()
         .take_while(|g| **g == SettingsGroup::Configs)
         .count();
-    assert_eq!(configs, 5, "{groups:?}");
+    assert_eq!(configs, 6, "{groups:?}");
     assert!(
         groups[configs..]
             .iter()

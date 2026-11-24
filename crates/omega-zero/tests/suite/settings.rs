@@ -138,6 +138,7 @@ fn up_and_down_move_the_bar_and_wrap_at_the_ends() {
         SettingsRow::FastForward,
         SettingsRow::FastForwardSound,
         SettingsRow::ColourCorrection,
+        SettingsRow::FrameBlending,
         SettingsRow::Labels,
         SettingsRow::Achievements,
         SettingsRow::DateTime,
@@ -234,6 +235,40 @@ fn colour_correction_leaves_the_settings_around_it_alone() {
     assert_eq!(
         (s.ff_speed, s.ff_sound),
         (AppState::default().ff_speed, AppState::default().ff_sound),
+        "the row reached a setting that is not its own"
+    );
+}
+
+#[test]
+fn frame_blending_flips_on_either_arrow_and_saves_alone() {
+    let (d, mut a, _) = on_carousel();
+    open_at(&mut a, SettingsRow::FrameBlending);
+    assert!(!a.frame_blending(), "frame blending is on by default");
+    assert_eq!(
+        a.settings_value(SettingsRow::FrameBlending),
+        Some(QuickValue::Off)
+    );
+    for (btn, want) in [(Btn::Right, true), (Btn::Left, false), (Btn::Left, true)] {
+        press(&mut a, btn);
+        assert_eq!(a.frame_blending(), want, "{btn:?}");
+        assert_eq!(
+            read_app_state(d.path()).frame_blend,
+            want,
+            "{btn:?} never reached the card"
+        );
+        assert_eq!(
+            a.settings_value(SettingsRow::FrameBlending),
+            Some(QuickValue::flag(want))
+        );
+    }
+    let s = read_app_state(d.path());
+    assert_eq!(
+        (s.ff_speed, s.ff_sound, s.colour_correction),
+        (
+            AppState::default().ff_speed,
+            AppState::default().ff_sound,
+            AppState::default().colour_correction
+        ),
         "the row reached a setting that is not its own"
     );
 }
@@ -515,6 +550,7 @@ fn the_rows_say_what_is_set_in_flows_capitals() {
         [
             text("4X"),
             text("ON"),
+            text("OFF"),
             text("OFF"),
             None,
             text("ON"),

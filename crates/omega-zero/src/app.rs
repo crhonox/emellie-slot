@@ -1184,6 +1184,11 @@ impl App {
         self.state.colour_correction
     }
 
+    /// Settings > Frame Blending: each game picture is shown mixed with the one before it.
+    pub fn frame_blending(&self) -> bool {
+        self.state.frame_blend
+    }
+
     pub fn powering_off(&self) -> bool {
         self.powering_off
     }

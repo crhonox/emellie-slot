@@ -159,6 +159,11 @@ impl Compositor {
         self.gain = blue_light_gain(step);
     }
 
+    /// Interframe blending: each game picture shown mixed half and half with the one before it.
+    pub fn set_frame_blend(&mut self, on: bool) {
+        self.game.set_blend(on);
+    }
+
     pub fn set_screen_power(&mut self, t: f32) {
         self.game.set_power(t);
     }

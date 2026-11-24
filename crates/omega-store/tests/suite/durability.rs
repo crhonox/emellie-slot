@@ -193,6 +193,7 @@ fn a_card_from_before_the_settings_keeps_all_its_values() {
             ff_speed: FF_SPEED_DEFAULT,
             ff_sound: false,
             colour_correction: false,
+            frame_blend: false,
             wifi: false,
             ssh: true,
             bluetooth: false,
@@ -215,6 +216,7 @@ fn the_quick_menu_settings_round_trip_as_their_own_lines() {
         ff_speed: 2,
         ff_sound: true,
         colour_correction: true,
+        frame_blend: true,
         wifi: true,
         ..AppState::default()
     };
@@ -225,7 +227,13 @@ fn the_quick_menu_settings_round_trip_as_their_own_lines() {
         !text.lines().any(|l| l.starts_with("rumble=")),
         "rumble has no setting any more: {text:?}"
     );
-    for line in ["ff_speed=2", "ff_sound=1", "colour_correction=1", "wifi=1"] {
+    for line in [
+        "ff_speed=2",
+        "ff_sound=1",
+        "colour_correction=1",
+        "frame_blend=1",
+        "wifi=1",
+    ] {
         assert!(text.lines().any(|l| l == line), "no {line} in {text:?}");
     }
 }

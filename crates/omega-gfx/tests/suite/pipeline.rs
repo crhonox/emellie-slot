@@ -1016,3 +1016,51 @@ fn a_console_still_is_drawn_whole_through_its_view() {
     c.draw_list(&[Draw::Shot { tex }]);
     assert_at_2x(&c.read_frame(), w, h, &at);
 }
+
+/// The middle of the canvas, drawn from a flat `value` grey picture the size `size`, after
+/// a flat `before` grey one, through `view`, with frame blending `on`.
+fn blended(view: GameView, size: (u32, u32), before: u8, value: u8, on: bool) -> Option<[u8; 3]> {
+    let (_g, _s, mut c) = compositor()?;
+    let flat = |v: u8| vec![v; (size.0 * size.1 * 4) as usize];
+    c.set_screen_power(1.0);
+    c.set_game_view(view);
+    c.set_frame_blend(on);
+    c.upload_game_sized(&flat(before), size);
+    c.upload_game_sized(&flat(value), size);
+    c.begin_frame();
+    c.draw_game();
+    Some(px(&c.read_frame(), out_w() as usize / 2, out_h() as usize / 2))
+}
+
+#[test]
+fn frame_blending_mixes_each_picture_half_and_half_with_the_one_before() {
+    let view = sharp([0.0, 0.0, 640.0, 480.0]);
+    let size = (320, 240);
+    let Some(on) = blended(view, size, 0, 200, true) else {
+        return;
+    };
+    for ch in on {
+        assert!((ch as i32 - 100).abs() <= 2, "blended {ch}, want 100");
+    }
+    for ch in blended(view, size, 0, 200, false).unwrap() {
+        assert!((ch as i32 - 200).abs() <= 1, "unblended {ch}, want 200");
+    }
+}
+
+#[test]
+fn frame_blending_never_mixes_pictures_of_two_sizes() {
+    let Some((_g, _s, mut c)) = compositor() else {
+        return;
+    };
+    c.set_screen_power(1.0);
+    c.set_game_view(sharp([0.0, 0.0, 640.0, 480.0]));
+    c.set_frame_blend(true);
+    c.upload_game_sized(&vec![0; 256 * 224 * 4], (256, 224));
+    c.upload_game_sized(&vec![200; 320 * 240 * 4], (320, 240));
+    c.begin_frame();
+    c.draw_game();
+    let got = px(&c.read_frame(), out_w() as usize / 2, out_h() as usize / 2);
+    for ch in got {
+        assert!((ch as i32 - 200).abs() <= 1, "mixed across sizes: {ch}");
+    }
+}

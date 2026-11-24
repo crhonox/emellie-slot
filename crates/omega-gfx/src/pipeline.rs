@@ -54,6 +54,7 @@ struct Lcd {
     u_glow: gl::types::GLint,
     u_uv: gl::types::GLint,
     u_src: gl::types::GLint,
+    u_blend: gl::types::GLint,
 }
 
 struct Sharp {
@@ -67,14 +68,22 @@ struct Sharp {
     u_src: gl::types::GLint,
     u_grid: gl::types::GLint,
     u_cell: gl::types::GLint,
+    u_blend: gl::types::GLint,
 }
 
 pub struct GamePass {
     lcd: Lcd,
     sharp: Sharp,
-    game: gl::types::GLuint,
-    /// The game texture's width and height, the last picture's.
-    size: (u32, u32),
+    /// Two game textures, taken in turn: `game[cur]` holds the last picture, the other the one
+    /// before it, for interframe blending.
+    game: [gl::types::GLuint; 2],
+    /// Each game texture's width and height, its picture's.
+    sizes: [(u32, u32); 2],
+    /// Which game textures hold a picture yet.
+    filled: [bool; 2],
+    cur: usize,
+    /// Interframe blending: the picture is shown half and half with the one before it.
+    blend: bool,
     mask: gl::types::GLuint,
     power: f32,
     view: Option<GameView>,
@@ -89,7 +98,9 @@ impl GamePass {
     pub fn new() -> Result<Self, GfxError> {
         let lcd = crate::shaders::program(RECT_VERT, GAME_FRAG)?;
         let sharp = crate::shaders::program(RECT_VERT, GAME_SHARP_FRAG)?;
-        let game = crate::gl::texture(SRC_W, SRC_H, gl::NEAREST, gl::CLAMP_TO_EDGE, gl::BGRA, None);
+        let game = [(); 2].map(|_| {
+            crate::gl::texture(SRC_W, SRC_H, gl::NEAREST, gl::CLAMP_TO_EDGE, gl::BGRA, None)
+        });
         let mask = crate::gl::texture(
             3,
             3,
@@ -102,9 +113,11 @@ impl GamePass {
             gl::UseProgram(lcd);
             gl::Uniform1i(uniform(lcd, "u_game"), 0);
             gl::Uniform1i(uniform(lcd, "u_mask"), 1);
+            gl::Uniform1i(uniform(lcd, "u_prev"), 2);
             gl::Uniform2f(uniform(lcd, "u_target"), out_w() as f32, out_h() as f32);
             gl::UseProgram(sharp);
             gl::Uniform1i(uniform(sharp, "u_game"), 0);
+            gl::Uniform1i(uniform(sharp, "u_prev"), 1);
             gl::Uniform2f(uniform(sharp, "u_target"), out_w() as f32, out_h() as f32);
         }
         Ok(GamePass {
@@ -115,6 +128,7 @@ impl GamePass {
                 u_glow: uniform(lcd, "u_glow"),
                 u_uv: uniform(lcd, "u_uv"),
                 u_src: uniform(lcd, "u_src"),
+                u_blend: uniform(lcd, "u_blend"),
             },
             sharp: Sharp {
                 prog: sharp,
@@ -126,14 +140,24 @@ impl GamePass {
                 u_src: uniform(sharp, "u_src"),
                 u_grid: uniform(sharp, "u_grid"),
                 u_cell: uniform(sharp, "u_cell"),
+                u_blend: uniform(sharp, "u_blend"),
             },
             game,
-            size: (SRC_W, SRC_H),
+            sizes: [(SRC_W, SRC_H); 2],
+            filled: [false; 2],
+            cur: 0,
+            blend: false,
             mask,
             power: 1.0,
             view: None,
             still: None,
         })
+    }
+
+    /// Interframe blending on or off: each picture shown mixed half and half with the one
+    /// uploaded before it, as a handheld's slow LCD blurred them.
+    pub fn set_blend(&mut self, on: bool) {
+        self.blend = on;
     }
 
     pub fn set_power(&mut self, t: f32) {
@@ -162,17 +186,21 @@ impl GamePass {
 
     /// A picture `size` pixels wide and high. The texture is made again at that size when the
     /// picture's size changes, as a PlayStation game's does between its menus and its game, and
-    /// otherwise only written over, as a GBA frame always was.
+    /// otherwise only written over, as a GBA frame always was. Each picture goes into the game
+    /// texture the one before did not, so that one is kept to blend with.
     pub fn upload_sized(&mut self, xrgb8888: &[u8], size: (u32, u32)) {
         let (w, h) = size;
         if w == 0 || h == 0 || xrgb8888.len() < (w * h * 4) as usize {
             return;
         }
         let pixels = xrgb8888.as_ptr() as *const std::ffi::c_void;
+        self.cur ^= 1;
+        let cur = self.cur;
+        self.filled[cur] = true;
         unsafe {
-            gl::BindTexture(gl::TEXTURE_2D, self.game);
+            gl::BindTexture(gl::TEXTURE_2D, self.game[cur]);
             gl::PixelStorei(gl::UNPACK_ALIGNMENT, 1);
-            if size == self.size {
+            if size == self.sizes[cur] {
                 gl::TexSubImage2D(
                     gl::TEXTURE_2D,
                     0,
@@ -196,19 +224,27 @@ impl GamePass {
                     gl::UNSIGNED_BYTE,
                     pixels,
                 );
-                self.size = size;
+                self.sizes[cur] = size;
             }
         }
     }
 
     /// The game texture's width and height, the last picture's.
     pub fn size(&self) -> (u32, u32) {
-        self.size
+        self.sizes[self.cur]
+    }
+
+    /// The picture before the last, to blend with: only while blending is on, and only when it
+    /// is the same size as the last, so a PlayStation game changing modes never mixes two shapes.
+    fn prev(&self) -> Option<gl::types::GLuint> {
+        let (cur, other) = (self.cur, self.cur ^ 1);
+        (self.blend && self.filled[other] && self.sizes[other] == self.sizes[cur])
+            .then_some(self.game[other])
     }
 
     pub fn draw(&self, quad: &Quad) {
         let view = self.view.unwrap_or_else(|| GameView::canvas(WHOLE_TEXTURE));
-        self.draw_source(self.game, self.size, quad, view);
+        self.draw_source(self.game[self.cur], self.prev(), self.size(), quad, view);
     }
 
     /// A still, `size` texels, through the still's view.
@@ -216,10 +252,21 @@ impl GamePass {
         let view = self
             .still
             .unwrap_or_else(|| GameView::canvas(WHOLE_TEXTURE));
-        self.draw_source(tex, size, quad, view);
+        self.draw_source(tex, None, size, quad, view);
     }
 
-    fn draw_source(&self, tex: gl::types::GLuint, src: (u32, u32), quad: &Quad, view: GameView) {
+    /// `tex`, `src` texels, through `view`, with `prev` (the same size) mixed in half and half
+    /// where there is one.
+    fn draw_source(
+        &self,
+        tex: gl::types::GLuint,
+        prev: Option<gl::types::GLuint>,
+        src: (u32, u32),
+        quad: &Quad,
+        view: GameView,
+    ) {
+        let blend = if prev.is_some() { 0.5 } else { 0.0 };
+        let prev = prev.unwrap_or(tex);
         let (src_w, src_h) = (src.0 as f32, src.1 as f32);
         let (x, y, w, h) = screen_rect_in(self.power, view.rect);
         let uv = view.uv;
@@ -235,11 +282,13 @@ impl GamePass {
                 );
                 gl::Uniform1f(self.lcd.u_bright, screen_brightness(self.power));
                 gl::Uniform1f(self.lcd.u_glow, screen_glow(self.power));
-                gl::ActiveTexture(gl::TEXTURE0);
-                gl::BindTexture(gl::TEXTURE_2D, tex);
+                gl::Uniform1f(self.lcd.u_blend, blend);
+                gl::ActiveTexture(gl::TEXTURE2);
+                gl::BindTexture(gl::TEXTURE_2D, prev);
                 gl::ActiveTexture(gl::TEXTURE1);
                 gl::BindTexture(gl::TEXTURE_2D, self.mask);
                 gl::ActiveTexture(gl::TEXTURE0);
+                gl::BindTexture(gl::TEXTURE_2D, tex);
             },
             Filter::Sharp | Filter::Grid(_) => unsafe {
                 let grid = match view.filter {
@@ -267,6 +316,10 @@ impl GamePass {
                 );
                 gl::Uniform1f(self.sharp.u_bright, screen_brightness(self.power));
                 gl::Uniform1f(self.sharp.u_glow, screen_glow(self.power));
+                gl::Uniform1f(self.sharp.u_blend, blend);
+                gl::ActiveTexture(gl::TEXTURE1);
+                gl::BindTexture(gl::TEXTURE_2D, prev);
+                filter(gl::LINEAR);
                 gl::ActiveTexture(gl::TEXTURE0);
                 gl::BindTexture(gl::TEXTURE_2D, tex);
                 filter(gl::LINEAR);
@@ -274,7 +327,12 @@ impl GamePass {
         }
         quad.draw();
         if matches!(view.filter, Filter::Sharp | Filter::Grid(_)) {
-            unsafe { filter(gl::NEAREST) };
+            unsafe {
+                gl::ActiveTexture(gl::TEXTURE1);
+                filter(gl::NEAREST);
+                gl::ActiveTexture(gl::TEXTURE0);
+                filter(gl::NEAREST);
+            }
         }
     }
 }
@@ -289,7 +347,7 @@ unsafe fn filter(f: gl::types::GLenum) {
 impl Drop for GamePass {
     fn drop(&mut self) {
         unsafe {
-            gl::DeleteTextures(1, &self.game);
+            gl::DeleteTextures(2, self.game.as_ptr());
             gl::DeleteTextures(1, &self.mask);
             gl::DeleteProgram(self.lcd.prog);
             gl::DeleteProgram(self.sharp.prog);

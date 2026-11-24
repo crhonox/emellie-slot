@@ -158,15 +158,18 @@ void main() {
 pub const GAME_FRAG: &str = r#"
 precision mediump float;
 uniform sampler2D u_game;
+uniform sampler2D u_prev;
 uniform sampler2D u_mask;
 uniform vec2 u_src;
 uniform vec4 u_uv;
 uniform float u_bright;
 uniform float u_glow;
+uniform float u_blend;
 varying vec2 v_uv;
 void main() {
     vec2 uv = u_uv.xy + v_uv * u_uv.zw;
-    vec3 rgb = texture2D(u_game, uv).rgb * texture2D(u_mask, v_uv * u_src).rgb;
+    vec3 game = mix(texture2D(u_game, uv).rgb, texture2D(u_prev, uv).rgb, u_blend);
+    vec3 rgb = game * texture2D(u_mask, v_uv * u_src).rgb;
     FRAG_COLOR = vec4(mix(rgb * u_bright, vec3(1.0), u_glow), 1.0);
 }
 "#;
@@ -178,7 +181,8 @@ void main() {
 /// in part, so the grid does not shimmer either. The grid is found from the panel pixel itself,
 /// `gl_FragCoord` from `u_cell`'s corner of the picture (x, and y up from the bottom) in game
 /// pixels `u_cell.zw` wide, not from the interpolated texture position: on the Mali a texel's
-/// fraction drifts enough across the picture to land the line in the wrong column.
+/// fraction drifts enough across the picture to land the line in the wrong column. `u_blend`
+/// of the picture before it (`u_prev`, the same size) is mixed in: interframe blending.
 pub const GAME_SHARP_FRAG: &str = r#"
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -186,12 +190,14 @@ precision highp float;
 precision mediump float;
 #endif
 uniform sampler2D u_game;
+uniform sampler2D u_prev;
 uniform vec2 u_src;
 uniform vec4 u_uv;
 uniform vec2 u_scale;
 uniform float u_bright;
 uniform float u_glow;
 uniform float u_grid;
+uniform float u_blend;
 uniform vec4 u_cell;
 varying vec2 v_uv;
 void main() {
@@ -199,7 +205,8 @@ void main() {
     vec2 from_centre = fract(texel) - 0.5;
     vec2 region = 0.5 - 0.5 / u_scale;
     vec2 f = (from_centre - clamp(from_centre, -region, region)) * u_scale + 0.5;
-    vec3 rgb = texture2D(u_game, (floor(texel) + f) / u_src).rgb;
+    vec2 at = (floor(texel) + f) / u_src;
+    vec3 rgb = mix(texture2D(u_game, at).rgb, texture2D(u_prev, at).rgb, u_blend);
     vec2 into = mod(vec2(gl_FragCoord.x - u_cell.x, u_cell.y - gl_FragCoord.y), u_cell.zw);
     vec2 line = clamp(into - u_cell.zw + 1.5, 0.0, 1.0);
     rgb *= 1.0 - u_grid * max(line.x, line.y);
