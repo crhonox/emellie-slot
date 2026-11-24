@@ -1,5 +1,13 @@
 # Changelog
 
+## es-1.0.19 (2026-11-24)
+
+- Settings > Frame Blending (ON/OFF, off by default): each game picture is shown mixed half and
+  half with the one before it, as a handheld's slow LCD blurred them, so flicker drawn on
+  alternate frames reads as see-through. Works on every core the frontend runs (GBA, GB/GBC,
+  SNES, PS1, NES, Mega Drive) and changes at once, even mid-game. Not for DS, ports or PICO-8.
+  Saved as `frame_blend=` in the state file.
+
 ## es-1.0.18 (2026-11-08)
 
 - Sunlight for solar sensor cartridges: SELECT + Right gives more sun, SELECT + Left less, 0 (dark)
