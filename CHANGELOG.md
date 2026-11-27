@@ -1,5 +1,19 @@
 # Changelog
 
+## es-1.0.20 (2026-11-27)
+
+- Screen prompts for games that save with passwords: when the game's password screen comes up, a
+  SAVE STATE box over the paused game offers to save a state there (A yes, B no); on its title
+  screen, a LOAD STATE box offers to load that state again, while it is still among the game's
+  states. The state is an ordinary one, shown with the others. Each screen asks once each time it
+  comes up, ignores buttons for its first 0.6 s, and the screen a load lands on does not ask.
+  Off during link play. Works whether or not RetroAchievements is signed in.
+- Which game and screen is read off the game's memory with RetroAchievements addresses, from
+  `Config/screen-prompts.ini` (the player's own, kept across updates) then
+  `System/screen-prompts.ini`. Shipped: Castlevania: Bloodlines (Mega Drive), save on screen
+  mode 7, load on 2 (`0x9002`).
+- New boot logos for 640x480 (SP) and 720x720 (Cube).
+
 ## es-1.0.19 (2026-11-24)
 
 - Settings > Frame Blending (ON/OFF, off by default): each game picture is shown mixed half and
