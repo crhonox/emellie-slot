@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::atomic::{
     AtomicBool, AtomicU16, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering,
@@ -20,6 +21,7 @@ use crate::link_state;
 use crate::persist::Snapshot;
 use crate::resample::Resampler;
 use crate::rewind::{RewindThread, REWIND_BYTES};
+use crate::screen_watch::{Ask, Watch};
 
 const PRESENT: Duration = Duration::from_nanos(16_666_667);
 
@@ -199,6 +201,8 @@ enum Cmd {
     BeginCable(u8, Box<dyn LinkChannel>),
     SetOption(String, String),
     SetDisc(usize),
+    /// Watch the game's screens for the screen prompts.
+    Watch(Box<Watch>),
 }
 
 struct Shared {
@@ -229,6 +233,8 @@ struct Shared {
     disc: AtomicUsize,
     /// The disc a swap last put in and the file it is read from, until the session keeps it.
     swapped: Mutex<Option<(usize, String)>>,
+    /// What a screen the watch saw come up asks (`screen_watch::Ask`), until the session takes it.
+    asked: AtomicU8,
 }
 
 #[derive(Default)]
@@ -314,6 +320,7 @@ impl EmuHandle {
             discs: AtomicUsize::new(1),
             disc: AtomicUsize::new(0),
             swapped: Mutex::new(None),
+            asked: AtomicU8::new(0),
         });
         let (tx, rx) = channel();
         let worker = Worker {
@@ -322,6 +329,7 @@ impl EmuHandle {
             cmds: rx,
             player,
             rules,
+            watch: RefCell::new(None),
         };
         let worker_link = link.clone();
         let join = std::thread::Builder::new()
@@ -394,6 +402,16 @@ impl EmuHandle {
     /// Swaps the disc in the drive for disc `index` of the game, counting from 0.
     pub fn set_disc(&self, index: usize) {
         request(&self.cmds, &self.shared, Cmd::SetDisc(index));
+    }
+
+    /// Has the emulator thread watch the game's screens with `watch`.
+    pub fn watch_screens(&self, watch: Watch) {
+        request(&self.cmds, &self.shared, Cmd::Watch(Box::new(watch)));
+    }
+
+    /// What a screen that has just come up asks, once.
+    pub fn take_ask(&self) -> Option<Ask> {
+        Ask::from_u8(self.shared.asked.swap(0, Ordering::AcqRel))
     }
 
     /// How many discs the game is on, 1 for any game not on several, once the core has loaded.
@@ -616,6 +634,7 @@ struct Worker {
     cmds: Receiver<Cmd>,
     player: Option<u8>,
     rules: Rules,
+    watch: RefCell<Option<Watch>>,
 }
 
 impl Worker {
@@ -861,6 +880,14 @@ impl Worker {
                         None => core.run_frame(input),
                     }
                     crate::cheevos::frame(core.as_ref());
+                    if let Some(ask) = self
+                        .watch
+                        .borrow_mut()
+                        .as_mut()
+                        .and_then(|w| w.frame(core.as_ref()))
+                    {
+                        self.shared.asked.store(ask as u8, Ordering::Release);
+                    }
                     let took = frame_began.elapsed();
                     if last {
                         drawn = took;
@@ -1048,6 +1075,10 @@ impl Worker {
                     eprintln!("omega-zero: {e}");
                 }
                 crate::cheevos::reset();
+                if let Some(w) = self.watch.borrow_mut().as_mut() {
+                    w.quiet();
+                }
+                self.shared.asked.store(0, Ordering::Release);
             }
             Cmd::Sav(reply) => {
                 let _ = reply.send(core.save_ram());
@@ -1087,6 +1118,9 @@ impl Worker {
             }
             Cmd::SetOption(key, value) => {
                 core.set_option(&key, &value);
+            }
+            Cmd::Watch(watch) => {
+                *self.watch.borrow_mut() = Some(*watch);
             }
             Cmd::SetDisc(index) => {
                 if !core.set_disc(index) {

@@ -33,6 +33,11 @@ impl StateRing {
         }
     }
 
+    /// The folder the game's states are kept in, for a note kept beside them.
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
     pub fn push(&self, state: &[u8], thumb_png: &[u8], stamp: &str) -> std::io::Result<()> {
         std::fs::create_dir_all(&self.dir)?;
         atomic_write(&self.path(stamp, THUMB_EXT), thumb_png)?;

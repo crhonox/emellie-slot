@@ -338,6 +338,11 @@ pub struct App {
     /// The DISC screen's panel, and its bar.
     pub(crate) disc_panel: Option<Lone>,
     pub(crate) disc_bar: Option<DiscBar>,
+    /// The box a game's password or title screen opened over it (state_prompt.rs), its panel
+    /// and its bar.
+    pub(crate) state_prompt: Option<crate::state_prompt::StatePrompt>,
+    pub(crate) prompt_panel: Option<Lone>,
+    pub(crate) prompt_bar: Option<DiscBar>,
     pub(crate) link_sprites: Option<LinkSprites>,
     pub(crate) link_hardware: LinkKind,
     pub(crate) last_role: LinkRow,
@@ -533,6 +538,9 @@ impl App {
             disc_swap: None,
             disc_panel: None,
             disc_bar: None,
+            state_prompt: None,
+            prompt_panel: None,
+            prompt_bar: None,
             link_sprites: None,
             link_hardware: LinkKind::Cable,
             last_role: LinkRow::Host,
@@ -1224,9 +1232,10 @@ impl App {
         self.core_picker.map(|p| p.chip(self.now()))
     }
 
-    /// Whether a screen over the game holds it paused: the link screen or the DISC screen.
+    /// Whether a screen over the game holds it paused: the link screen, the DISC screen or a
+    /// screen prompt.
     pub fn game_menu_open(&self) -> bool {
-        self.game_menu.is_some() || self.disc_screen.is_some()
+        self.game_menu.is_some() || self.disc_screen.is_some() || self.state_prompt.is_some()
     }
 
     pub fn game_menu(&self) -> Option<GameMenu> {
@@ -1403,6 +1412,9 @@ impl App {
             Action::GbaUp(Btn::Left) => self.shelf_mut().release_left(),
             Action::GbaUp(Btn::Right) => self.shelf_mut().release_right(),
             _ => {}
+        }
+        if self.state_prompt.is_some() {
+            return self.state_prompt_input(action);
         }
         if self.game_menu.is_some() {
             return self.game_menu_input(action);
@@ -2281,6 +2293,7 @@ impl App {
         if let Some(screen) = &self.disc_screen {
             self.draw_disc_screen(screen, out);
         }
+        self.draw_state_prompt(out);
         self.hud.draw_at(self.now(), self.top_bar_reach(), out);
         self.draw_opening(out);
         self.draw_start_notice(out);
@@ -3109,6 +3122,7 @@ impl App {
     fn close_game_menu(&mut self) {
         self.game_menu = None;
         self.disc_screen = None;
+        self.state_prompt = None;
         if let Some(mut starting) = self.starting.take() {
             starting.starter.cancel();
         }
@@ -3297,7 +3311,7 @@ impl App {
         }
     }
 
-    fn ring(&self) -> Option<StateRing> {
+    pub(crate) fn ring(&self) -> Option<StateRing> {
         let (Some(root), Some(cart)) = (&self.root, self.seated()) else {
             return None;
         };
@@ -3359,7 +3373,7 @@ impl App {
         self.load_file(&newest);
     }
 
-    fn load_file(&mut self, state: &Path) -> bool {
+    pub(crate) fn load_file(&mut self, state: &Path) -> bool {
         if !self.may_load_state() {
             self.refuse();
             return false;
@@ -3380,26 +3394,33 @@ impl App {
     }
 
     fn save_state(&mut self) {
+        self.push_state();
+    }
+
+    /// Pushes a state of the game as it is now, as SAVE does, and gives its stamp.
+    pub(crate) fn push_state(&mut self) -> Option<String> {
         let (Some(ring), Some(snapshot)) = (self.ring(), &self.snapshot) else {
-            return;
+            return None;
         };
         if !snapshot.resume_trusted() {
             eprintln!(
                 "omega-zero: save: the core refused the resume it was given, not pushing a state"
             );
-            return self.refuse();
+            self.refuse();
+            return None;
         }
         let Some(state) = snapshot.state() else {
             eprintln!("omega-zero: save: the core gave up no state");
-            return;
+            return None;
         };
         let thumb = snapshot.thumb().unwrap_or_default();
         let stamp = free_stamp(&ring, self.wall_secs());
         if let Err(e) = ring.push(&state, &thumb, &stamp) {
             eprintln!("omega-zero: save: {e}");
-            return;
+            return None;
         }
         self.hud.toast(Toast::StateSaved, self.now());
+        Some(stamp)
     }
 
     /// Keeps the game's picture as it is now in Screenshots/<system>/<cart>_<date>.png, the

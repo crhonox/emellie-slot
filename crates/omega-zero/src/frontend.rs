@@ -33,6 +33,7 @@ mod sync_clock;
 mod sync_controls;
 mod sync_core_picker;
 mod sync_disc;
+mod sync_state_prompt;
 mod sync_home;
 mod sync_hud;
 mod sync_info;
@@ -60,6 +61,7 @@ use sync_clock::{sync_clock, Clocks};
 use sync_controls::sync_controls;
 use sync_core_picker::sync_core_picker;
 use sync_disc::{sync_disc, DiscTexes};
+use sync_state_prompt::{sync_state_prompt, PromptTexes};
 use sync_home::sync_list_panel;
 use sync_hud::{sync_hud, HudTexes};
 use sync_info::{sync_info, InfoTexes};
@@ -117,6 +119,7 @@ pub struct Frontend {
     link: LinkTexes,
     /// The DISC screen's panel and bar.
     disc: DiscTexes,
+    prompt: PromptTexes,
     core_asked: Option<String>,
     core_board_tex: Option<TexId>,
     core_lid_tex: Option<TexId>,
@@ -216,6 +219,7 @@ impl Frontend {
             cutter: LabelCutter::spawn(),
             link: LinkTexes::default(),
             disc: DiscTexes::default(),
+            prompt: PromptTexes::default(),
             core_asked: None,
             core_board_tex: None,
             core_lid_tex: None,
@@ -403,6 +407,7 @@ impl Frontend {
         );
         sync_link(self.session.app_mut(), compositor, &mut self.link);
         sync_disc(self.session.app_mut(), compositor, &mut self.disc);
+        sync_state_prompt(self.session.app_mut(), compositor, &mut self.prompt);
         sync_switcher(
             self.session.app_mut(),
             compositor,

@@ -259,6 +259,9 @@ impl Session {
                 emu.set_option(key, &value);
             }
         }
+        if let Some(ask) = self.emu.as_ref().and_then(EmuHandle::take_ask) {
+            self.app.screen_asks(ask);
+        }
         if let Some(disc) = self.app.take_disc_swap() {
             if let Some(emu) = &self.emu {
                 emu.set_disc(disc);
@@ -475,7 +478,7 @@ impl Session {
         persist::mark_starting(&self.root, platform, stem);
         self.starting = true;
         let ring = self.sink.ring();
-        let emu = EmuHandle::spawn_for(platform, game, rom, ring, sav, resume, player);
+        let emu = EmuHandle::spawn_for(platform, game, rom.clone(), ring, sav, resume, player);
         emu.set_volume(self.app.output_volume());
         emu.set_driven(self.driven);
         self.app.set_snapshot(Box::new(emu.snapshot()));
@@ -484,6 +487,9 @@ impl Session {
             if let Some((key, value)) = crate::core::solar_option(core, self.app.sunlight()) {
                 emu.set_option(key, &value);
             }
+        }
+        if player.is_none() {
+            watch_screens(&emu, &self.root, platform, stem, &rom);
         }
         self.emu = Some(emu);
         self.running = Some((platform, stem.to_string()));
@@ -549,4 +555,27 @@ impl Session {
 pub(crate) fn trace() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("OMEGA_TRACE").is_some())
+}
+
+/// Has `emu` watch the game's screens when a screen prompts rule fits it (screen_watch.rs).
+fn watch_screens(
+    emu: &EmuHandle,
+    root: &std::path::Path,
+    platform: Platform,
+    stem: &str,
+    rom: &std::path::Path,
+) {
+    let Some(rule) = crate::screen_watch::rule_for(root, platform, stem) else {
+        return;
+    };
+    let mut header = Vec::new();
+    if let Ok(f) = std::fs::File::open(rom) {
+        use std::io::Read;
+        let _ = f.take(0x200).read_to_end(&mut header);
+    }
+    let Some(console) = omega_cheevos::game::console_for(platform, &header) else {
+        return;
+    };
+    eprintln!("omega-zero: screen prompts: {stem} watched by [{}]", rule.name);
+    emu.watch_screens(crate::screen_watch::Watch::new(rule, console));
 }

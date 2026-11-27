@@ -95,3 +95,62 @@ pub(crate) unsafe extern "C" fn read_memory(
     }
     read(address, std::slice::from_raw_parts_mut(buffer, n as usize))
 }
+
+/// The game's memory as RetroAchievements addresses it, read on the emulator thread by
+/// something other than the achievements (the screen prompts): regions of its own, built again
+/// when the core's map or its RAM moves, so it works whether or not anyone is signed in.
+pub struct Ram {
+    map: Vec<MemoryDescriptor>,
+    ram: CoreMemory,
+    console: u32,
+    handle: *mut c_void,
+}
+
+impl Ram {
+    pub fn new(console: u32) -> Ram {
+        Ram {
+            map: Vec::new(),
+            ram: CoreMemory::default(),
+            console,
+            handle: std::ptr::null_mut(),
+        }
+    }
+
+    /// Builds the regions again when the core's map or its RAM changed, and says whether there
+    /// are any to read.
+    pub fn refresh(&mut self, map: &[MemoryDescriptor], ram: CoreMemory) -> bool {
+        let same = !self.handle.is_null() && self.map == map && self.ram == ram;
+        if !same && (!map.is_empty() || !ram.is_empty()) {
+            unsafe { ffi::omega_regions_free(self.handle) };
+            self.map = map.to_vec();
+            self.ram = ram;
+            self.handle = build(map, ram, self.console);
+        }
+        !self.handle.is_null()
+    }
+
+    /// Reads `buffer.len()` bytes from `address`, and says how many it could.
+    pub fn read(&self, address: u32, buffer: &mut [u8]) -> u32 {
+        if self.handle.is_null() {
+            return 0;
+        }
+        unsafe {
+            ffi::omega_regions_read(
+                self.handle,
+                address,
+                buffer.as_mut_ptr(),
+                buffer.len() as u32,
+            )
+        }
+    }
+}
+
+impl Drop for Ram {
+    fn drop(&mut self) {
+        unsafe { ffi::omega_regions_free(self.handle) };
+    }
+}
+
+// The regions point into the core's memory and are read on one thread at a time: the watch that
+// holds them is built on the session's thread and handed to the emulator's before it reads.
+unsafe impl Send for Ram {}
