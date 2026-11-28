@@ -21,6 +21,9 @@
 //! decimal or in hex (`0x1f` or `h1f`). A key written again is another way for that screen to
 //! show. The addresses are RetroAchievements', the same its code notes give.
 //!
+//! `trace` lists addresses (`0xH9002 0xH9004`) whose every change is written to the log with
+//! the frame it came on, to find the values a screen shows with.
+//!
 //! The emulator thread reads them after every frame; a screen counts once it has held for
 //! [`HOLD`] frames, and asks once each time it comes up. A state loaded or the game resumed
 //! does not ask about the screen it lands on.
@@ -59,7 +62,7 @@ impl Ask {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Size {
+pub enum Size {
     Bits8,
     Bits16,
     Bits32,
@@ -108,18 +111,7 @@ impl Cond {
         ]
         .into_iter()
         .find_map(|(s, op)| text.split_once(s).map(|(l, r)| (l, op, r)))?;
-        let left = left.trim();
-        let rest = left
-            .strip_prefix("0x")
-            .or_else(|| left.strip_prefix("0X"))?;
-        let (size, digits) = match rest.chars().next()? {
-            'H' | 'h' => (Size::Bits8, &rest[1..]),
-            'X' | 'x' => (Size::Bits32, &rest[1..]),
-            ' ' => (Size::Bits16, &rest[1..]),
-            c if c.is_ascii_hexdigit() => (Size::Bits16, rest),
-            _ => return None,
-        };
-        let address = u32::from_str_radix(digits.trim(), 16).ok()?;
+        let (address, size) = memory_ref(left)?;
         Some(Cond {
             address,
             size,
@@ -129,12 +121,9 @@ impl Cond {
     }
 
     fn holds(&self, read: &dyn Fn(u32, &mut [u8]) -> u32) -> bool {
-        let mut buf = [0u8; 4];
-        let n = self.size.bytes();
-        if read(self.address, &mut buf[..n]) as usize != n {
+        let Some(v) = read_value(read, self.address, self.size) else {
             return false;
-        }
-        let v = u32::from_le_bytes(buf);
+        };
         match self.op {
             Op::Eq => v == self.value,
             Op::Ne => v != self.value,
@@ -144,6 +133,29 @@ impl Cond {
             Op::Ge => v >= self.value,
         }
     }
+}
+
+/// A memory reference as RetroAchievements writes it, `0xH9002`: its address and size.
+fn memory_ref(text: &str) -> Option<(u32, Size)> {
+    let text = text.trim();
+    let rest = text
+        .strip_prefix("0x")
+        .or_else(|| text.strip_prefix("0X"))?;
+    let (size, digits) = match rest.chars().next()? {
+        'H' | 'h' => (Size::Bits8, &rest[1..]),
+        'X' | 'x' => (Size::Bits32, &rest[1..]),
+        ' ' => (Size::Bits16, &rest[1..]),
+        c if c.is_ascii_hexdigit() => (Size::Bits16, rest),
+        _ => return None,
+    };
+    Some((u32::from_str_radix(digits.trim(), 16).ok()?, size))
+}
+
+/// The value at `address`, `size` wide, little end first; None where it cannot be read.
+fn read_value(read: &dyn Fn(u32, &mut [u8]) -> u32, address: u32, size: Size) -> Option<u32> {
+    let mut buf = [0u8; 4];
+    let n = size.bytes();
+    (read(address, &mut buf[..n]) as usize == n).then(|| u32::from_le_bytes(buf))
 }
 
 fn number(text: &str) -> Option<u32> {
@@ -181,6 +193,8 @@ pub struct Rule {
     pub names: Vec<String>,
     pub save: Vec<All>,
     pub load: Vec<All>,
+    /// Addresses whose every change is written to the log, to find a screen's values.
+    pub trace: Vec<(u32, Size)>,
 }
 
 impl Rule {
@@ -191,6 +205,7 @@ impl Rule {
             names: Vec::new(),
             save: Vec::new(),
             load: Vec::new(),
+            trace: Vec::new(),
         }
     }
 
@@ -250,6 +265,16 @@ pub fn parse_rules(text: &str) -> Vec<Rule> {
             }
             "save" => All::parse(value).map(|a| rule.save.push(a)).is_some(),
             "load" => All::parse(value).map(|a| rule.load.push(a)).is_some(),
+            "trace" => {
+                let refs: Option<Vec<_>> = value
+                    .split([' ', ',', '_'])
+                    .filter(|t| !t.is_empty())
+                    .map(memory_ref)
+                    .collect();
+                refs.filter(|r| !r.is_empty())
+                    .map(|r| rule.trace.extend(r))
+                    .is_some()
+            }
             _ => false,
         };
         if !ok {
@@ -259,7 +284,9 @@ pub fn parse_rules(text: &str) -> Vec<Rule> {
             );
         }
     }
-    rules.retain(|r| !r.names.is_empty() && (!r.save.is_empty() || !r.load.is_empty()));
+    rules.retain(|r| {
+        !r.names.is_empty() && (!r.save.is_empty() || !r.load.is_empty() || !r.trace.is_empty())
+    });
     rules
 }
 
@@ -313,6 +340,9 @@ pub struct Watch {
     load: Edge,
     /// The next frame read sees where the game is without asking: just loaded or resumed.
     quiet: bool,
+    /// The frames read, and the traced addresses' values last read.
+    frames: u64,
+    traced: Vec<Option<u32>>,
 }
 
 impl Watch {
@@ -324,6 +354,8 @@ impl Watch {
             save: Edge::default(),
             load: Edge::default(),
             quiet: true,
+            frames: 0,
+            traced: Vec::new(),
         }
     }
 
@@ -347,11 +379,22 @@ impl Watch {
     }
 
     fn step(&mut self, read: &dyn Fn(u32, &mut [u8]) -> u32) -> Option<Ask> {
+        self.frames += 1;
+        for line in self.trace(read) {
+            eprintln!("omega-zero: screen trace: {line}");
+        }
         let quiet = std::mem::take(&mut self.quiet);
         let save = self.rule.save.iter().any(|a| a.holds(read));
         let load = self.rule.load.iter().any(|a| a.holds(read));
         let asked_save = self.save.step(save, quiet);
         let asked_load = self.load.step(load, quiet);
+        if asked_save || asked_load {
+            eprintln!(
+                "omega-zero: screen prompts: frame {} asks {}",
+                self.frames,
+                if asked_save { "save" } else { "load" }
+            );
+        }
         if asked_save {
             Some(Ask::Save)
         } else if asked_load {
@@ -359,6 +402,37 @@ impl Watch {
         } else {
             None
         }
+    }
+
+    /// A line for each traced address whose value changed since the frame before, and for
+    /// each on the first frame read.
+    fn trace(&mut self, read: &dyn Fn(u32, &mut [u8]) -> u32) -> Vec<String> {
+        self.traced.resize(self.rule.trace.len(), None);
+        let mut lines = Vec::new();
+        for (i, &(address, size)) in self.rule.trace.iter().enumerate() {
+            let now = read_value(read, address, size);
+            let was = self.traced[i];
+            if now == was {
+                continue;
+            }
+            self.traced[i] = now;
+            let width = size.bytes() * 2;
+            let show = |v: Option<u32>| match v {
+                Some(v) => format!("0x{v:0width$x} ({v})"),
+                None => "unreadable".to_string(),
+            };
+            let line = match was {
+                Some(_) => format!(
+                    "frame {} 0x{address:04x} = {} (was {})",
+                    self.frames,
+                    show(now),
+                    show(was)
+                ),
+                None => format!("frame {} 0x{address:04x} = {}", self.frames, show(now)),
+            };
+            lines.push(line);
+        }
+        lines
     }
 }
 
@@ -473,6 +547,35 @@ load = 0xH9002=2
         w.quiet();
         assert!(run(&mut w, &screen, 7, 100).is_empty());
         assert!(run(&mut w, &screen, 2, 100) == vec![Ask::Load]);
+    }
+
+    #[test]
+    fn a_traced_address_says_each_change_once() {
+        let mut rule = parse_rules("[T]\nmatch = t\ntrace = 0xH9002, 0x9004\n").remove(0);
+        assert_eq!(
+            rule.trace,
+            vec![(0x9002, Size::Bits8), (0x9004, Size::Bits16)]
+        );
+        rule.save.clear();
+        let mut w = Watch::new(rule, omega_cheevos::game::MEGA_DRIVE);
+        let screen = Cell::new(9u8);
+        let read = |address: u32, buf: &mut [u8]| {
+            buf.fill(0);
+            if address == 0x9002 {
+                buf[0] = screen.get();
+            }
+            buf.len() as u32
+        };
+        w.frames = 1;
+        let first = w.trace(&read);
+        assert_eq!(first.len(), 2);
+        assert!(first[0].contains("0x9002 = 0x09 (9)"), "{first:?}");
+        assert!(w.trace(&read).is_empty());
+        screen.set(8);
+        assert_eq!(
+            w.trace(&read),
+            vec!["frame 1 0x9002 = 0x08 (8) (was 0x09 (9))"]
+        );
     }
 
     #[test]
