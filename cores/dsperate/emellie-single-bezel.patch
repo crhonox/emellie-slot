@@ -1,8 +1,8 @@
 diff --git a/src/frontend/sdl/display.cpp b/src/frontend/sdl/display.cpp
-index e18efae..04045a8 100644
+index de12d54..3e61929 100644
 --- a/src/frontend/sdl/display.cpp
 +++ b/src/frontend/sdl/display.cpp
-@@ -130,6 +130,7 @@ double Display::dominant_ratio() const {
+@@ -135,6 +135,7 @@ double Display::dominant_ratio() const {
  
  bool Display::open(const char* title, int scale, bool fullscreen, bool linear, bool vsync, const Layout& layout_mode, int only_screen, int display_index) {
    sync();
@@ -10,7 +10,7 @@ index e18efae..04045a8 100644
    layout_ = layout_mode;
    linear_ = linear;
    only_screen_ = only_screen;
-@@ -806,6 +807,110 @@ void Display::clear_margins(u32* px, u32 pitch, int w, int h) const {
+@@ -959,6 +960,110 @@ void Display::clear_margins(u32* px, u32 pitch, int w, int h) const {
    }
  }
  
@@ -121,7 +121,7 @@ index e18efae..04045a8 100644
  // Accumulated into one rect for the frame (a modal page and a corner label
  // are the two cases; a union costs a few cleared pixels, saves a list).
  void Display::note_canvas_draw(int x, int y, int w, int h) {
-@@ -828,9 +933,13 @@ void Display::clear_rect(u32* px, u32 pitch, int w, int h, const SDL_Rect& r) co
+@@ -981,9 +1086,13 @@ void Display::clear_rect(u32* px, u32 pitch, int w, int h, const SDL_Rect& r) co
  void Display::targets(u32* px, u32 stride, int w, int h, Target out[SCREENS]) {
    frame_px_ = px; frame_pitch_ = stride; frame_w_ = w; frame_h_ = h;
    insets_done_ = false;
@@ -136,7 +136,7 @@ index e18efae..04045a8 100644
        // px at the rect's first kept row/column; runs are relative to it (see build_scale).
        const int x0 = std::max(0, -v.rect.x), y0 = std::max(0, -v.rect.y);
        const int y1 = std::clamp(h - v.rect.y, 0, v.rect.h);
-@@ -944,9 +1053,10 @@ void Display::take_frame(u32* px, u32 stride, int w, int h, int idx, Target out[
+@@ -1098,9 +1207,10 @@ void Display::take_frame(u32* px, u32 stride, int w, int h, int idx, Target out[
    // another still holds the old layout until it's cycled back to.
    if (margins_dirty_) { out_clean_ = 0; margins_dirty_ = false; }
    const u32 bit = idx >= 0 && idx < 32 ? 1u << idx : 0u;
@@ -148,7 +148,7 @@ index e18efae..04045a8 100644
      canvas_prev_[idx] = SDL_Rect{0, 0, 0, 0};
    }
    canvas_drawn_ = SDL_Rect{0, 0, 0, 0};
-@@ -959,6 +1069,7 @@ void Display::finish_views() {
+@@ -1113,6 +1223,7 @@ void Display::finish_views() {
    sync();
    if (disp_) return;
    blit_insets();
@@ -157,18 +157,10 @@ index e18efae..04045a8 100644
  
  bool Display::canvas_capable() const {
 diff --git a/src/frontend/sdl/display.h b/src/frontend/sdl/display.h
-index 5af3c2c..8654506 100644
+index be4ab73..341f7b1 100644
 --- a/src/frontend/sdl/display.h
 +++ b/src/frontend/sdl/display.h
-@@ -36,6 +36,7 @@ public:
-   static bool parse_int_scale(const std::string& s, IntScale& m) { return frontend::parse_int_scale(s, m); }
-   static double snap_scale(double s, IntScale m) { return frontend::snap_scale(s, m); }
-   void set_integer_scale(IntScale m) { int_scale_ = m; }
-+  void set_seam_blend(int m) { seam_blend_ = m; }   // 0 dark, 1 blend, 2 blend_linear; picks the grid overlay
-   IntScale integer_scale() const { return int_scale_; }
-   static const char* mode_name(Mode m) { return frontend::mode_name(m); }
-   static bool parse_mode(const std::string& s, Mode& m) { return frontend::parse_mode(s, m); }
-@@ -272,6 +273,30 @@ private:
+@@ -336,6 +336,29 @@ private:
    SDL_Rect          canvas_drawn_{0, 0, 0, 0};
    SDL_Rect          canvas_prev_[kMaxBufs] = {};
    void clear_rect(u32* px, u32 pitch, int w, int h, const SDL_Rect& r) const;
@@ -187,7 +179,6 @@ index 5af3c2c..8654506 100644
 +  // 255 - alpha in the top byte and the colour times alpha below it.
 +  std::vector<u32>  grid_ov_;
 +  int               grid_ov_w_ = 0, grid_ov_h_ = 0;
-+  int               seam_blend_ = 0;
 +  bool              overlays_read_ = false;
 +  // While it shows, the screen is scaled into grid_side_ (cached memory) and finish_views()
 +  // writes game and grid together into the frame, which is never read back (uncached on fb0).
@@ -199,15 +190,3 @@ index 5af3c2c..8654506 100644
    bool              out_frame_ = false;   // current begin_frame targeted the scanout tier
    int               scaled_w_ = 0, scaled_h_ = 0;
    std::vector<u16>  xrun_[SCREENS];   // per screen, 257 entries; see kern::scale_row
-diff --git a/src/frontend/sdl/main.cpp b/src/frontend/sdl/main.cpp
-index 670edea..82f11ee 100644
---- a/src/frontend/sdl/main.cpp
-+++ b/src/frontend/sdl/main.cpp
-@@ -988,6 +988,7 @@ bool open_displays(const VideoSetup& vs, ds::sdl::Display& display, ds::sdl::Dis
-   display.set_chunky(vs.chunky != 0, vs.chunky_cell);
-   display.set_sinks(vs.panel_sink, vs.want_sink);
-   display.set_integer_scale(vs.int_scale);
-+  display.set_seam_blend(vs.linear ? 0 : vs.seam_blend);
-   display.set_grid_strength(vs.linear ? 0.0 : vs.grid_s);
-   if (!vs.linear) display.set_disp_grid(static_cast<u8>(((256 - vs.grid) * 255) / 256));
-   return display.open("DSperate", vs.scale, vs.fullscreen, vs.linear, vs.vsync, vs.layout);
