@@ -116,7 +116,11 @@ fn status(updates: &Updates, online: bool, power_ok: bool) -> Vec<String> {
                 Some(pct) => format!("Downloading {}%", pct.min(100)),
                 None => "Downloading".to_string(),
             };
-            vec![first, format!("{} of {} MB", got / MB, total.div_ceil(MB))]
+            let size = match *total {
+                0 => format!("{} MB", got / MB),
+                total => format!("{} of {} MB", got / MB, total.div_ceil(MB)),
+            };
+            vec![first, size]
         }
         UpdateState::Verifying(_) => lines("Checking the download...", ""),
         UpdateState::Unpacking(_) => lines("Unpacking...", "Keep the handheld on."),

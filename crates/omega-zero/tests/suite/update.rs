@@ -13,8 +13,9 @@ use omega_zero::app::{App, Phase};
 use omega_zero::label_sync::Http;
 use omega_zero::screens::update::{update_view, ACTION_ROW};
 use omega_zero::update::{
-    install, parse_release, parse_sha, sha256_file, unpacked_system, Fail, Release, Sha256, Tools,
-    UpdateJob, UpdateJobs, UpdateNews, UpdateState, Updates, Version, DIR, READY,
+    check, install, parse_release, parse_release_page, parse_sha, sha256_file, unpacked_system,
+    Fail, Release, Sha256, Tools, UpdateJob, UpdateJobs, UpdateNews, UpdateState, Updates, Version,
+    DIR, READY,
 };
 use omega_zero::wifi::{Status, WifiJob, WifiJobs, WifiNews};
 use tempfile::TempDir;
@@ -125,6 +126,60 @@ fn a_sha256_file_names_its_hash_first() {
     assert_eq!(parse_sha(&hash.to_uppercase()).as_deref(), Some(hash));
     assert_eq!(parse_sha("abc  emellie.zip"), None);
     assert_eq!(parse_sha(""), None);
+}
+
+/// GitHub as the test has it: what each URL answers, the rest never reached.
+struct Answers(Vec<(String, u16, String)>);
+
+impl Http for Answers {
+    fn get(&mut self, url: &str) -> Option<(u16, Vec<u8>)> {
+        self.0
+            .iter()
+            .find(|(u, _, _)| u == url)
+            .map(|(_, status, body)| (*status, body.clone().into_bytes()))
+    }
+}
+
+/// The latest release's page as GitHub draws it, cut down to the links that name its tag.
+fn release_page(tag: &str) -> String {
+    let repo = omega_zero::update::repo();
+    format!(
+        "<html><head><meta property=\"og:url\" content=\"/{repo}/releases/tag/{tag}\" />\
+         </head><body><a href=\"/{repo}/releases/tag/{tag}\">{tag}</a></body></html>"
+    )
+}
+
+#[test]
+fn the_latest_releases_page_names_its_tag_and_its_files() {
+    let r = parse_release_page(&release_page("es-1.0.22")).unwrap();
+    let repo = omega_zero::update::repo();
+    assert_eq!(r.version, v(1, 0, 22));
+    assert_eq!(
+        r.zip_url,
+        format!(
+            "https://github.com/{repo}/releases/download/es-1.0.22/emellie-slot-es-1.0.22-h700.zip"
+        )
+    );
+    assert_eq!(r.sha_url, format!("{}.sha256", r.zip_url));
+    assert_eq!(r.zip_size, 0);
+    assert!(parse_release_page("<html>nothing here</html>").is_none());
+    assert!(parse_release_page(&release_page("v2.0")).is_none());
+}
+
+#[test]
+fn a_check_the_api_turns_away_reads_the_releases_page() {
+    let api = omega_zero::update::latest_url();
+    let page = omega_zero::update::latest_page_url();
+    let limited = "{\"message\":\"API rate limit exceeded\"}".to_string();
+    let mut http = Answers(vec![
+        (api.clone(), 403, limited),
+        (page.clone(), 200, release_page("es-1.0.22")),
+    ]);
+    assert_eq!(check(&mut http).unwrap().version, v(1, 0, 22));
+    let mut only_api_down = Answers(vec![(page, 200, release_page("es-1.0.23"))]);
+    assert_eq!(check(&mut only_api_down).unwrap().version, v(1, 0, 23));
+    let mut nothing = Answers(vec![]);
+    assert_eq!(check(&mut nothing), Err(Fail::Unreachable));
 }
 
 /// GitHub's files as the test has them: the SHA-256 file, or nothing.

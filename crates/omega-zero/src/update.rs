@@ -93,6 +93,38 @@ pub fn latest_url() -> String {
     format!("https://api.github.com/repos/{}/releases/latest", repo())
 }
 
+/// GitHub's own page for the latest release, which leads to that release's page. Unlike the
+/// API, it is not held to 60 asks an hour for each address, which two handhelds and a computer
+/// behind one router can use up.
+pub fn latest_page_url() -> String {
+    format!("https://github.com/{}/releases/latest", repo())
+}
+
+/// The release the latest release's page names, `body` that page (curl follows the redirect
+/// to it): its tag read off the page's links to it, its files named as release.yml names them.
+/// Its notes and its zip's size are not on it.
+pub fn parse_release_page(body: &str) -> Option<Release> {
+    let marker = format!("/{}/releases/tag/{TAG_PREFIX}", repo());
+    let at = body.find(&marker)? + marker.len();
+    let number: String = body[at..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    let version = Version::parse(&number)?;
+    let tag = version.tag();
+    let zip_url = format!(
+        "https://github.com/{}/releases/download/{tag}/emellie-slot-{tag}{ZIP_END}",
+        repo()
+    );
+    Some(Release {
+        version,
+        notes: String::new(),
+        sha_url: format!("{zip_url}.sha256"),
+        zip_url,
+        zip_size: 0,
+    })
+}
+
 /// The release in GitHub's reply about the latest one: none where its tag is not `es-x.y.z`
 /// or it lacks the card tree's zip or its SHA-256.
 pub fn parse_release(body: &str) -> Option<Release> {
@@ -292,14 +324,28 @@ pub trait UpdateJobs: Send {
     fn news(&mut self) -> Vec<UpdateNews>;
 }
 
-/// The latest release, through `http`.
+/// The latest release, through `http`: from GitHub's API, else, when that will not answer (it
+/// turns away an address that has asked 60 times in the hour), from the release's own page.
 pub fn check(http: &mut dyn Http) -> Result<Release, Fail> {
-    let (status, body) = http.get(&latest_url()).ok_or(Fail::Unreachable)?;
-    if status != 200 {
-        return Err(Fail::Unreachable);
+    let from_api = match http.get(&latest_url()) {
+        Some((200, body)) => parse_release(&String::from_utf8_lossy(&body)),
+        Some((status, _)) => {
+            eprintln!(
+                "omega-zero: update: GitHub's API answered {status}, trying the releases page"
+            );
+            None
+        }
+        None => None,
+    };
+    if let Some(release) = from_api {
+        return Ok(release);
     }
-    let body = String::from_utf8_lossy(&body);
-    parse_release(&body).ok_or(Fail::Unreachable)
+    match http.get(&latest_page_url()) {
+        Some((200, body)) => {
+            parse_release_page(&String::from_utf8_lossy(&body)).ok_or(Fail::Unreachable)
+        }
+        _ => Err(Fail::Unreachable),
+    }
 }
 
 /// How a download and an unpack are run: by curl and 7-Zip on the handheld, by stand-ins in
