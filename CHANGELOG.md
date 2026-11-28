@@ -1,5 +1,11 @@
 # Changelog
 
+## es-1.0.22 (2026-11-28)
+
+- Castlevania: Bloodlines' SAVE STATE box now comes up on the password screen shown after a stage
+  is beaten (screen mode 9 with sub-mode `0x9004` at 7), not on the password entry screen. Found
+  with es-1.0.21's trace, which stays on for Bloodlines for now.
+
 ## es-1.0.21 (2026-11-28)
 
 - Screen prompts: a rule can `trace` addresses (`trace = 0xH9002 0xH9004`), and each change of
