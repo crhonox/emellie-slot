@@ -1,5 +1,13 @@
 # Changelog
 
+## es-1.0.23 (2026-11-28)
+
+- Updates no longer fail with "GitHub could not be reached" when GitHub's API turns the home
+  connection away (it answers each address only 60 times an hour, shared by every handheld and
+  computer behind the router). The check then reads the latest release's page on github.com,
+  which has no such limit, and downloads and verifies the zip as before. The download then shows
+  how many MB have come down, without the total.
+
 ## es-1.0.22 (2026-11-28)
 
 - Castlevania: Bloodlines' SAVE STATE box now comes up on the password screen shown after a stage
