@@ -1,5 +1,26 @@
 # Changelog
 
+## es-1.0.24 (2026-11-28)
+
+- Every core is at its upstream's latest: mGBA `7a12d6d`, gpSP `5819380`, armGBA `b2f6d44`
+  (2.0), Snes9x `204ea1c`, PCSX ReARMed `69dbeba`, Gambatte `b14881d`, Genesis Plus GX
+  `51348f6`, FCEUmm `fb919fb`, Nestopia `349bc90`.
+  - gpSP: GBA I/O reads fixed on arm64, the dynarec runs code from VRAM, a scanned EEPROM
+    signature no longer overrides a game's real SRAM or flash.
+  - armGBA 2.0: faster recompiler (idle loops polling timers, no full flush when its memory
+    fills), exact IRQ and timer timing, PWM sound at the game's own bit depth. **armGBA states
+    from before this release no longer load**; saves are unaffected.
+  - Genesis Plus GX: Sega CD sync fixes; FCEUmm: faster PPU and sound; Nestopia: DMC/DMA fix;
+    PCSX ReARMed: newer Lightrec and gpu_unai fixes.
+- DSperate is at `53a0685` (4.1.0), with all three patches brought onto it: save types fixed
+  for about fifteen games, NAND saves (WarioWare D.I.Y., Jam with the Band), a game's `.dsv`
+  or RetroArch `.srm` used when there is no `.sav`, saves replaced whole and synced, 3D
+  cracks between polygons filled, fog and edge marking fixed, a faster fast timing model, and
+  hardware fixes (RTC alarms, `VCOUNT`, `LDM`/`STM`).
+- Fast forward on armGBA no longer draws the frames it skips (its Fast-Forward Skip, which
+  needs the frontend to say it is fast-forwarding): faster where armGBA could not reach the
+  chosen speed. What is shown is the same.
+
 ## es-1.0.23 (2026-11-28)
 
 - Updates no longer fail with "GitHub could not be reached" when GitHub's API turns the home
