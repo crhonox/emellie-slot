@@ -1,5 +1,13 @@
 # Changelog
 
+## es-1.0.21 (2026-11-28)
+
+- Screen prompts: a rule can `trace` addresses (`trace = 0xH9002 0xH9004`), and each change of
+  their values goes to `emellie-slot.log` as a `screen trace` line with its frame; each prompt
+  also logs the frame it asks on. Castlevania: Bloodlines traces its screen mode, sub-mode, stage
+  and lives, to find the password screen shown after a stage: screen mode 7 turned out to be
+  only the password entry screen, where the SAVE STATE box still comes up for now.
+
 ## es-1.0.20 (2026-11-27)
 
 - Screen prompts for games that save with passwords: when the game's password screen comes up, a
