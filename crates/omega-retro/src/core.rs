@@ -101,6 +101,9 @@ pub trait RetroCore: Send {
         false
     }
     fn set_frame_skip(&mut self, _skip: bool) {}
+    /// Whether the player is fast-forwarding, for a core that asks (armGBA leaves the frames
+    /// skipped then undrawn). Told before each run of frames.
+    fn set_fast_forward(&mut self, _on: bool) {}
     /// The last picture the core drew, XRGB8888 in rows `video_size().0` pixels long.
     fn video_xrgb8888(&self) -> &[u8];
     /// How big that picture is, width by height. A core that never says draws the GBA's screen.

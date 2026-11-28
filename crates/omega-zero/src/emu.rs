@@ -800,6 +800,7 @@ impl Worker {
             // the sticks as they are pushed, and whose the left one is: the game's while it
             // reads it as a stick, else the d-pad's
             core.set_sticks(crate::input::sticks::sticks());
+            core.set_fast_forward(speed == Speed::Fast && !rewinding);
             crate::input::sticks::set_left_is_dpad(!core.takes_sticks());
             let mut span = 1u32;
             let ceiling = match speed {

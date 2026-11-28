@@ -47,6 +47,9 @@ struct Host {
     audio_status: Option<AudioBufferStatusFn>,
     /// The frame about to run is skipped, for a core that asks whether to draw it.
     skip_video: bool,
+    /// The player is fast-forwarding, for a core that asks: armGBA then leaves the frames it is
+    /// told to skip undrawn (Fast-Forward Skip), where otherwise it draws them all.
+    fast_forwarding: bool,
     options: std::collections::HashMap<String, std::ffi::CString>,
     options_dirty: bool,
     declared: std::collections::HashMap<String, Vec<String>>,
@@ -82,6 +85,7 @@ impl Host {
             net_peer: None,
             audio_status: None,
             skip_video: false,
+            fast_forwarding: false,
             options: std::collections::HashMap::new(),
             options_dirty: false,
             declared: std::collections::HashMap::new(),
@@ -186,6 +190,12 @@ unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
             }
             // bit 0 draws the frame, bit 1 plays its sound; a skipped frame is still heard
             with_host(|h| *(data as *mut c_int) = if h.skip_video { 2 } else { 3 }).is_some()
+        }
+        GET_FASTFORWARDING => {
+            if data.is_null() {
+                return false;
+            }
+            with_host(|h| *(data as *mut bool) = h.fast_forwarding).is_some()
         }
         GET_CAN_DUPE => {
             if data.is_null() {
@@ -877,6 +887,10 @@ impl RetroCore for LibretroCore {
         self.host.skip_video = skip;
         let _a = Active::bind(&mut self.host);
         unsafe { report_audio_status(skip) };
+    }
+
+    fn set_fast_forward(&mut self, on: bool) {
+        self.host.fast_forwarding = on;
     }
 
     fn video_xrgb8888(&self) -> &[u8] {
@@ -2471,5 +2485,24 @@ mod tests {
         assert_eq!(ask(), 3, "a frame that is shown is drawn and heard");
         unsafe { with_host(|h| h.skip_video = true) };
         assert_eq!(ask(), 2, "a skipped frame is heard but not drawn");
+    }
+
+    #[test]
+    fn a_core_that_asks_whether_the_player_is_fast_forwarding_is_told() {
+        let mut host = host_with(HashMap::new(), false);
+        let _active = Active::bind(&mut host);
+        let ask = || {
+            let mut on = true;
+            let ok =
+                unsafe { environment(GET_FASTFORWARDING, &mut on as *mut bool as *mut c_void) };
+            assert!(ok, "the question went unanswered");
+            on
+        };
+        assert!(
+            !ask(),
+            "a game played at its own speed is not fast-forwarding"
+        );
+        unsafe { with_host(|h| h.fast_forwarding = true) };
+        assert!(ask(), "a game fast-forwarded says so");
     }
 }

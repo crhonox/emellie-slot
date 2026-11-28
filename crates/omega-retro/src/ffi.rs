@@ -22,6 +22,7 @@ pub const GET_DISK_CONTROL_INTERFACE_VERSION: c_uint = 57;
 pub const SET_DISK_CONTROL_EXT_INTERFACE: c_uint = 58;
 pub const EXPERIMENTAL: c_uint = 0x10000;
 pub const GET_AUDIO_VIDEO_ENABLE: c_uint = 47 | EXPERIMENTAL;
+pub const GET_FASTFORWARDING: c_uint = 49 | EXPERIMENTAL;
 pub const SET_AUDIO_BUFFER_STATUS_CALLBACK: c_uint = 62;
 pub const SET_NETPACKET_INTERFACE: c_uint = 78;
 

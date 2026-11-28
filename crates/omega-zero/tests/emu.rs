@@ -242,6 +242,8 @@ struct Probe {
     cost: Duration,
     skip: bool,
     log: Arc<Mutex<Vec<bool>>>,
+    /// What the worker last said about fast-forwarding (set_fast_forward)
+    fast: Arc<AtomicBool>,
 }
 
 impl Probe {
@@ -252,6 +254,7 @@ impl Probe {
             cost,
             skip: false,
             log: log.clone(),
+            fast: Arc::new(AtomicBool::new(false)),
         });
         (probe, log)
     }
@@ -271,6 +274,9 @@ impl RetroCore for Probe {
     fn set_frame_skip(&mut self, skip: bool) {
         self.skip = skip;
         self.inner.set_frame_skip(skip);
+    }
+    fn set_fast_forward(&mut self, on: bool) {
+        self.fast.store(on, Ordering::Relaxed);
     }
     fn video_xrgb8888(&self) -> &[u8] {
         self.inner.video_xrgb8888()
@@ -306,6 +312,37 @@ fn spawn_probe(cost: Duration) -> (EmuHandle, Arc<Mutex<Vec<bool>>>) {
         "the core never finished loading"
     );
     (emu, log)
+}
+
+#[test]
+fn the_core_is_told_it_is_fast_forwarded_only_while_it_is() {
+    let _turn = turn();
+    let mut sink = StubSink::new();
+    sink.open(32_768).expect("the stub refused to open");
+    drain(sink.clone());
+    let (core, _log) = Probe::new(Duration::ZERO);
+    let fast = core.fast.clone();
+    let emu = EmuHandle::spawn(core, PathBuf::from("mock"), sink.ring(), None, None);
+    assert!(
+        wait_for(|| emu.state() == CoreState::Ready),
+        "the core never finished loading"
+    );
+    emu.set_speed(Speed::Normal);
+    std::thread::sleep(Duration::from_millis(50));
+    assert!(
+        !fast.load(Ordering::Relaxed),
+        "told fast-forwarding at normal speed"
+    );
+    emu.set_speed(Speed::Fast);
+    assert!(
+        wait_for(|| fast.load(Ordering::Relaxed)),
+        "never told it was fast-forwarded"
+    );
+    emu.set_speed(Speed::Normal);
+    assert!(
+        wait_for(|| !fast.load(Ordering::Relaxed)),
+        "still told fast-forwarding once back at normal speed"
+    );
 }
 
 #[test]
